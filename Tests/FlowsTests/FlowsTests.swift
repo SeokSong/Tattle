@@ -290,3 +290,33 @@ func fixtureInvariants(_ name: String) async throws {
         "reasons=\(reasons.map { "\($0.key.rawValue):\($0.value)" }.sorted())",
         "time=\(elapsed)")
 }
+
+@Test func requeueClosedFlowAppearsOnce() async throws {
+    var table = FlowTable()
+    let packets = try await decode([Spec(flags: 0x04, process: 0)])
+    for p in packets { _ = table.add(p) }
+    let first = table.drainDirty()
+    #expect(first.count == 1 && first[0].endReason == .rst)
+    table.requeue(first)
+    let second = table.drainDirty()
+    #expect(second.count == 1 && second[0].id == first[0].id)
+    #expect(table.drainDirty().isEmpty)
+}
+
+@Test func requeueOpenFlowKeepsLatestData() async throws {
+    var table = FlowTable()
+    let packets = try await decode([Spec(process: 0), Spec(at: 1, process: 0)])
+    _ = table.add(packets[0])
+    let old = table.drainDirty()
+    #expect(old.count == 1 && old[0].packetsOut == 1)
+    _ = table.add(packets[1])
+    table.requeue(old)
+    let out = table.drainDirty()
+    #expect(out.count == 1 && out[0].packetsOut == 2)
+    #expect(table.drainDirty().isEmpty)
+    // an open flow that left the table is ignored
+    _ = table.closeAll(reason: .captureStopped)
+    _ = table.drainDirty()
+    table.requeue(old)
+    #expect(table.drainDirty().isEmpty)
+}

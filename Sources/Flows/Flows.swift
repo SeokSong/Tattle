@@ -225,4 +225,17 @@ public struct FlowTable: Sendable {
         dirty.removeAll()
         return out
     }
+
+    /// puts flows from a failed save back so the next drain returns them. a closed flow goes back to
+    /// closedPending; an open flow still in the table is marked dirty again (the next drain then carries
+    /// its latest data); an open flow no longer in the table is ignored
+    public mutating func requeue(_ flows: [Flow]) {
+        for flow in flows {
+            if flow.endReason != nil {
+                closedPending.append(flow)
+            } else if entries[flow.key] != nil {
+                dirty.insert(flow.key)
+            }
+        }
+    }
 }

@@ -119,10 +119,36 @@ public final class Store {
 - All calls are synchronous and the class is used from one actor (the pipeline); mark it `@unchecked Sendable` with an internal lock, or keep it non-Sendable and owned by the pipeline actor. Choose the latter
 - `save` uses prepared statements kept for the life of the store; one `begin`/`commit` per call
 
+### FlowStore protocol
+
+- `FlowStore` (`Sources/Storage/FlowStore.swift`) is `AnyObject` with `beginSession(_:)`, `save(flows:domains:session:)` and `endSession(id:at:reason:)`; `Store` conforms
+- The pipeline depends on the protocol, so tests use a fake that fails on demand. A failed `save` must not lose flows: the pipeline requeues them (see PIPELINE.md)
+
+### Deleting for real
+
+- `Store.init` sets `pragma secure_delete = on`, so freed pages are overwritten with zeros
+- `deleteAll()`: delete all sessions, `wal_checkpoint(TRUNCATE)`, `vacuum`, checkpoint again. No deleted hostname stays in the `.sqlite` or `-wal` file
+- `expire(olderThan:)`: delete, then `wal_checkpoint(TRUNCATE)` only (no vacuum, to stay fast). The file keeps its size, but freed pages are zeroed
+- The install salt (`meta`) is kept, so device hashes stay stable. Deleting it is out of scope
+
+### Data inventory
+
+Every place Watch keeps data. Each later change that stores something new must add a row here and in the README.
+
+| What | Where | Retention | Cleared by Delete all |
+|---|---|---|---|
+| Sessions, flows, per-process tallies, DNS answers and server names | `watch.sqlite` (0600, folder 0700) | 7 days after a session ends | Yes (checkpoint and vacuum) |
+| Salted device hash and device name | Same database | Same as sessions (install salt stays) | Sessions yes; the install salt stays |
+| Diagnostic raw-packet files (opt-in) | `diagnostics/` next to the database | 24 hours | Yes |
+| Capture script log and run directory | Root script's run folder (see [CAPTURE.md](CAPTURE.md)) | Until the next run or reboot | Not touched; contains no packets, no hostnames |
+| Quality report JSON | Printed or saved by the user | User-managed | No (outside the database) |
+| Fixture captures and scenario files | `~/dev/watch-fixtures` (developer only) | User-managed | No |
+
 ### Privacy
 
 - File permissions 0600; directory 0700
 - No raw packets, no payload bytes, no UDID; `device_hash` only
+- `Store(path:)` refuses a path whose last component is a symbolic link (`StorageError.io("database path is a symbolic link")`), so a root capture cannot be redirected
 - Encryption at rest: rely on FileVault in V1, noted in the privacy text
 
 ### Tests
@@ -133,8 +159,12 @@ public final class Store {
 - Session left open → `markInterruptedSessions` sets reason `interrupted`
 - `expire` removes a whole old session and keeps a recent one; the cascade removes its flows, tally rows, domains, addresses
 - `deleteAll` leaves all tables empty
+- `deleteAllLeavesNoPlainTextHostname`, `expireLeavesNoPlainTextHostname`: the bytes of `.sqlite` and `-wal` do not contain a deleted server name
+- `deleteAllKeepsSchemaUsable`: a new session saves after `deleteAll`; `meta` rows and the device hash stay
+- `deleteAllTimeOn5000Flows`: prints the time (information only)
 - `deviceHash` is stable across reopen and differs between two stores (different salt)
 - Permission bits on the created file
+- `Store` works through the `FlowStore` protocol (begin, save, end)
 
 ### Acceptance
 

@@ -115,6 +115,10 @@ public struct FlowTable {
 }
 ```
 
+### Requeue
+
+- `public mutating func requeue(_ flows: [Flow])`: puts flows from a failed save back. `endReason != nil` goes to `closedPending`; an open flow still in `entries` goes back into `dirty`; an open flow no longer in `entries` is ignored
+
 ### Algorithm
 
 - `add`: look up `key`. Missing → new flow, `firstSeen = lastSeen = timestamp`, return `.opened`. Packets with `transport == .other` or a nil port are dropped by the caller (counted in the pipeline, not here)
@@ -139,6 +143,7 @@ public struct FlowTable {
 - Untagged packets stay in the same flow as a `.none` tally row
 - Two PIDs produce two tally rows
 - `drainDirty` returns each change once; a closed flow appears in one drain only
+- `requeue` after a failed save: a closed flow comes back in the next drain exactly once; an open flow comes back with its latest data; an open flow no longer in the table is ignored
 - Fixture (`WATCH_FIXTURES`, via the Decoder): sum of packets over flows + dropped (`other` transport) == decoded packets; sum of `ipBytes` matches the decoder's sum. Print flow count and how many had more than one non-none tally row (answers the open question)
 
 ### Acceptance

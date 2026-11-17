@@ -62,13 +62,26 @@ These are deliberate limits, or limits of the platform. They are not bugs.
 
 ## Security and privacy measures
 
-- **No decryption, no content.** Only DNS answers, TLS/QUIC server names, packet headers and sizes are read. Plain-HTTP bodies are never parsed.
-- **Raw packets never touch the disk.** tcpdump streams to Watch through a pipe, and each packet is dropped once decoded. The only exception is a capped buffer (5 packets or 16 KB per connection) that holds packets until the hostname is found. Saving raw packets is a separate opt-in diagnostic switch that is off at every launch.
+- **No decryption, no content.** Only DNS answers, TLS/QUIC server names, packet headers and sizes are read. Watch never parses plain-HTTP bodies, but a diagnostic file (below) contains them.
+- **Raw packets stay off the disk unless the diagnostic switch is on.** tcpdump streams to Watch through a pipe, and each packet is dropped once decoded. The only exception is a capped buffer (5 packets or 16 KB per connection) that holds packets until the hostname is found. Saving raw packets is a separate opt-in diagnostic switch that is off at every launch. When it is on, the whole stream, including any plain-HTTP bodies, is written to a file in a private `diagnostics` folder next to the database. The app deletes those files after 24 hours and with "Delete all"; the command-line tool does not delete its file.
 - **Device identifier never stored.** The phone's UDID exists only in memory and in a short-lived 0600 script. The database stores a salted SHA-256 hash, and logs and error messages never contain the UDID.
 - **Local only.** Watch makes no network requests. The database is created with 0600 permissions in a 0700 directory.
-- **Limited retention.** Sessions expire after 7 days, and "Delete all" removes everything.
+- **Limited retention.** Sessions expire after 7 days, and "Delete all" removes every stored session and every diagnostic file made by the app.
 - **Root access kept narrow.** The app itself never runs as root. At Start it runs a generated script through the macOS admin dialog. The script does three things only: start RVI, run tcpdump on that one interface, and stop both. It tears RVI down on every exit path, and its log is kept for debugging.
 - **Nothing is guessed.** "Unknown app" and "unknown hostname" are separate states. A DNS answer is shown as evidence, not as proof that the app connected.
+
+## What Watch stores
+
+| What | Where | Kept | Removed by "Delete all" |
+|---|---|---|---|
+| Sessions, flows, per-app tallies, DNS answers, server names | `watch.sqlite` (0600, in a 0700 folder) | 7 days after a session ends | Yes, and the file is vacuumed so no deleted names remain |
+| Salted device hash, device name | Same database | Same as sessions | Sessions yes; the install salt is kept so that device hashes stay stable |
+| Raw-packet diagnostic files (opt-in) | `diagnostics` folder next to the database | 24 hours | Yes |
+| Capture script log and run folder | The root script's run folder | Until the next run or reboot | No; no packets or hostnames in it |
+| Quality report JSON | Where the user saves it | User-managed | No |
+| Fixture captures (developers only) | `~/dev/watch-fixtures` | User-managed | No |
+
+Full list: [md/STORAGE.md](md/STORAGE.md#data-inventory).
 
 ## Results so far
 

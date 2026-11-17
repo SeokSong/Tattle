@@ -216,3 +216,101 @@ private func populate(_ store: Store, _ s: CaptureSession) throws {
     #expect(try store.rowCount(table: "flow") == 10_000)
     #expect(try store.flows(session: sess.id).count == 10_000)
 }
+
+@Test func storeWorksThroughFlowStore() throws {
+    let path = tempPath()
+    defer { cleanup(path) }
+    let store: any FlowStore = try Store(path: path)
+    let sess = session()
+    try store.beginSession(sess)
+    try store.save(flows: [makeFlow(v4Key(1, remotePort: 443), at: 0)], domains: [], session: sess.id)
+    try store.endSession(id: sess.id, at: Date(), reason: "captureStopped")
+    let reader = try Store(path: path)
+    #expect(try reader.flows(session: sess.id).count == 1)
+}
+
+
+@Test func storeRejectsSymlinkPath() throws {
+    let real = tempPath()
+    defer { cleanup(real) }
+    try FileManager.default.createDirectory(
+        at: real.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let target = real.deletingLastPathComponent().appendingPathComponent("target.sqlite")
+    let link = real.deletingLastPathComponent().appendingPathComponent("link.sqlite")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+    #expect(throws: StorageError.io("database path is a symbolic link")) { try Store(path: link) }
+    #expect(!FileManager.default.fileExists(atPath: target.path))
+}
+
+private let secretHost = "secret-host.example"
+
+private func populateSecret(_ store: Store, _ s: CaptureSession) throws {
+    try store.beginSession(s)
+    var f = makeFlow(v4Key())
+    f.serverName = secretHost
+    let dns = DomainObservation(time: t0, source: .dns, hostname: secretHost, addresses: [.v4(1)])
+    try store.save(flows: [f], domains: [dns], session: s.id)
+}
+
+private func databaseFilesContainHostname(_ path: URL) throws -> Bool {
+    let needle = Data(secretHost.utf8)
+    for suffix in ["", "-wal"] {
+        let file = URL(fileURLWithPath: path.path + suffix)
+        guard FileManager.default.fileExists(atPath: file.path) else { continue }
+        if try Data(contentsOf: file).range(of: needle) != nil { return true }
+    }
+    return false
+}
+
+@Test func deleteAllLeavesNoPlainTextHostname() throws {
+    let path = tempPath()
+    defer { cleanup(path) }
+    let store = try Store(path: path)
+    try populateSecret(store, session())
+    #expect(try databaseFilesContainHostname(path))  // the check can see the name before deleting
+    try store.deleteAll()
+    #expect(try !databaseFilesContainHostname(path))
+}
+
+@Test func expireLeavesNoPlainTextHostname() throws {
+    let path = tempPath()
+    defer { cleanup(path) }
+    let store = try Store(path: path)
+    let old = session()
+    try populateSecret(store, old)
+    try store.endSession(id: old.id, at: Date().addingTimeInterval(-8 * 86400), reason: "stopped")
+    #expect(try databaseFilesContainHostname(path))
+    try store.expire(olderThan: 7 * 86400)
+    #expect(try store.sessions().isEmpty)
+    #expect(try !databaseFilesContainHostname(path))
+}
+
+@Test func deleteAllKeepsSchemaUsable() throws {
+    let path = tempPath()
+    defer { cleanup(path) }
+    let store = try Store(path: path)
+    let salt = try store.deviceHash(udid: "u")
+    try populate(store, session())
+    try store.deleteAll()
+    #expect(try store.rowCount(table: "meta") == 2)
+    #expect(try store.deviceHash(udid: "u") == salt)
+    let next = session()
+    try store.beginSession(next)
+    try store.save(flows: [makeFlow(v4Key())], domains: [], session: next.id)
+    #expect(try store.flows(session: next.id).count == 1)
+    #expect(try Store(path: path).sessions().map(\.id) == [next.id])
+}
+
+@Test func deleteAllTimeOn5000Flows() throws {
+    let path = tempPath()
+    defer { cleanup(path) }
+    let store = try Store(path: path)
+    let sess = session()
+    try store.beginSession(sess)
+    let flows = (0..<5_000).map { makeFlow(v4Key($0, remotePort: UInt16(1 + $0 / 256)), at: Double($0)) }
+    try store.save(flows: flows, domains: [], session: sess.id)
+    let start = Date()
+    try store.deleteAll()
+    print("deleteAll on 5000 flows took \(String(format: "%.3f", Date().timeIntervalSince(start))) s")
+    #expect(try store.rowCount(table: "flow") == 0)
+}

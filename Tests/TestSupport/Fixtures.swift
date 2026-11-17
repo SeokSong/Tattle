@@ -11,8 +11,12 @@ public enum Fixtures {
 
     public static func url(_ name: String) -> URL? {
         guard let directory else { return nil }
-        let url = directory.appendingPathComponent(name)
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        // captures live in captures/ (scripts/fixtures.sh layout); the folder root still works
+        for sub in ["captures/", ""] {
+            let url = directory.appendingPathComponent(sub + name)
+            if FileManager.default.fileExists(atPath: url.path) { return url }
+        }
+        return nil
     }
 
     public static let all = [
@@ -21,5 +25,14 @@ public enum Fixtures {
         "watch-test.pcap",
         "watch-youtube-test.pcap",
         "multi-app-test.pcap",
+    ]
+
+    // scenario captures from the phone requests (found by url() in captures/)
+    public static let scenarios = [
+        "s0-idle.pcapng",
+        "s1-safari.pcapng",
+        "s2-two-apps.pcapng",
+        "s3-youtube-quic.pcapng",
+        "s4-link-failures.pcapng",
     ]
 }

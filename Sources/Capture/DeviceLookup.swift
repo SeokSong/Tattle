@@ -33,7 +33,43 @@ public enum DeviceLookupError: Error, Sendable, CustomStringConvertible, Localiz
     public var errorDescription: String? { description }
 }
 
+public enum DeviceSelection: Sendable, Equatable {
+    case chosen(DeviceSummary)
+    /// no device matched; lists the names of the devices that were available
+    case notFound(available: [String])
+    /// more than one device matched (or none was named and there are several); lists their names
+    case ambiguous([String])
+}
+
 public struct DeviceLookup {
+    /// picks a device by name. a name matches case-insensitively and ignoring apostrophe style
+    /// (straight, curly, modifier); an exact match wins, otherwise a unique substring match.
+    /// no name: the only device, or ambiguous when there are several
+    public static func select(name: String?, from devices: [DeviceSummary]) -> DeviceSelection {
+        let names = devices.map(\.name)
+        guard let name else {
+            if devices.isEmpty { return .notFound(available: []) }
+            return devices.count == 1 ? .chosen(devices[0]) : .ambiguous(names)
+        }
+        let wanted = normalizedName(name)
+        let exact = devices.filter { normalizedName($0.name) == wanted }
+        if exact.count == 1 { return .chosen(exact[0]) }
+        if exact.count > 1 { return .ambiguous(exact.map(\.name)) }
+        guard !wanted.isEmpty else { return .notFound(available: names) }
+        let partial = devices.filter { normalizedName($0.name).contains(wanted) }
+        if partial.count == 1 { return .chosen(partial[0]) }
+        if partial.count > 1 { return .ambiguous(partial.map(\.name)) }
+        return .notFound(available: names)
+    }
+
+    private static func normalizedName(_ text: String) -> String {
+        var result = text.trimmingCharacters(in: .whitespaces).lowercased()
+        for variant in ["\u{2019}", "\u{2018}", "\u{02BC}", "\u{0060}", "\u{00B4}"] {
+            result = result.replacingOccurrences(of: variant, with: "'")
+        }
+        return result
+    }
+
     /// every device devicectl lists as wired. runs devicectl off the calling thread
     public static func wiredDevices() async throws -> [DeviceSummary] {
         let data = try await runDevicectl()

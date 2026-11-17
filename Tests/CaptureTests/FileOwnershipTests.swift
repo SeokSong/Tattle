@@ -1,0 +1,105 @@
+import Foundation
+import Testing
+
+@testable import Capture
+
+private func tempDir() throws -> URL {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("ownership-" + UUID().uuidString)
+    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    return url
+}
+
+private let me = SudoUserFixture.current
+
+private enum SudoUserFixture {
+    static var current: FileOwnership.SudoUser {
+        FileOwnership.SudoUser(uid: getuid(), gid: getgid(), home: NSHomeDirectory())
+    }
+}
+
+@Test func sudoUserNeedsRootAndAllVariables() {
+    let full = ["SUDO_UID": "501", "SUDO_GID": "20", "SUDO_USER": NSUserName()]
+    let user = FileOwnership.sudoUser(environment: full, effectiveUID: 0)
+    #expect(user?.uid == 501)
+    #expect(user?.gid == 20)
+    #expect(user?.home.hasPrefix("/") == true)
+    #expect(FileOwnership.sudoUser(environment: full, effectiveUID: 501) == nil)
+    for missing in ["SUDO_UID", "SUDO_GID", "SUDO_USER"] {
+        var env = full
+        env[missing] = nil
+        #expect(FileOwnership.sudoUser(environment: env, effectiveUID: 0) == nil)
+    }
+    var bad = full
+    bad["SUDO_UID"] = "abc"
+    #expect(FileOwnership.sudoUser(environment: bad, effectiveUID: 0) == nil)
+    bad = full
+    bad["SUDO_USER"] = "no-such-user-\(UUID().uuidString.prefix(8))"
+    #expect(FileOwnership.sudoUser(environment: bad, effectiveUID: 0) == nil)
+}
+
+@Test func expandTildeOnlyLeading() {
+    #expect(FileOwnership.expandTilde("~/a/b", home: "/Users/x") == "/Users/x/a/b")
+    #expect(FileOwnership.expandTilde("a/~/b", home: "/Users/x") == "a/~/b")
+    #expect(FileOwnership.expandTilde("~other/x", home: "/Users/x") == "~other/x")
+}
+
+@Test func giveBackToSelfSucceeds() throws {
+    let dir = try tempDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let file = dir.appendingPathComponent("f").path
+    FileManager.default.createFile(atPath: file, contents: nil)
+    let failed = FileOwnership.giveBack([file, dir.appendingPathComponent("missing").path], to: me)
+    #expect(failed.isEmpty)
+}
+
+@Test func giveBackReportsFailure() throws {
+    guard geteuid() != 0 else { return }
+    let dir = try tempDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let file = dir.appendingPathComponent("f").path
+    FileManager.default.createFile(atPath: file, contents: nil)
+    let root = FileOwnership.SudoUser(uid: 0, gid: 0, home: "/var/root")
+    #expect(FileOwnership.giveBack([file], to: root) == [file])
+}
+
+@Test func giveBackCallsChownWithUserIds() throws {
+    let dir = try tempDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let file = dir.appendingPathComponent("f").path
+    FileManager.default.createFile(atPath: file, contents: nil)
+    nonisolated(unsafe) var seen: [(String, uid_t, gid_t)] = []
+    let user = FileOwnership.SudoUser(uid: 501, gid: 20, home: "/Users/x")
+    let failed = FileOwnership.giveBack([file], to: user, chown: { seen.append(($0, $1, $2)); return 0 })
+    #expect(failed.isEmpty)
+    #expect(seen.count == 1 && seen[0].0 == file && seen[0].1 == 501 && seen[0].2 == 20)
+}
+
+@Test func openForWritingRefusesSymlink() throws {
+    let dir = try tempDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let target = dir.appendingPathComponent("target")
+    try Data("keep".utf8).write(to: target)
+    let link = dir.appendingPathComponent("link")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+    #expect(throws: FileOwnership.OpenError.self) { try FileOwnership.openForWriting(path: link.path) }
+    #expect(try Data(contentsOf: target) == Data("keep".utf8))
+}
+
+@Test func openForWritingRefusesExisting() throws {
+    let dir = try tempDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let path = dir.appendingPathComponent("d.pcapng").path
+    let handle = try FileOwnership.openForWriting(path: path)
+    try handle.close()
+    #expect(throws: FileOwnership.OpenError.self) { try FileOwnership.openForWriting(path: path) }
+    let mode = (try FileManager.default.attributesOfItem(atPath: path))[.posixPermissions] as? Int
+    #expect(mode == 0o600)
+}
+
+@Test func missingDirectoriesListsOnlyNewOnes() throws {
+    let dir = try tempDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let deep = dir.appendingPathComponent("a/b/f.sqlite").path
+    #expect(FileOwnership.missingDirectories(of: deep) == [dir.path + "/a", dir.path + "/a/b"])
+    #expect(FileOwnership.missingDirectories(of: dir.appendingPathComponent("f").path).isEmpty)
+}
