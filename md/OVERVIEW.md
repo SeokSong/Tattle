@@ -43,7 +43,7 @@ iPhone ──USB──▶ rvi0 (rvictl) ──▶ tcpdump -U -w - ──stdout�
 - DNS answers and TLS/QUIC server names become domain evidence
 - Flows and domain records are saved as they happen and kept for 7 days
 
-Mockup of the screens and pipeline: [Watch capture flow](https://claude.ai/artifact/Tn59CyXDwGEbbKxWzEZo8e)
+Design mockups (made before the app was built; the app follows them): [connect](../img/01-connect.png), [grant access](../img/02-grant-access.png), [live capture](../img/03-live-capture.png), [settings](../img/04-settings.png), [pipeline](../img/pipeline.png)
 
 ## Requirements
 
