@@ -2,7 +2,13 @@
 
 **Status:** Working prototype (2026-11-17). Connect → admin password → Live → Stop → Sessions all verified on the phone (35,577 packets / 446 flows in one run). Stop ends tcpdump with KILL after ~2 s by design (see [CAPTURE.md](CAPTURE.md)). Known cosmetic bug: system rows other than mDNSResponder say "lookups for" instead of "on behalf of".
 
-Mockup: [Watch capture flow](https://claude.ai/artifact/Tn59CyXDwGEbbKxWzEZo8e)
+Mockups (made before the app was built):
+
+| Connect | Grant access |
+|---|---|
+| ![Connect](../img/01-connect.png) | ![Grant access](../img/02-grant-access.png) |
+| **Live capture** | **Settings** |
+| ![Live capture](../img/03-live-capture.png) | ![Settings](../img/04-settings.png) |
 
 ## Purpose
 
@@ -69,7 +75,7 @@ Target `WatchApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `swi
     - `startCapture()`: device check → `requestingAccess` → launcher.start → new `Store(path:)` for the pipeline (the app keeps its own `Store` for reads; SQLite WAL allows both) → `CapturePipeline(... retainFlows: true)` → `run` on a task → `capturing`. Any failure → `failed(message)` with the launcher stopped
     - `stopCapture()`: `stopping` → `launcher.stop()` → wait for `run` to return → `pipeline.stop(reason: .captureStopped)` → `idle`, sessions refreshed
     - on launch: `store.markInterruptedSessions()`, `store.expire(olderThan: retentionDays × 86400)`
-- Views, one file each, matching the mockup ([Watch capture flow](https://claude.ai/artifact/Tn59CyXDwGEbbKxWzEZo8e)):
+- Views, one file each, matching the mockup (see the mockups above):
     - `ConnectView`: three check rows (USB, Device link, Capture access = "Asked on start"), Start button enabled only when ready
     - `AccessView`: the explanation and three buttons; **Allow once** triggers the osascript prompt; **Always allow** disabled with the note "needs the signed helper (later)"; Cancel
     - `LiveView`: red capture bar (dot, "Capturing", mm:ss timer, interface, Stop), three tiles (packets, flows, % unattributed), the by-process table (Unattributed row always present, system rows labelled), top 10 flows by bytes with server name and attribution

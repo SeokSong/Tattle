@@ -20,7 +20,13 @@ Top flows by IP bytes:
 
 The Mac app shows the same data live while a capture runs, with a Stop button, a per-app table and past sessions.
 
+![Live capture mockup](img/03-live-capture.png)
+
+*Design mockup made before the app was built, using numbers from a TikTok + Instagram test capture. More in [md/APP.md](md/APP.md).*
+
 ## How it works
+
+![Pipeline](img/pipeline.png)
 
 ```
 iPhone ──USB──▶ rvi0 (rvictl) ──▶ tcpdump -U -P -w - ──stdout──▶ Watch
