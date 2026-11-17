@@ -1,6 +1,6 @@
 # Device
 
-**Status:** Done (2026-11-16). `DeviceLookup` in `Sources/Capture` reads `devicectl list devices`; ready = wired + paired (the tunnel comes up on demand). Used by the CLI and the app. `--device <name>` does not filter by name yet; first wired device wins.
+**Status:** Done (2026-11-16). `DeviceLookup` in `Sources/Capture` reads `devicectl list devices`; ready = wired + paired (the tunnel comes up on demand). Used by the CLI and the app. `capture --device <name>` picks the wired device by name via `DeviceLookup.select` (exact, else unique substring, case and apostrophe style ignored; ambiguous or missing = exit 3).
 
 ## Purpose
 

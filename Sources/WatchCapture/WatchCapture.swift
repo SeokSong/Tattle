@@ -310,7 +310,8 @@ let captureUsage = """
     usage: sudo WatchCapture capture (--udid <udid> | --device <name>) [--db <path>] [--duration <seconds>] [--diagnostic <file.pcapng>]
 
       --udid <udid>          device to capture, skips the devicectl lookup
-      --device <name>        pick the first wired device from devicectl (only the name is printed)
+      --device <name>        wired device with this name from devicectl: exact match (case and apostrophe style ignored),
+                             else a unique substring; ambiguous or missing is exit 3 (only names are printed)
       --db <path>            save flows and domains to this database
       --duration <seconds>   stop automatically after this many seconds
       --diagnostic <file>    also write the raw pcapng stream to this file (raw packets on disk)
@@ -382,9 +383,18 @@ func runCapture(_ args: [String]) async -> Int32 {
     } else {
         do {
             let devices = try await DeviceLookup.wiredDevices()
-            guard let device = devices.first else { throw DeviceLookupError.failed("devicectl lists no wired device") }
-            udid = device.udid
-            name = device.name
+            switch DeviceLookup.select(name: options.device, from: devices) {
+            case .chosen(let device):
+                udid = device.udid
+                name = device.name
+            case .notFound(let available):
+                let list = available.isEmpty ? "no wired device listed" : "wired devices: " + available.joined(separator: ", ")
+                print("Device not found: \(options.device ?? "(no name given)") (\(list))")
+                return 3
+            case .ambiguous(let matches):
+                print("Device name is ambiguous, matches: \(matches.joined(separator: ", ")). Pass a longer --device name or use --udid")
+                return 3
+            }
         } catch {
             print("Device not found: \(redactUDIDs("\(error)", udid: ""))")
             return 3
@@ -392,10 +402,35 @@ func runCapture(_ args: [String]) async -> Int32 {
     }
     print("Device: \(name ?? "(given by --udid)")")
 
+    // under sudo, files must end up owned by the invoking user, in that user's home
+    let sudoUser = FileOwnership.sudoUser(environment: ProcessInfo.processInfo.environment)
+    func resolved(_ path: String?) -> String? {
+        guard let path else { return nil }
+        guard let sudoUser else { return path }
+        return FileOwnership.expandTilde(path, home: sudoUser.home)
+    }
+    let dbPath = resolved(options.dbPath)
+    let diagnosticPath = resolved(options.diagnostic)
+    var ownedPaths: [String] = []
+    var failedHandBack = 0
+    func handBack() {
+        guard let sudoUser else { return }
+        failedHandBack = max(failedHandBack, FileOwnership.giveBack(ownedPaths, to: sudoUser).count)
+    }
+    func reportHandBack() {
+        if failedHandBack > 0 { print("Could not give \(failedHandBack) file(s) back to the user") }
+    }
+    defer { handBack(); reportHandBack() }
+
     // store
     var store: Store?
     var deviceHash: String?
-    if let dbPath = options.dbPath {
+    if let dbPath {
+        let newDirectories = FileOwnership.missingDirectories(of: dbPath)
+        defer {
+            ownedPaths += newDirectories + [dbPath, dbPath + "-wal", dbPath + "-shm"]
+            handBack()
+        }
         do {
             let opened = try Store(path: URL(fileURLWithPath: dbPath))
             deviceHash = try opened.deviceHash(udid: udid)
@@ -408,14 +443,29 @@ func runCapture(_ args: [String]) async -> Int32 {
 
     // diagnostic file
     var tee: FileHandle?
-    if let path = options.diagnostic {
-        guard FileManager.default.createFile(atPath: path, contents: nil, attributes: [.posixPermissions: 0o600]),
-              let handle = FileHandle(forWritingAtPath: path) else {
+    if let path = diagnosticPath {
+        let newDirectories = FileOwnership.missingDirectories(of: path)
+        let handle: FileHandle
+        do {
+            if sudoUser != nil {
+                // never write through a symlink or over an existing file as root
+                handle = try FileOwnership.openForWriting(path: path)
+            } else {
+                guard FileManager.default.createFile(
+                    atPath: path, contents: nil, attributes: [.posixPermissions: 0o600]),
+                    let opened = FileHandle(forWritingAtPath: path)
+                else { throw FileOwnership.OpenError.failed(errno: errno) }
+                handle = opened
+            }
+        } catch {
             print("Unable to create diagnostic file \(path)")
             return 1
         }
+        ownedPaths += newDirectories + [path]
+        handBack()
         tee = handle
         print("WARNING: raw packets are being written to \(path)")
+        print("The file is not deleted automatically")
     }
 
     // before anything is started, so Ctrl-C during start cannot skip the rvictl -x cleanup
@@ -484,6 +534,7 @@ func runCapture(_ args: [String]) async -> Int32 {
     signalTask.cancel()
     await pipeline.stop(reason: stopRequest.isRequested || failure == nil ? .captureStopped : .interrupted)
     await controller.stop()
+    handBack()  // WAL files can appear after the store was opened
 
     if let failure, !stopRequest.isRequested {
         exitCode = 2
@@ -495,7 +546,7 @@ func runCapture(_ args: [String]) async -> Int32 {
 
     let final = await pipeline.stats
     print("\nCapture stopped.")
-    await printSummary(pipeline: pipeline, stats: final, final: final, dbPath: options.dbPath)
+    await printSummary(pipeline: pipeline, stats: final, final: final, dbPath: dbPath)
     switch source.end {
     case .pcapTrailer?: print("\nStream ended: pcap trailer")
     case .cleanEnd?: print("\nStream ended: clean")

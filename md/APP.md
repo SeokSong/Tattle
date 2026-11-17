@@ -74,13 +74,14 @@ Target `WatchApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `swi
     - settings: `retentionDays` (7 default, `@AppStorage`), `diagnosticCapture` (off)
     - `startCapture()`: device check → `requestingAccess` → launcher.start → new `Store(path:)` for the pipeline (the app keeps its own `Store` for reads; SQLite WAL allows both) → `CapturePipeline(... retainFlows: true)` → `run` on a task → `capturing`. Any failure → `failed(message)` with the launcher stopped
     - `stopCapture()`: `stopping` → `launcher.stop()` → wait for `run` to return → `pipeline.stop(reason: .captureStopped)` → `idle`, sessions refreshed
-    - on launch: `store.markInterruptedSessions()`, `store.expire(olderThan: retentionDays × 86400)`
+    - on launch: `store.markInterruptedSessions()`, `store.expire(olderThan: retentionDays × 86400)`, `DiagnosticFiles.purge` (24 hours)
+    - `deleteAll()`: `DiagnosticFiles.purgeAll`, then `store.deleteAll()`
 - Views, one file each, matching the mockup (see the mockups above):
     - `ConnectView`: three check rows (USB, Device link, Capture access = "Asked on start"), Start button enabled only when ready
     - `AccessView`: the explanation and three buttons; **Allow once** triggers the osascript prompt; **Always allow** disabled with the note "needs the signed helper (later)"; Cancel
     - `LiveView`: red capture bar (dot, "Capturing", mm:ss timer, interface, Stop), three tiles (packets, flows, % unattributed), the by-process table (Unattributed row always present, system rows labelled), top 10 flows by bytes with server name and attribution
     - `SessionsView`: list of past sessions (start, duration, packets, flows), select one to see its process totals from `Store.processTotals` and top flows
-    - `SettingsView`: capture access (shows "Asked each time (prototype)"; Revoke disabled), retention picker 1/3/7 days, Delete all (with confirmation), diagnostic capture toggle (writes the raw stream to `~/Library/Application Support/Watch/diagnostic-<date>.pcapng` via a tee; shown in the capture bar when on)
+    - `SettingsView`: capture access (shows "Asked each time (prototype)"; Revoke disabled), retention picker 1/3/7 days, Delete all (with confirmation), diagnostic capture toggle (writes the raw stream to `~/Library/Application Support/Watch/diagnostics/diagnostic-<date>.pcapng` via a tee; shown in the capture bar when on; files are deleted after 24 hours at app start and by Delete all, see [CAPTURE.md](CAPTURE.md#diagnostic-capture))
     - Window: sidebar (Connect, Live, Sessions, Settings) + detail, 880×560 minimum. Live is selected automatically when a capture starts
 - The UI never shows the udid or the device hash. Addresses and hostnames are shown (that is the product), nothing else leaves the process
 

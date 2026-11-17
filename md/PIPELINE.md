@@ -15,7 +15,7 @@ Target `Pipeline`, depends on `PCAPNG`, `PacketDecoder`, `Flows`, `Domains`, `St
 
 ```swift
 public actor CapturePipeline {
-    public init(store: Store?, session: CaptureSession, flushInterval: TimeInterval = 2)
+    public init(store: sending (any FlowStore)?, session: CaptureSession, flushInterval: TimeInterval = 2)
     public func run(_ source: some PacketSource) async throws -> PipelineStats
     public func stop(reason: FlowEndReason) async            // closes every flow, final flush, ends the session
     public var stats: PipelineStats { get }
@@ -26,6 +26,8 @@ public struct PipelineStats: Sendable {
     public var flowsOpened, flowsClosed, dnsObservations, sniFound, echSeen: Int
     public var interfaces: [String: Int]
     public var elapsed: TimeInterval            // wall time of run()
+    public var saveFailures: Int                // saves (and endSession calls) that threw
+    public var unsavedFlows: Int                // flows still unsaved after the final flush of stop
 }
 ```
 
@@ -44,7 +46,11 @@ public struct PipelineStats: Sendable {
 
 - Live: a timer task every `flushInterval` calls `flush()`: `store.save(flowTable.drainDirty(), pendingDomains, session)`
 - File replay: flush every 5,000 packets and at the end (avoids timer nondeterminism in tests)
-- `stop`: `flowTable.closeAll(reason)`, `flush()`, `store.endSession`
+- `stop`: `flowTable.closeAll(reason)`, final flush (retried once), `store.endSession`
+- Save first, clear on success: `flush()` drains the table, calls `store.save`, and on a throw calls `flowTable.requeue(flows)` and counts `saveFailures`. The drained flows come back in the next drain, once
+- If the final flush still fails after the retry, `unsavedFlows` holds the number of flows left; `stop` carries on and always tries `endSession` (a failure there also counts in `saveFailures`)
+- After `stop`, `process` returns at once and the public flush paths (`run`, timer) do nothing: no packet is counted or saved after the session ends
+- The pipeline takes any `FlowStore` (protocol in `Sources/Storage/FlowStore.swift`), so tests can inject a store that fails
 - `store == nil` → run without saving (used by the CLI for a quick summary and by tests)
 
 ### Errors

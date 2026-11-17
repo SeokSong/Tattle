@@ -111,6 +111,7 @@ final class AppModel: ObservableObject {
         } catch {
             storeError = "The session database could not be opened: \(error.localizedDescription)"
         }
+        DiagnosticFiles.purge(in: DiagnosticFiles.directory(under: storePath.deletingLastPathComponent()), now: Date())
         refreshSessions()
     }
 
@@ -348,6 +349,7 @@ final class AppModel: ObservableObject {
 
     func deleteAll() {
         guard !isBusy else { return }
+        DiagnosticFiles.purgeAll(in: diagnosticDirectory)
         do {
             try store?.deleteAll()
             countCache = [:]
@@ -374,16 +376,15 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private var diagnosticDirectory: URL {
+        DiagnosticFiles.directory(under: storePath.deletingLastPathComponent())
+    }
+
     private func makeDiagnosticFile() throws -> FileHandle {
-        let base = storePath.deletingLastPathComponent()
-        try FileManager.default.createDirectory(
-            at: base, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        let url = base.appendingPathComponent("diagnostic-\(stamp).pcapng")
-        guard FileManager.default.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600]),
-              let handle = FileHandle(forWritingAtPath: url.path) else {
+        do {
+            return try DiagnosticFiles.create(in: diagnosticDirectory, now: Date())
+        } catch {
             throw StartFailure("The diagnostic file could not be created.")
         }
-        return handle
     }
 }

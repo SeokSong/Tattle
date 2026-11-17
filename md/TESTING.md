@@ -1,6 +1,6 @@
 # Testing
 
-**Status:** 131 tests across 10 targets, green (2026-11-17). Fixture captures went missing from ~/Desktop on 2026-11-16, so fixture tests currently skip.
+**Status:** 169 tests across 10 targets, green (2026-11-17). Fixture captures went missing from ~/Desktop on 2026-11-16, so fixture tests currently skip.
 
 ## Approach
 
@@ -10,7 +10,12 @@
 
 ## Fixture captures
 
-On the Desktop for now. Kept out of the 7-day rule and never recaptured.
+Private folder `~/dev/watch-fixtures` (override with `WATCH_FIXTURES`), outside git and outside iCloud. Real captures hold personal traffic, so nothing in it is committed or shared. The five captures below were lost from the Desktop on 2026-11-16 (recovery: PH-0, or recapture as `legacy-*`).
+
+- Layout: `captures/` (PCAPNG), `scenarios/` (scenario JSON), `reports/` (report JSON, local), `db/`; all mode 0700
+- `scripts/fixtures.sh init` creates it; `scripts/fixtures.sh check` fails if the folder is inside a git work tree, under `Mobile Documents`, `/Desktop` or `/Documents`, or group/world readable, then lists files with sizes and writes `MANIFEST.sha256`
+- Scenario captures: `Fixtures.scenarios` (`s0-idle` to `s4-link-failures`, `.pcapng`)
+- Repo guard: `RepoGuard.scan(root:)` (Tests/TestSupport) and the `repoIsClean` test fail on capture or database files, iPhone UDIDs or 40-hex words in text files, and IP addresses or hostnames under `Tests/Expected/`. Skips `.build`, `.git`, `img`. Exceptions: a 40-hex value on a line mentioning "salt" (public QUIC salts), and the placeholder UDID quoted in the plan. Violations print path and rule only, never the matched text
 
 | File | Size | Packets | Interfaces | What it shows |
 |---|---|---|---|---|
@@ -39,6 +44,7 @@ On the Desktop for now. Kept out of the 7-day rule and never recaptured.
 |---|---|---|
 | Reader, multi-app (50,766 packets) | — | 0.11 s release, Mac |
 | Full pipeline (`bench`, multi-app, release) | ≥1,500 packets/s (N1) | ~620,000 packets/s (best of 3, 2026-11-16) |
+| Synthetic pipeline throughput (`syntheticThroughput`, 200,000 hand-built UDP packets, `store: nil`) | ≥50,000 packets/s (sanity floor) | ~200,000 packets/s (debug test build, 2026-11-17) |
 | Memory, open flows | — | Not measured |
 | Live capture (phone, YouTube), 2026-11-16 | Streams, stops on Ctrl-C | 26,916 packets / 177 s, 0 malformed, 91 flows, 25 SNI, 30 DNS, exit 0 |
 
@@ -55,13 +61,13 @@ On the Desktop for now. Kept out of the 7-day rule and never recaptured.
 
 ```
 swift test
-WATCH_FIXTURES=~/Desktop swift test
-swift build -c release && .build/release/WatchCapture read ~/Desktop/watch-clean-test.pcap
+scripts/fixtures.sh check
+WATCH_FIXTURES=~/dev/watch-fixtures swift test
+swift build -c release && .build/release/WatchCapture read ~/dev/watch-fixtures/captures/watch-clean-test.pcap
 ```
 
 ## Open questions
 
-- Move fixtures somewhere stable (outside Desktop, outside git) and point `WATCH_FIXTURES` at it
 - A VPN capture and a long (30+ min) capture to add to the set
 
 ## See also

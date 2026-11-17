@@ -1,6 +1,6 @@
 # Capture
 
-**Status:** Done, live-tested (2026-11-16). First run found the missing `-P` flag; second run: 26,916 packets in 177 s, Ctrl-C stopped cleanly, `Stream ended: clean`, tcpdump exit 0, 91 flows + 30 DNS answers saved. `rvictl -x` cleanup confirmed on the earlier failed run. `Sources/Capture`, 9 tests against fake rvictl/tcpdump scripts; `capture` CLI command. Signals: plain C handlers (not SIG_IGN) so tcpdump keeps the default Ctrl-C behaviour; the summary prints how the stream ended and tcpdump's exit status. `--device` currently picks the first wired device and ignores the name. Awaiting the first live run.
+**Status:** Done, live-tested (2026-11-16). First run found the missing `-P` flag; second run: 26,916 packets in 177 s, Ctrl-C stopped cleanly, `Stream ended: clean`, tcpdump exit 0, 91 flows + 30 DNS answers saved. `rvictl -x` cleanup confirmed on the earlier failed run. `Sources/Capture`, 9 tests against fake rvictl/tcpdump scripts; `capture` CLI command. Signals: plain C handlers (not SIG_IGN) so tcpdump keeps the default Ctrl-C behaviour; the summary prints how the stream ended and tcpdump's exit status. `--device <name>` filters wired devices by name (see below). Awaiting the first live run.
 
 ## Purpose
 
@@ -56,8 +56,24 @@
 
 - Off by default. A Settings switch
 - When on: also writes the raw PCAPNG stream to disk, shown in the capture bar
-- Files deleted after 24 hours or by hand
+- App: files go in `<app support>/Watch/diagnostics/` (0700), named `diagnostic-<ISO 8601 time, ":" as "-">.pcapng` (0600). A second file in the same second gets a `-2`, `-3` suffix (`DiagnosticFiles`, never overwrites)
+- App: files older than 24 hours are deleted at app start (only regular files named `diagnostic-*.pcapng`; a symlink with that name is removed, never followed). "Delete all" removes every one
+- The files contain raw packets, including any plain-HTTP bodies
+- CLI: `--diagnostic <file>` writes where you say and prints "The file is not deleted automatically". Nothing purges it
 - Only for debugging the reader and decoder on real traffic
+
+## Running under sudo
+
+- `sudo` sets `SUDO_USER`, `SUDO_UID`, `SUDO_GID`. `capture` uses them only when it runs as root and all three are valid
+- The home folder comes from the password database (`getpwnam(SUDO_USER)`), never from `HOME`
+- `HOME` under sudo: not yet checked on this Mac. Owner to run `sudo env | grep HOME` and record the result here
+- A quoted `"~/x"` reaches the tool unexpanded; under sudo a leading `~/` in `--db` and `--diagnostic` is expanded to the user's home
+- After the store opens, the database, `-wal` and `-shm` files are handed back with `lchown` (symlinks are not followed). Again after the final stop, because WAL files can appear later
+- Directories that `Store.init` or the diagnostic file created are handed back too
+- The diagnostic file is created with `O_CREAT | O_EXCL | O_NOFOLLOW`: it refuses an existing file or a symlink
+- The database refuses a path that is a symlink (see [STORAGE.md](STORAGE.md))
+- If any hand-back fails, one line is printed: `Could not give <n> file(s) back to the user` (no paths)
+- Code: `Sources/Capture/FileOwnership.swift`
 
 ## Implementation spec (sudo mode)
 
@@ -99,7 +115,9 @@ public actor CaptureController {
 sudo .build/release/WatchCapture capture (--udid <udid> | --device <name>) [--db <path>] [--duration <seconds>] [--diagnostic <file.pcapng>]
 ```
 
-- `--device`: resolve the udid through `devicectl list devices --json-output` (first device whose connection transport is `wired`); `--udid` skips that. Never print the udid; print the device name only
+- `--device`: resolve the udid through `devicectl list devices --json-output` (wired devices only); `--udid` skips that. Never print the udid; print the device name only
+    - Match: case-insensitive exact name first (curly and straight apostrophes are equal), else a unique case-insensitive substring
+    - No match, or more than one match: exit 3, the message lists device names only. `DeviceLookup.select(name:from:)`
 - Runs `cleanupStaleInterfaces`, `start`, builds the pipeline (store at `--db` or none), prints a `Capturing on rvi0 ... Ctrl-C to stop` line, then a stats line every 2 s (packets, flows open, DNS, SNI). On stop prints the same summary as `flows`
 - `--duration`: stop automatically after that many seconds (for scripted tests)
 - `--diagnostic`: also tee the raw stream to that file (the opt-in diagnostic capture); print a warning line that raw packets are being written

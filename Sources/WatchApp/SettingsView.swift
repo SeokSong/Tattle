@@ -24,7 +24,7 @@ struct SettingsView: View {
             Section("Diagnostic capture") {
                 Toggle("Also save the raw packet stream", isOn: $model.diagnosticCapture)
                     .disabled(model.isBusy)
-                Text("Writes every packet to a file in ~/Library/Application Support/Watch for the next capture. Off at every launch.")
+                Text("Raw packets, including any unencrypted web traffic, are saved on this Mac until you delete them: after 24 hours or with Delete all.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -33,7 +33,7 @@ struct SettingsView: View {
             Button("Delete all", role: .destructive) { model.deleteAll() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes every stored flow and domain. It cannot be undone.")
+            Text("This removes every stored flow and domain, and any saved raw packet files. It cannot be undone.")
         }
     }
 }

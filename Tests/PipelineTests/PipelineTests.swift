@@ -186,3 +186,141 @@ private func session() -> CaptureSession {
         #expect(await pipeline.stats.flowsClosed == s.flowsOpened)
     }
 }
+
+// a store that fails its first `failures` saves, then records
+private final class FailingStore: FlowStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var remaining: Int
+    private(set) var saved: [Flow] = []
+    private(set) var endSessionCalls = 0
+    // flows saved after endSession was attempted
+    private(set) var savedAfterEnd = 0
+
+    init(failures: Int) { remaining = failures }
+
+    struct Failure: Error {}
+
+    func beginSession(_ s: CaptureSession) throws {}
+
+    func save(flows: [Flow], domains: [DomainObservation], session: UUID) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        if remaining > 0 {
+            remaining -= 1
+            throw Failure()
+        }
+        if endSessionCalls > 0 { savedAfterEnd += flows.count }
+        saved += flows
+    }
+
+    func endSession(id: UUID, at: Date, reason: String) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        endSessionCalls += 1
+    }
+}
+
+private final class AlwaysFailingStore: FlowStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var endSessionCalls = 0
+    func beginSession(_ s: CaptureSession) throws {}
+    func save(flows: [Flow], domains: [DomainObservation], session: UUID) throws {
+        throw FailingStore.Failure()
+    }
+    func endSession(id: UUID, at: Date, reason: String) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        endSessionCalls += 1
+    }
+}
+
+// three tcp flows, each closed by a reset, so they are closed before the first flush
+private func resetFlows() -> [UInt8] {
+    capture((0..<3).map { Pkt(at: Double($0) * 0.1, remote: [93, 184, 216, UInt8(30 + $0)], flags: 0x04) })
+}
+
+@Test func failedSaveKeepsFlows() async throws {
+    let store = FailingStore(failures: 1)
+    let pipeline = CapturePipeline(store: store, session: session())
+    // the end-of-replay flush throws once; run stops, and the final flush retries
+    await #expect(throws: (any Error).self) {
+        _ = try await pipeline.run(DataPacketSource(resetFlows()))
+    }
+    let ids = store.saved.map(\.id)
+    #expect(ids.count == 3)
+    #expect(Set(ids).count == 3)
+    #expect(store.saved.allSatisfy { $0.endReason == .rst })
+    let s = await pipeline.stats
+    #expect(s.saveFailures == 1 && s.unsavedFlows == 0)
+}
+
+@Test func finalSaveFailureIsCounted() async throws {
+    let store = AlwaysFailingStore()
+    let pipeline = CapturePipeline(store: store, session: session())
+    await #expect(throws: (any Error).self) {
+        _ = try await pipeline.run(DataPacketSource(resetFlows()))
+    }
+    let s = await pipeline.stats
+    #expect(s.unsavedFlows == 3)
+    #expect(s.saveFailures >= 1)
+    #expect(store.endSessionCalls == 1)
+}
+
+@Test func nothingProcessedAfterStop() async throws {
+    let store = FailingStore(failures: 0)
+    let pipeline = CapturePipeline(store: store, session: session())
+    _ = try await pipeline.run(DataPacketSource(capture([
+        Pkt(at: 0, payload: [1]), Pkt(at: 0.1, proto: 17, remote: [1, 1, 1, 1], remotePort: 9999, payload: [1]),
+    ])))
+    await pipeline.stop(reason: .captureStopped)
+    let before = store.saved.count
+    let idsBefore = Set(store.saved.map(\.id))
+    _ = try await pipeline.run(DataPacketSource(capture([
+        Pkt(at: 1, proto: 17, remote: [2, 2, 2, 2], remotePort: 9998, payload: [1]),
+    ])))
+    let s = await pipeline.stats
+    #expect(s.packets == 2)
+    #expect(store.saved.count == before && idsBefore.count == 2)
+    #expect(store.savedAfterEnd == 0)
+    #expect(store.endSessionCalls == 1)
+}
+
+@Test func backwardTimestampDoesNotExpire() async throws {
+    // capture() sorts by time, so write the frames in the given order by hand
+    var bytes = PCAPNGBuilder.sectionHeader() + PCAPNGBuilder.interface("en0")
+    bytes += PCAPNGBuilder.process(pid: 7, name: "TikTok")
+    for at in [10.0, 2.0, 2.5, 3.5] {
+        let f = frame(Pkt(at: at, proto: 17, remote: [1, 1, 1, 1], remotePort: 9999, payload: [1]))
+        bytes += PCAPNGBuilder.packet(
+            interface: 0, microseconds: UInt64((Double(base) + at) * 1_000_000),
+            process: 0, flags: 2, payload: f)
+    }
+    let pipeline = CapturePipeline(store: nil, session: session())
+    let s = try await pipeline.run(DataPacketSource(bytes))
+    #expect(s.flowsOpened == 1)
+    #expect(await pipeline.stats.flowsClosed == 0)
+}
+
+@Test func syntheticThroughput() async throws {
+    let count = 200_000
+    var bytes = PCAPNGBuilder.sectionHeader() + PCAPNGBuilder.interface("en0")
+    bytes += PCAPNGBuilder.process(pid: 7, name: "TikTok")
+    for i in 0..<count {
+        let f = frame(Pkt(
+            at: 0, proto: 17, remote: [93, 184, UInt8(i % 50), UInt8(i % 200)],
+            remotePort: 9999, payload: [1, 2, 3, 4]))
+        bytes += PCAPNGBuilder.packet(
+            interface: 0, microseconds: UInt64(base) * 1_000_000 + UInt64(i) * 500,
+            process: 0, flags: 2, payload: f)
+    }
+    let pipeline = CapturePipeline(store: nil, session: session())
+    let clock = ContinuousClock()
+    let start = clock.now
+    let s = try await pipeline.run(DataPacketSource(bytes))
+    let d = clock.now - start
+    let secs = Double(d.components.seconds) + Double(d.components.attoseconds) / 1e18
+    let rate = Double(count) / secs
+    print("synthetic throughput: \(Int(rate)) packets/s")
+    #expect(s.packets == count)
+    #expect(rate > 50_000)
+}

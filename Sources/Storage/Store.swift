@@ -72,6 +72,10 @@ public final class Store {
     /// creates directories with 0700 and the file with 0600, runs migrations
     public init(path: URL) throws {
         let fm = FileManager.default
+        var linkInfo = stat()
+        if lstat(path.path, &linkInfo) == 0, (linkInfo.st_mode & S_IFMT) == S_IFLNK {
+            throw StorageError.io("database path is a symbolic link")
+        }
         let dir = path.deletingLastPathComponent()
         if !fm.fileExists(atPath: dir.path) {
             try fm.createDirectory(
@@ -83,7 +87,7 @@ public final class Store {
             }
         }
         db = try Database(path: path.path)
-        try db.exec("pragma journal_mode = wal; pragma synchronous = normal; pragma foreign_keys = on;")
+        try db.exec("pragma journal_mode = wal; pragma synchronous = normal; pragma foreign_keys = on; pragma secure_delete = on;")
         try migrate()
     }
 
@@ -285,10 +289,17 @@ public final class Store {
         let st = try db.statement("delete from session where ended_at is not null and ended_at < ?")
         st.bind(1, Date().timeIntervalSince1970 - olderThan)
         try st.run()
+        // secure_delete overwrites freed pages; truncating the wal removes its copies of them
+        try db.exec("pragma wal_checkpoint(TRUNCATE)")
     }
 
+    /// removes every session (the install salt stays). then the wal is emptied and the file vacuumed,
+    /// so no deleted content is left in either file
     public func deleteAll() throws {
         try db.exec("delete from session")
+        try db.exec("pragma wal_checkpoint(TRUNCATE)")
+        try db.exec("vacuum")
+        try db.exec("pragma wal_checkpoint(TRUNCATE)")
     }
 
     // MARK: reading

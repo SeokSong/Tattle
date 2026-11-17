@@ -13,6 +13,10 @@ public struct PipelineStats: Sendable {
     public var packets = 0, decoded = 0, skipped = 0, malformed = 0, droppedNoPort = 0
     public var flowsOpened = 0, flowsClosed = 0, dnsObservations = 0, sniFound = 0, echSeen = 0
     public var interfaces: [String: Int] = [:]
+    /// saves (and end-of-session writes) that threw
+    public var saveFailures = 0
+    /// flows still unsaved after the final flush of stop
+    public var unsavedFlows = 0
     /// wall time of run()
     public var elapsed: TimeInterval = 0
 
@@ -23,7 +27,7 @@ public actor CapturePipeline {
     /// replay flushes every this many packets
     public static let replayFlushPackets = 5_000
 
-    private let store: Store?
+    private let store: (any FlowStore)?
     private let session: CaptureSession
     private let flushInterval: TimeInterval
     private let retainFlows: Bool
@@ -37,11 +41,12 @@ public actor CapturePipeline {
     private var lastExpire: Date?
     private var sessionStarted = false
     private var stopped = false
+    private var lastRequeued = 0
     private var timer: Task<Void, Never>?
 
     /// retainFlows keeps the final state of every flow in memory for flowsSnapshot(); for the CLI and tests
     public init(
-        store: sending Store?, session: CaptureSession, flushInterval: TimeInterval = 2,
+        store: sending (any FlowStore)?, session: CaptureSession, flushInterval: TimeInterval = 2,
         retainFlows: Bool = false
     ) {
         self.store = store
@@ -68,8 +73,9 @@ public actor CapturePipeline {
         let start = clock.now
         var sincePacketFlush = 0
         do {
-            try beginSessionIfNeeded()
+            if !stopped { try beginSessionIfNeeded() }
             for try await event in source.events() {
+                guard !stopped else { break }
                 guard case .packet(let raw) = event else { continue }
                 process(raw)
                 sincePacketFlush += 1
@@ -96,9 +102,14 @@ public actor CapturePipeline {
         timer?.cancel()
         timer = nil
         for flow in flowTable.closeAll(reason: reason) { extractor.flowClosed(flow.key) }
-        try? flush()
+        // save first, clear on success: a failed save keeps its flows queued. retry once, then give up
+        do { try flush(final: true) } catch {
+            do { try flush(final: true) } catch { counters.unsavedFlows = lastRequeued }
+        }
         if let store, sessionStarted {
-            try? store.endSession(id: session.id, at: lastExpire ?? Date(), reason: reason.rawValue)
+            do { try store.endSession(id: session.id, at: lastExpire ?? Date(), reason: reason.rawValue) } catch {
+                counters.saveFailures += 1
+            }
         }
     }
 
@@ -118,7 +129,7 @@ public actor CapturePipeline {
         }
     }
 
-    private func flushNow() throws { try flush() }
+    func flushNow() throws { try flush() }
 
     private func beginSessionIfNeeded() throws {
         guard let store, !sessionStarted else { return }
@@ -131,6 +142,7 @@ public actor CapturePipeline {
     }
 
     private func process(_ raw: PCAPNGPacket) {
+        guard !stopped else { return }
         counters.packets += 1
         counters.interfaces[raw.interface.name ?? "", default: 0] += 1
 
@@ -188,7 +200,9 @@ public actor CapturePipeline {
         }
     }
 
-    private func flush() throws {
+    /// save first, clear on success. final is only set by stop, which has already set stopped
+    private func flush(final: Bool = false) throws {
+        guard final || !stopped else { return }
         let flows = flowTable.drainDirty()
         if retainFlows { for f in flows { retained[f.id] = f } }
         guard let store else {
@@ -196,8 +210,15 @@ public actor CapturePipeline {
             return
         }
         guard !flows.isEmpty || !pendingDomains.isEmpty else { return }
-        try beginSessionIfNeeded()
-        try store.save(flows: flows, domains: pendingDomains, session: session.id)
+        do {
+            try beginSessionIfNeeded()
+            try store.save(flows: flows, domains: pendingDomains, session: session.id)
+        } catch {
+            flowTable.requeue(flows)
+            lastRequeued = flows.count
+            counters.saveFailures += 1
+            throw error
+        }
         pendingDomains.removeAll(keepingCapacity: true)
     }
 }
