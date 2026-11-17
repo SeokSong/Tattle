@@ -1,0 +1,83 @@
+# Pipeline
+
+**Status:** Done (2026-11-16). `Sources/Pipeline` (actor `CapturePipeline`), 6 tests; CLI has `read`, `flows <file> [--db path]`, `bench <file>`. Bench on multi-app: ~620,000 packets/s release (N1 target was 1,500). Notes: `run` does not close flows, callers call `stop`; the session begins on the first flush; `retainFlows: true` keeps final flows in memory for the CLI; `echSeen` is always 0 until Domains reports ECH.
+
+## Purpose
+
+- One place that turns `PCAPNGEvent`s into stored flows and domains, for both live capture and file replay (F4, I7)
+- Owns the only copy of each raw packet and drops it after decoding (N2)
+
+## Implementation spec
+
+Target `Pipeline`, depends on `PCAPNG`, `PacketDecoder`, `Flows`, `Domains`, `Storage`, `Attribution`.
+
+### Actor
+
+```swift
+public actor CapturePipeline {
+    public init(store: Store?, session: CaptureSession, flushInterval: TimeInterval = 2)
+    public func run(_ source: some PacketSource) async throws -> PipelineStats
+    public func stop(reason: FlowEndReason) async            // closes every flow, final flush, ends the session
+    public var stats: PipelineStats { get }
+}
+
+public struct PipelineStats: Sendable {
+    public var packets, decoded, skipped, malformed, droppedNoPort: Int
+    public var flowsOpened, flowsClosed, dnsObservations, sniFound, echSeen: Int
+    public var interfaces: [String: Int]
+    public var elapsed: TimeInterval            // wall time of run()
+}
+```
+
+### Per event
+
+1. `.interface` / `.process` / `.sectionStarted`: nothing (the parser tracks them)
+2. `.packet`: `PacketDecoder.decode` → on `.decoded`:
+    - `transport == .other` or a nil port → `droppedNoPort`, done
+    - `FlowTable.add` → on `.opened`, nothing else
+    - Outbound with payload: `HandshakeBuffer.add(key, payload, isQUIC: udp && remotePort == 443)` → name → `flowTable.setServerName` and a `DomainObservation(.sni)`
+    - Inbound UDP from remote port 53 with payload: `DNSParser.parse` → `DomainObservation(.dns)`
+    - Packet time ≥ `lastExpire + 1 s` → `flowTable.expire(at: packetTime)`, closed flows get `handshakeBuffer.forget`
+3. The `DecodedPacket.bytes` array goes out of scope here. Nothing retains it except the handshake buffer's copy of a handshake payload
+
+### Flushing
+
+- Live: a timer task every `flushInterval` calls `flush()`: `store.save(flowTable.drainDirty(), pendingDomains, session)`
+- File replay: flush every 5,000 packets and at the end (avoids timer nondeterminism in tests)
+- `stop`: `flowTable.closeAll(reason)`, `flush()`, `store.endSession`
+- `store == nil` → run without saving (used by the CLI for a quick summary and by tests)
+
+### Errors
+
+- Parser error → stop with reason `.interrupted`, rethrow with the byte offset. Never skip bad data (F11)
+- Store error → stop the capture, rethrow. Losing a batch is worse than stopping
+
+### Speed
+
+- Everything runs on the actor, single-threaded by design: 1,500 packets/s needs ~0.7 ms per packet, and the reader alone does 50k in 0.1 s. Measure before adding threads
+- No `Date()` calls per packet; packet timestamps drive expiry
+
+### CLI (`WatchCapture`)
+
+| Command | Does |
+|---|---|
+| `read <file>` | Existing summary (packets, interfaces, by process) |
+| `flows <file> [--db path]` | Runs the pipeline on a file; prints stats, top flows by bytes with attribution, DNS and SNI counts; saves when `--db` is given |
+| `bench <file>` | Runs the pipeline with no store 3 times; prints packets/s. Target ≥ 1,500 (N1); expected far higher |
+
+- Output never prints the device id. Addresses and hostnames print only in `flows` output, which is a local developer command
+
+### Tests
+
+- Replaying a hand-built event list (one DNS answer, one TLS flow with a split ClientHello, one UDP flow) yields the expected flows, server name and domain observation
+- Stats add up: `packets == decoded + skipped + malformed`
+- Flush on replay writes the same flows a `store.flows(session:)` reads back
+- Fixture (`WATCH_FIXTURES`): all five files run to the trailer; `bench` on multi-app prints its rate
+
+### Acceptance
+
+- `swift test` green; `bench` multi-app ≥ 1,500 packets/s release (record the number in [TESTING.md](TESTING.md))
+
+## See also
+
+[DESIGN.md](DESIGN.md) · [FLOWS.md](FLOWS.md) · [DOMAINS.md](DOMAINS.md) · [STORAGE.md](STORAGE.md)
