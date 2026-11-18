@@ -7,6 +7,11 @@ public protocol FlowStore: AnyObject {
     func beginSession(_ s: CaptureSession) throws
     func save(flows: [Flow], domains: [DomainObservation], session: UUID) throws
     func endSession(id: UUID, at: Date, reason: String) throws
+    func recordSessionStats(id: UUID, _ stats: SessionStats) throws
 }
 
-extension Store: FlowStore {}
+extension Store: FlowStore {
+    public func recordSessionStats(id: UUID, _ stats: SessionStats) throws {
+        try setSessionStats(id: id, stats)
+    }
+}

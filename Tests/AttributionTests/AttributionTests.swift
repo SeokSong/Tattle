@@ -69,6 +69,37 @@ private func tally(_ rows: [(ProcessPair, Int)]) -> [ProcessPair: Int] {
     }
 }
 
+// MARK: process names
+
+@Test func cutNameStillMatchesSystemProcess() {
+    #expect(Attributor.isSystemProcess("networkservicepr"))
+    #expect(Attributor.isSystemProcess("networkserviceproxy"))
+}
+
+@Test func everySystemNameMatchesInCutForm() {
+    for name in systemProcessNames {
+        #expect(Attributor.isSystemProcess(name), "\(name) as written")
+        #expect(Attributor.isSystemProcess(ProcessNames.cut(name)), "\(name) cut")
+        #expect(ProcessNames.matches(ProcessNames.cut(name), full: name))
+    }
+}
+
+@Test func unknownNameIsNotSystem() {
+    #expect(!Attributor.isSystemProcess("TikTok"))
+    #expect(!Attributor.isSystemProcess("apsd2"))
+    #expect(!ProcessNames.matches("networkservic", full: "networkserviceproxy"))
+}
+
+@Test func displayNameMapsAndFallsBack() {
+    #expect(ProcessNames.displayName("appstorecomponen") == "App Store (component)")
+    #expect(ProcessNames.displayName("TikTok") == "TikTok")
+}
+
+@Test func attributeTreatsCutNameAsSystem() {
+    let r = Attributor.attribute(tally([(ProcessPair("networkservicepr", 9, nil, nil), 4)]))
+    #expect(r.primary == .system(name: "networkservicepr"))
+}
+
 // MARK: supportingDomains
 
 private let t0 = Date(timeIntervalSince1970: 1_763_000_000)

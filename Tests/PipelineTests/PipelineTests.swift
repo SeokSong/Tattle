@@ -52,10 +52,11 @@ private func capture(_ pkts: [Pkt], extraFrames: [(Double, [UInt8])] = []) -> [U
     return bytes
 }
 
-private func clientHello(sni: String) -> [UInt8] {
+private func clientHello(sni: String, ech: Bool = false) -> [UInt8] {
     let name = Array(sni.utf8)
     let list = [0] + be16(name.count) + name
-    let exts: [UInt8] = be16(0) + be16(list.count + 2) + be16(list.count) + list
+    var exts: [UInt8] = be16(0) + be16(list.count + 2) + be16(list.count) + list
+    if ech { exts += be16(0xFE0D) + be16(3) + [0, 1, 2] }
     var body: [UInt8] = [3, 3] + [UInt8](repeating: 7, count: 32) + [0]
     body += be16(4) + [0x13, 0x01, 0x13, 0x02] + [1, 0] + be16(exts.count) + exts
     let hs: [UInt8] = [1, UInt8(body.count >> 16), UInt8(body.count >> 8 & 0xFF), UInt8(body.count & 0xFF)] + body
@@ -201,6 +202,7 @@ private final class FailingStore: FlowStore, @unchecked Sendable {
     struct Failure: Error {}
 
     func beginSession(_ s: CaptureSession) throws {}
+    func recordSessionStats(id: UUID, _ stats: SessionStats) throws {}
 
     func save(flows: [Flow], domains: [DomainObservation], session: UUID) throws {
         lock.lock()
@@ -224,6 +226,7 @@ private final class AlwaysFailingStore: FlowStore, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var endSessionCalls = 0
     func beginSession(_ s: CaptureSession) throws {}
+    func recordSessionStats(id: UUID, _ stats: SessionStats) throws {}
     func save(flows: [Flow], domains: [DomainObservation], session: UUID) throws {
         throw FailingStore.Failure()
     }
@@ -323,4 +326,24 @@ private func resetFlows() -> [UInt8] {
     print("synthetic throughput: \(Int(rate)) packets/s")
     #expect(s.packets == count)
     #expect(rate > 50_000)
+}
+
+@Test func pipelineMarksEchFlow() async throws {
+    let echHello = clientHello(sni: "public.example.com", ech: true)
+    let plainHello = clientHello(sni: "example.org")
+    let bytes = capture([
+        Pkt(at: 0, flags: 0x02),
+        Pkt(at: 0.1, payload: echHello),
+        Pkt(at: 0.2, remote: [93, 184, 216, 35], flags: 0x02),
+        Pkt(at: 0.3, remote: [93, 184, 216, 35], payload: plainHello),
+    ])
+    let pipeline = CapturePipeline(store: nil, session: session(), retainFlows: true)
+    let stats = try await pipeline.run(DataPacketSource(bytes))
+    await pipeline.stop(reason: .captureStopped)
+    #expect(stats.sniFound == 2 && stats.echSeen == 1)
+    let flows = await pipeline.flowsSnapshot()
+    let ech = try #require(flows.first { $0.key.remoteAddress == .v4(0x5DB8_D822) })
+    let plain = try #require(flows.first { $0.key.remoteAddress == .v4(0x5DB8_D823) })
+    #expect(ech.echSeen && ech.serverName == "public.example.com")
+    #expect(!plain.echSeen && plain.serverName == "example.org")
 }

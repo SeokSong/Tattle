@@ -52,7 +52,7 @@
 
 Target `Storage`, depends on `Flows`, `Domains`, `PacketDecoder`. Links `sqlite3` (`linkerSettings: [.linkedLibrary("sqlite3")]`).
 
-### Schema (version 1)
+### Schema (version 1, then migrations)
 
 ```sql
 pragma journal_mode = wal; pragma synchronous = normal; pragma foreign_keys = on;
@@ -96,6 +96,29 @@ create index domain_address_addr on domain_address(addr);
 - Addresses as 4- or 16-byte blobs, so they index and compare without parsing
 - Times as unix seconds (`real`)
 
+### Schema version 2 (migration)
+
+Added with `alter table ... add column`; defaults make old rows valid. Category and hostname source are not stored: they are derived at read time.
+
+| Table | Column | Type | Meaning |
+|---|---|---|---|
+| `flow` | `started_midstream` | `integer not null default 0` | TCP flow whose first packet had no SYN |
+| `flow` | `ech` | `integer not null default 0` | ClientHello had the encrypted_client_hello extension |
+| `session` | `gap_count` | `integer not null default 0` | Silences over 5 s in packet time |
+| `session` | `max_gap_ms` | `integer not null default 0` | Longest gap |
+| `session` | `kernel_dropped` | `integer` | tcpdump's "packets dropped by kernel"; null = unknown |
+| `session` | `save_failures` | `integer not null default 0` | Throwing saves |
+| `session` | `unsaved_flows` | `integer not null default 0` | Flows lost at the end |
+
+- API: `SessionStats`, `Store.setSessionStats(id:_:)`, `Store.sessionStats(id:)`, `FlowStore.recordSessionStats(id:_:)`
+
+### Migration rule
+
+- One schema bump per milestone. Every bump has an old-database test (build the previous schema literally in the test, open with `Store`, check the data)
+- `schemaV1SQL` is frozen; `migrations` maps a target version to its statements
+- A fresh database runs V1 then every migration in one transaction; an existing one runs the missing steps in one transaction and updates `meta.schema_version`. A failing step rolls everything back
+- A database with a higher version than the app supports throws `StorageError.newerSchema(found:supported:)`
+
 ### API
 
 ```swift
@@ -137,7 +160,7 @@ Every place Watch keeps data. Each later change that stores something new must a
 
 | What | Where | Retention | Cleared by Delete all |
 |---|---|---|---|
-| Sessions, flows, per-process tallies, DNS answers and server names | `watch.sqlite` (0600, folder 0700) | 7 days after a session ends | Yes (checkpoint and vacuum) |
+| Sessions, flows, per-process tallies, DNS answers, server names, mid-connection and ECH flags, per-session gap, drop and save-failure counts | `watch.sqlite` (0600, folder 0700) | 7 days after a session ends | Yes (checkpoint and vacuum) |
 | Salted device hash and device name | Same database | Same as sessions (install salt stays) | Sessions yes; the install salt stays |
 | Diagnostic raw-packet files (opt-in) | `diagnostics/` next to the database | 24 hours | Yes |
 | Capture script log and run directory | Root script's run folder (see [CAPTURE.md](CAPTURE.md)) | Until the next run or reboot | Not touched; contains no packets, no hostnames |
@@ -153,7 +176,8 @@ Every place Watch keeps data. Each later change that stores something new must a
 
 ### Tests
 
-- Open twice: schema created once, version stays 1
+- Open twice: schema created once, version stays 2
+- `versionOneDatabaseMigrates`, `freshDatabaseIsVersionTwo`, `newerSchemaThrows`, `sessionStatsRoundTrip`, `migrationIsAtomic`
 - `save` then `flows(session:)` round-trips every field, including tally rows and both address types
 - `save` the same flow twice updates in place (no duplicate rows)
 - Session left open → `markInterruptedSessions` sets reason `interrupted`

@@ -44,6 +44,15 @@
 - 2 min is a starting value. Test it against the fixtures once flows exist
 - Long history is a retention question ([STORAGE.md](STORAGE.md)), not a timeout question
 
+## Started midstream
+
+- `startedMidstream` is set once, when a TCP flow is created: true if the first packet seen has no SYN flag
+- A SYN-ACK first counts as a handshake (the SYN was missed, but the ClientHello still follows), so it is not midstream
+- An RST first packet is midstream (no SYN); the flow closes at once and carries the flag
+- UDP is never midstream: no handshake concept at this layer (UDP/QUIC gaps are the `noHandshakeUDP` reason)
+- A flow expired as idle that reappears under the same key is a new flow, midstream if its first packet is not a SYN
+- Cost: one flag check per new flow, none per packet
+
 ## Fields (proposed)
 
 | Field | Notes |
@@ -100,6 +109,8 @@ public struct Flow: Sendable, Identifiable {
     public var tally: [ProcessPair: Int]
     public var serverName: String?             // set by Domains (SNI)
     public var endReason: FlowEndReason?       // nil while open
+    public var startedMidstream = false        // TCP flow whose first packet had no SYN (stored)
+    public var echSeen = false                 // ClientHello had encrypted_client_hello (stored; filled in M2 problem 2.3)
 }
 
 public enum FlowEvent: Sendable { case opened(Flow), closed(Flow) }
@@ -122,6 +133,7 @@ public struct FlowTable {
 ### Algorithm
 
 - `add`: look up `key`. Missing → new flow, `firstSeen = lastSeen = timestamp`, return `.opened`. Packets with `transport == .other` or a nil port are dropped by the caller (counted in the pipeline, not here)
+- On a new TCP flow, set `startedMidstream = !flags.contains(.syn)`
 - Update counters by direction. `unknown` direction counts as out (local = source by construction) and increments `unknownDirectionPackets`
 - Tally row = `ProcessPair` from the packet's `process` and `effectiveProcess`; increment
 - TCP state: `finLocal`, `finRemote`, `rst`. A FIN from each side → state `closing`, `closingSince = timestamp`. RST → close now with `.rst`

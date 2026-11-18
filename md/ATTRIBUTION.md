@@ -75,7 +75,22 @@ public enum Attributor {
 
 - `attribute`: group rows by app name = `effectiveName ?? processName`; skip `.none` rows. Winner = largest packet count. If the winner's name is a system process and the row had no `effectiveName` → `.system`; if it had an `effectiveName` → `.onBehalfOf`. Tally with only `.none` rows → `.unknown`. `mixed` = ≥ 2 distinct app names among non-system rows
 - `isSystemProcess`: a fixed list in code (`mDNSResponder`, `nsurlsessiond`, `apsd`, `locationd`, `geod`, `trustd`, `cloudd`, `rapportd`, `identityservices`, `kernel_task`, `storekitd`, `appstored`, `amsengagementd`, `transparencyd`, `maild`, `TilesService`, `ConnectMobile`, `watchlistd`, `networkserviceproxy`, `destinationd`, `symptomsd`, `wifid`, `CommCenter`, `dataaccessd`, `itunescloudd`, `passd`, `searchpartyd`, `sharingd`, `timed`, `assistantd`, `akd`, `accountsd`, `AppleIDAuthAgent`, `appleaccountd`, `familycircled`, `findmydeviced`, `fmfd`, `gamed`, `homed`, `healthd`, `mediaremoted`, `nsurlsessiond`, `siriknowledged`, `suggestd`, `weatherd`, `webbookmarksd`, `wifianalyticsd`). Unknown names count as apps. Keep the list in one file so it's easy to extend
-- `supportingDomains`: DNS observations where `flow.key.remoteAddress ∈ addresses`, `effectiveName == winner app name` (or either nil), `time ≤ flow.firstSeen`, and `flow.firstSeen − time ≤ ttl` (ttl nil → 300 s); plus the SNI observation whose `flowKey == flow.key`. SNI first, then DNS by time descending
+- `supportingDomains`: the list form of the rule in "Hostname resolver" below (one implementation, `DNSRule`, shared with `HostnameIndex`). SNI observation for the flow key first, then qualifying DNS answers newest first, ties by smaller hostname
+
+### Hostname resolver (`Hostnames.swift`)
+
+- `HostnameIndex(observations)` is built once per session; `resolve(flow)` and `resolveWithoutSNI(flow)` return `ResolvedHostname { name, source, dnsAgeSeconds, echPresent }?`
+- Pure: no I/O, no clock, no network. Evidence is the same capture only. Nothing is stored
+
+| Source | Label | Rule |
+|---|---|---|
+| `sni` | Seen in connection | `flow.serverName`, else the SNI observation for `flow.key`. `echPresent` is true when the flow or the observation saw ECH (the name is then the outer name) |
+| `dns` | Seen in DNS this session | newest answer containing `flow.key.remoteAddress` with `time ≤ flow.firstSeen`, `flow.firstSeen − time ≤ ttl` (inclusive; nil ttl → 300 s) and an app match |
+
+- App match: flow app = winner of `attribute(tally)` (app, on-behalf-of app, or system process name). Answer app = `effectiveProcess?.name ?? process?.name`. Names are compared after `ProcessNames.displayName`. An answer with no app matches any flow. A flow with no app (unknown) matches only answers with no app
+- Ties on time: smaller hostname wins
+- `resolveWithoutSNI` runs the dns step only (for `dnsPrecision`)
+- Out of scope: `dnsEarlier`, reverse DNS, CNAME chasing beyond the stored query name
 
 ### Tests
 
@@ -85,13 +100,31 @@ public enum Attributor {
 - Mixed: YouTube 100 + TikTok 5 → primary YouTube, `mixed == true`
 - Only `.none` → `.unknown`
 - `supportingDomains` respects address, app, time order and TTL
+- `HostnameIndex.resolve` agrees with `supportingDomains` on generated data; see `HostnamesTests`
 - Rerunning over the same input gives equal results (pure)
 
 ## Found in the first live capture (2026-11-16)
 
-- Process names are truncated to 16 characters by the kernel (`appstorecomponen`, `AppStoreOverlays`). Any name-to-app mapping must match on the truncated form
-- The Mac–phone USB link shows up in the capture: `heartbeatd`/`lockdownd` TCP on a `fd5d:...` address, and link-local `169.254.100.1`. Classify as `deviceLink` and keep out of app totals. Not implemented yet
+- Process names are truncated to 16 characters by the kernel (`appstorecomponen`, `AppStoreOverlays`). Any name-to-app mapping must match on the truncated form. Implemented, see "Names are cut to 16 characters"
+- The Mac–phone USB link shows up in the capture: `heartbeatd`/`lockdownd` TCP on a `fd5d:...` address, and link-local `169.254.100.1`. Classify as `deviceLink` and keep out of app totals. Not implemented yet: only the `deviceLinkProcesses` set exists (`heartbeatd`, `lockdownd`), unused until the category rules land
 - A connection that already existed when the capture started has no handshake and no DNS in the capture, so it shows as app-attributed with no hostname (a 27 MB YouTube flow in the live run). Expected; later, earlier DNS evidence could fill it in, labelled as such
+
+## Names are cut to 16 characters; matching rules
+
+- The kernel cuts process names to 16 characters, so PKTAP never gives a longer one (`networkserviceproxy` arrives as `networkservicepr`)
+- `isSystemProcess(name)` is true when `name` equals a listed full name or its 16-character cut form. Both sets are built once from `systemProcessNames`
+- Matching is exact on one of those two forms. A prefix match is not enough: `apsd2` is not `apsd`
+- Bug fixed: `networkserviceproxy` (19 characters) could never match before
+- A test checks every entry of `systemProcessNames` matches as written and as cut
+- `ProcessNames` (`Sources/Attribution/ProcessNames.swift`): `maxLength`, `cut`, `matches(raw, full:)`, `displayName`
+- Raw names stay in storage and in `ProcessPair`. Display names are derived, never stored over the raw name
+
+| Raw (cut) name | Display name |
+|---|---|
+| `appstorecomponen` | App Store (component) |
+
+- Unknown names display as they are. The table grows from real top names, in `ProcessNames.swift` only
+- Not wired into the by-process screen yet
 
 ## Open questions
 

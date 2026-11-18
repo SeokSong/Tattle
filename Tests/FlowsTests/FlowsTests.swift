@@ -320,3 +320,57 @@ func fixtureInvariants(_ name: String) async throws {
     table.requeue(old)
     #expect(table.drainDirty().isEmpty)
 }
+
+// tcp flag bits: fin 0x01, syn 0x02, rst 0x04, psh 0x08, ack 0x10
+private func firstFlow(_ spec: Spec) async throws -> Flow {
+    let p = try await decode([spec])
+    var table = FlowTable()
+    _ = table.add(p[0])
+    let drained = table.drainDirty()
+    return drained[0]
+}
+
+@Test func synFirstIsNotMidstream() async throws {
+    #expect(try await firstFlow(Spec(flags: 0x02)).startedMidstream == false)
+}
+
+@Test func ackPshFirstIsMidstream() async throws {
+    #expect(try await firstFlow(Spec(flags: 0x18)).startedMidstream)
+}
+
+@Test func synAckFirstIsNotMidstream() async throws {
+    #expect(try await firstFlow(Spec(dir: .inbound, flags: 0x12)).startedMidstream == false)
+}
+
+@Test func rstFirstIsMidstream() async throws {
+    let p = try await decode([Spec(flags: 0x04)])
+    var table = FlowTable()
+    guard case .opened(let opened) = table.add(p[0]) else { Issue.record("expected opened"); return }
+    #expect(opened.startedMidstream)
+    let drained = table.drainDirty()
+    #expect(drained.count == 1 && drained[0].endReason == .rst && drained[0].startedMidstream)
+}
+
+@Test func udpIsNeverMidstream() async throws {
+    #expect(try await firstFlow(Spec(proto: 17)).startedMidstream == false)
+    #expect(try await firstFlow(Spec(proto: 17, flags: 0x10)).startedMidstream == false)
+}
+
+@Test func reappearAfterIdleIsMidstream() async throws {
+    let p = try await decode([Spec(flags: 0x02), Spec(at: 200, flags: 0x10)])
+    var table = FlowTable()
+    _ = table.add(p[0])
+    let closed = table.expire(at: t0.addingTimeInterval(120))
+    #expect(closed.count == 1 && closed[0].endReason == .idle && closed[0].startedMidstream == false)
+    guard case .opened(let again) = table.add(p[1]) else { Issue.record("expected opened"); return }
+    #expect(again.startedMidstream)
+}
+
+@Test func flagSurvivesDrain() async throws {
+    let p = try await decode([Spec(flags: 0x10), Spec(dir: .inbound, at: 1, flags: 0x10)])
+    var table = FlowTable()
+    _ = table.add(p[0])
+    _ = table.add(p[1])
+    let drained = table.drainDirty()
+    #expect(drained.count == 1 && drained[0].startedMidstream)
+}

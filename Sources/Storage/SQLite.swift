@@ -8,6 +8,7 @@ public enum StorageError: Error, Equatable {
     case sqlite(code: Int32, message: String)
     case invalidData(String)
     case io(String)
+    case newerSchema(found: Int, supported: Int)
 }
 
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)

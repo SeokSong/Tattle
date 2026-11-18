@@ -18,13 +18,15 @@ public struct DomainObservation: Sendable {
     public let ttl: UInt32?
     /// sni only
     public let flowKey: FlowKey?
+    /// sni only: the hello carried the encrypted_client_hello extension, so the name is the public outer name
+    public let echPresent: Bool
     public let process: PCAPNGProcess?
     public let effectiveProcess: PCAPNGProcess?
 
     public init(
         time: Date, source: Source, hostname: String, cnameChain: [String] = [],
         addresses: [IPAddress] = [], ttl: UInt32? = nil, flowKey: FlowKey? = nil,
-        process: PCAPNGProcess? = nil, effectiveProcess: PCAPNGProcess? = nil
+        echPresent: Bool = false, process: PCAPNGProcess? = nil, effectiveProcess: PCAPNGProcess? = nil
     ) {
         self.time = time
         self.source = source
@@ -33,6 +35,7 @@ public struct DomainObservation: Sendable {
         self.addresses = addresses
         self.ttl = ttl
         self.flowKey = flowKey
+        self.echPresent = echPresent
         self.process = process
         self.effectiveProcess = effectiveProcess
     }
