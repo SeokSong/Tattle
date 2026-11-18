@@ -120,6 +120,44 @@ private func parseDNS(_ m: [UInt8]) -> DomainObservation? {
     #expect(TLSClientHello.serverName(inRecords: bytes[...]) == .found("late.example.org"))
 }
 
+@Test func clientHelloWithEchReportsIt() {
+    let hello = clientHello(sni: "public.example", extraExtensions: [(0xFE0D, [0, 1, 2])])
+    let result = TLSClientHello.serverName(inRecords: tlsRecord(hello)[...])
+    #expect(result == .found(ServerNameResult(name: "public.example", echPresent: true)))
+}
+
+@Test func clientHelloWithoutEchReportsNone() {
+    let result = TLSClientHello.serverName(inRecords: tlsRecord(clientHello(sni: "public.example"))[...])
+    #expect(result == .found(ServerNameResult(name: "public.example", echPresent: false)))
+    #expect(result != .found(ServerNameResult(name: "public.example", echPresent: true)))
+}
+
+@Test func quicInitialWithEchReportsIt() {
+    let hello = clientHello(sni: "quic.example.org", extraExtensions: [(0xFE0D, [0, 1, 2])])
+    let packet = quicInitial(dcid: rfcDCID, frames: cryptoFrame(offset: 0, hello))
+    #expect(
+        QUICInitial.serverName(inDatagram: packet[...])
+            == .found(ServerNameResult(name: "quic.example.org", echPresent: true)))
+}
+
+@Test func echDoesNotBreakSniParsing() {
+    // ech before the server_name extension, then after it
+    let before = clientHello(sni: nil, extraExtensions: [(0xFE0D, [1, 2, 3])])
+    let name = Array("late.example.com".utf8)
+    let list = [0] + be16(name.count) + name
+    let sniExt = be16(0) + be16(list.count + 2) + be16(list.count) + list
+    // splice the sni extension after the ech extension: rebuild with sni as an extra extension
+    let hello = clientHello(sni: nil, extraExtensions: [(0xFE0D, [1, 2, 3]), (0, Array(sniExt.dropFirst(4)))])
+    #expect(
+        TLSClientHello.serverName(inHandshake: hello[...])
+            == .found(ServerNameResult(name: "late.example.com", echPresent: true)))
+    #expect(TLSClientHello.serverName(inHandshake: before[...]) == .noSNI)
+    let after = clientHello(sni: "early.example.com", extraExtensions: [(0xFE0D, [1])])
+    #expect(
+        TLSClientHello.serverName(inHandshake: after[...])
+            == .found(ServerNameResult(name: "early.example.com", echPresent: true)))
+}
+
 @Test func tlsNoSNI() {
     #expect(TLSClientHello.serverName(inRecords: tlsRecord(clientHello(sni: nil))[...]) == .noSNI)
     let ech = clientHello(sni: nil, extraExtensions: [(0xFE0D, [1, 2, 3])])

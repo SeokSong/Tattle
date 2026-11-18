@@ -37,11 +37,11 @@ public struct DomainExtractor: Sendable {
                 transport: transport, localAddress: packet.localAddress, localPort: localPort,
                 remoteAddress: packet.remoteAddress, remotePort: remotePort)
             let isQUIC = transport == .udp && remotePort == 443
-            guard let name = buffer.add(key: key, payload: payload, isQUIC: isQUIC) else { return [] }
+            guard let found = buffer.add(key: key, payload: payload, isQUIC: isQUIC) else { return [] }
             return [
                 DomainObservation(
-                    time: packet.timestamp, source: .sni, hostname: name, flowKey: key,
-                    process: packet.process, effectiveProcess: packet.effectiveProcess)
+                    time: packet.timestamp, source: .sni, hostname: found.name, flowKey: key,
+                    echPresent: found.echPresent, process: packet.process, effectiveProcess: packet.effectiveProcess)
             ]
         }
     }

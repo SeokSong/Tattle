@@ -8,3 +8,9 @@ let systemProcessNames: Set<String> = [
     "familycircled", "findmydeviced", "fmfd", "gamed", "homed", "healthd", "mediaremoted",
     "siriknowledged", "suggestd", "weatherd", "webbookmarksd", "wifianalyticsd",
 ]
+
+/// the system names plus their 16-character cut forms, built once
+let systemProcessLookup: Set<String> = Set(systemProcessNames).union(systemProcessNames.map(ProcessNames.cut))
+
+/// processes that carry the Mac-phone USB link (heartbeatd, lockdownd). used by the deviceLink category
+let deviceLinkProcesses: Set<String> = ["heartbeatd", "lockdownd"]

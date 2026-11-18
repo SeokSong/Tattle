@@ -32,9 +32,10 @@ public struct CaptureSession: Sendable {
     }
 }
 
-private let schemaVersion = 1
+private let schemaVersion = 2
 
-private let schemaSQL = """
+/// the version 1 schema, frozen. never edit: change the schema by adding a migration
+private let schemaV1SQL = """
     create table meta (key text primary key, value text);
     create table session (
       id text primary key, started_at real not null, ended_at real,
@@ -66,11 +67,48 @@ private let schemaSQL = """
     create index domain_address_addr on domain_address(addr);
     """
 
+/// migrations keyed by the version they produce. one bump per milestone
+private let migrations: [Int: [String]] = [
+    2: [
+        "alter table flow add column started_midstream integer not null default 0",
+        "alter table flow add column ech integer not null default 0",
+        "alter table session add column gap_count integer not null default 0",
+        "alter table session add column max_gap_ms integer not null default 0",
+        "alter table session add column kernel_dropped integer",
+        "alter table session add column save_failures integer not null default 0",
+        "alter table session add column unsaved_flows integer not null default 0",
+    ]
+]
+
+public struct SessionStats: Equatable, Sendable {
+    public var gapCount: Int
+    public var maxGapMs: Int
+    /// tcpdump's "packets dropped by kernel"; nil = unknown
+    public var kernelDropped: Int?
+    public var saveFailures: Int
+    public var unsavedFlows: Int
+
+    public init(
+        gapCount: Int = 0, maxGapMs: Int = 0, kernelDropped: Int? = nil, saveFailures: Int = 0, unsavedFlows: Int = 0
+    ) {
+        self.gapCount = gapCount
+        self.maxGapMs = maxGapMs
+        self.kernelDropped = kernelDropped
+        self.saveFailures = saveFailures
+        self.unsavedFlows = unsavedFlows
+    }
+}
+
 public final class Store {
     private let db: Database
 
     /// creates directories with 0700 and the file with 0600, runs migrations
-    public init(path: URL) throws {
+    public convenience init(path: URL) throws {
+        try self.init(path: path, migrations: migrations)
+    }
+
+    /// `migrations` is replaceable so tests can inject a failing step
+    init(path: URL, migrations: [Int: [String]]) throws {
         let fm = FileManager.default
         var linkInfo = stat()
         if lstat(path.path, &linkInfo) == 0, (linkInfo.st_mode & S_IFMT) == S_IFLNK {
@@ -88,7 +126,7 @@ public final class Store {
         }
         db = try Database(path: path.path)
         try db.exec("pragma journal_mode = wal; pragma synchronous = normal; pragma foreign_keys = on; pragma secure_delete = on;")
-        try migrate()
+        try migrate(migrations)
     }
 
     public static func defaultPath() -> URL {
@@ -98,19 +136,34 @@ public final class Store {
         return base.appendingPathComponent("Watch/watch.sqlite")
     }
 
-    private func migrate() throws {
+    private func migrate(_ steps: [Int: [String]]) throws {
         let probe = try db.statement("select count(*) from sqlite_master where type = 'table' and name = 'meta'")
         _ = try probe.step()
         let exists = probe.int(0) > 0
         probe.reset()
-        if exists { return }  // version 1 is the only version so far
+        if exists {
+            guard let found = try schemaVersionValue() else { throw StorageError.invalidData("schema version") }
+            if found > schemaVersion { throw StorageError.newerSchema(found: found, supported: schemaVersion) }
+        }
         try db.transaction {
-            try db.exec(schemaSQL)
-            var salt = [UInt8](repeating: 0, count: 16)
-            for i in salt.indices { salt[i] = UInt8.random(in: 0...255) }
-            let ins = try db.statement("insert into meta(key, value) values (?, ?)")
-            ins.bind(1, "schema_version"); ins.bind(2, String(schemaVersion)); try ins.run()
-            ins.bind(1, "install_salt"); ins.bind(2, hex(salt)); try ins.run()
+            var version = 1
+            if exists {
+                version = try schemaVersionValue() ?? 1
+            } else {
+                // fresh database: version 1, then every migration, in this one transaction
+                try db.exec(schemaV1SQL)
+                var salt = [UInt8](repeating: 0, count: 16)
+                for i in salt.indices { salt[i] = UInt8.random(in: 0...255) }
+                let ins = try db.statement("insert into meta(key, value) values (?, ?)")
+                ins.bind(1, "schema_version"); ins.bind(2, "1"); try ins.run()
+                ins.bind(1, "install_salt"); ins.bind(2, hex(salt)); try ins.run()
+            }
+            while version < schemaVersion {
+                version += 1
+                for sql in steps[version] ?? [] { try db.exec(sql) }
+                let up = try db.statement("update meta set value = ? where key = 'schema_version'")
+                up.bind(1, String(version)); try up.run()
+            }
         }
     }
 
@@ -183,15 +236,16 @@ public final class Store {
                 """
                 insert into flow(id, session_id, transport, local_addr, local_port, remote_addr, remote_port,
                   interface, first_seen, last_seen, packets_in, packets_out, ip_bytes_in, ip_bytes_out,
-                  payload_bytes_in, payload_bytes_out, unknown_direction, server_name, end_reason)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  payload_bytes_in, payload_bytes_out, unknown_direction, server_name, end_reason, started_midstream, ech)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict(id) do update set
                   interface = excluded.interface, first_seen = excluded.first_seen, last_seen = excluded.last_seen,
                   packets_in = excluded.packets_in, packets_out = excluded.packets_out,
                   ip_bytes_in = excluded.ip_bytes_in, ip_bytes_out = excluded.ip_bytes_out,
                   payload_bytes_in = excluded.payload_bytes_in, payload_bytes_out = excluded.payload_bytes_out,
                   unknown_direction = excluded.unknown_direction, server_name = excluded.server_name,
-                  end_reason = excluded.end_reason
+                  end_reason = excluded.end_reason, started_midstream = excluded.started_midstream,
+                  ech = excluded.ech
                 """)
             let clear = try db.statement("delete from flow_process where flow_id = ?")
             let tally = try db.statement(
@@ -220,6 +274,8 @@ public final class Store {
                 upsert.bind(17, f.unknownDirectionPackets)
                 upsert.bind(18, f.serverName)
                 upsert.bind(19, f.endReason?.rawValue)
+                upsert.bind(20, Int(f.startedMidstream ? 1 : 0))
+                upsert.bind(21, Int(f.echSeen ? 1 : 0))
                 try upsert.run()
 
                 clear.bind(1, fid)
@@ -282,6 +338,34 @@ public final class Store {
         }
     }
 
+    // MARK: session stats
+
+    public func setSessionStats(id: UUID, _ stats: SessionStats) throws {
+        let st = try db.statement(
+            """
+            update session set gap_count = ?, max_gap_ms = ?, kernel_dropped = ?, save_failures = ?, unsaved_flows = ?
+            where id = ?
+            """)
+        st.bind(1, stats.gapCount)
+        st.bind(2, stats.maxGapMs)
+        st.bind(3, stats.kernelDropped)
+        st.bind(4, stats.saveFailures)
+        st.bind(5, stats.unsavedFlows)
+        st.bind(6, id.uuidString)
+        try st.run()
+    }
+
+    public func sessionStats(id: UUID) throws -> SessionStats {
+        let st = try db.statement(
+            "select gap_count, max_gap_ms, kernel_dropped, save_failures, unsaved_flows from session where id = ?")
+        st.bind(1, id.uuidString)
+        defer { st.reset() }
+        guard try st.step() else { throw StorageError.invalidData("no such session") }
+        return SessionStats(
+            gapCount: st.int(0), maxGapMs: st.int(1), kernelDropped: st.optInt(2), saveFailures: st.int(3),
+            unsavedFlows: st.int(4))
+    }
+
     // MARK: retention
 
     /// deletes sessions that ended more than `olderThan` seconds ago. flows, tally and domains cascade
@@ -310,7 +394,7 @@ public final class Store {
             """
             select id, transport, local_addr, local_port, remote_addr, remote_port, interface, first_seen, last_seen,
               packets_in, packets_out, ip_bytes_in, ip_bytes_out, payload_bytes_in, payload_bytes_out,
-              unknown_direction, server_name, end_reason
+              unknown_direction, server_name, end_reason, started_midstream, ech
             from flow where session_id = ? order by first_seen, id
             """)
         st.bind(1, sid)
@@ -336,6 +420,8 @@ public final class Store {
             f.unknownDirectionPackets = st.int(15)
             f.serverName = st.text(16)
             f.endReason = st.text(17).flatMap(FlowEndReason.init(rawValue:))
+            f.startedMidstream = st.int(18) != 0
+            f.echSeen = st.int(19) != 0
             index[id] = out.count
             out.append(f)
         }

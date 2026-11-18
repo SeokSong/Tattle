@@ -10,7 +10,7 @@
 | watch-youtube-test | 128 | 58 | 170 | 0 |
 | multi-app-test | 99 | 71 | 75 | 0 |
 
-- Implementation notes: DNS responses without an A/AAAA answer are dropped; ECH without plain SNI is reported as `.noSNI` (not counted separately yet); `DomainExtractor` is the convenience the pipeline uses (`observe(packet)`, `flowClosed(key)`)
+- Implementation notes: DNS responses without an A/AAAA answer are dropped; ECH without plain SNI is reported as `.noSNI` and the ECH flag is lost (that flow lands in `noHandshakeUDP` / `noDNSMatch`); `DomainExtractor` is the convenience the pipeline uses (`observe(packet)`, `flowClosed(key)`)
 - The RFC 9001 A.2 ClientHello's SNI is `example.com` (an earlier draft of this doc said otherwise)
 
 ## Purpose
@@ -49,6 +49,7 @@
     - the lookup was for the same app (`eproc`) as the flow's process, and
     - the flow started after the answer, within its TTL
 - Always labelled as "from DNS", never as observed
+- Implemented as `HostnameIndex` in `Sources/Attribution/Hostnames.swift`; sources are `sni` and `dns`, TTL default 300 s, inclusive. Details in [ATTRIBUTION.md](ATTRIBUTION.md)
 - SNI wins over DNS when both exist
 
 ## What we never do
@@ -88,7 +89,8 @@ public struct DomainObservation: Sendable {
 ### TLS ClientHello (`TLSClientHello`)
 
 ```swift
-public enum SNIResult: Sendable { case found(String), needMore, notHandshake, noSNI }
+public struct ServerNameResult: Sendable, Equatable { public var name: String; public var echPresent: Bool }
+public enum SNIResult: Sendable, Equatable { case found(ServerNameResult), needMore, notHandshake, noSNI }
 public static func serverName(inRecords bytes: ArraySlice<UInt8>) -> SNIResult   // tls record layer in front
 public static func serverName(inHandshake bytes: ArraySlice<UInt8>) -> SNIResult // bare handshake message (quic)
 ```
@@ -97,7 +99,10 @@ public static func serverName(inHandshake bytes: ArraySlice<UInt8>) -> SNIResult
 - Handshake type 1, length. If the bytes present are fewer than the length → `.needMore`
 - Skip: version 2, random 32, session id (1-byte length), cipher suites (2-byte length), compression (1-byte length). Extensions: 2-byte length, then type/length pairs. Type 0 = server_name: list length, name type 0, name length, name
 - Validate the name: ASCII, no control characters, ≤ 253 chars; else `.noSNI`
-- Extension type `0xFE0D` (ECH) present and no plain SNI → `.noSNI`; the pipeline counts ECH separately
+- Extension type `0xFE0D` (ECH) is detected by presence only, wherever it sits in the extension list. A GREASE ECH looks the same, so the flag means "extension sent", not "ECH used"
+- ECH with a plain SNI → `.found` with `echPresent == true`. The name is the public outer name, not the real host; do not use it as the hostname
+- ECH without a plain SNI → `.noSNI`, and the ECH state is lost (accepted limit)
+- The flag flows `TLSClientHello` / `QUICInitial` → `HandshakeBuffer.add` (returns `ServerNameResult?`) → `DomainExtractor` → `DomainObservation.echPresent` (sni only) → pipeline: `FlowTable.markECH(for:)` and `stats.echSeen += 1`
 
 ### Handshake buffer (`HandshakeBuffer`)
 

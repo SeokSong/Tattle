@@ -1,6 +1,18 @@
 import Foundation
 
-public enum SNIResult: Sendable, Equatable { case found(String), needMore, notHandshake, noSNI }
+/// a server name and whether the hello also carried the encrypted_client_hello extension (0xFE0D).
+/// with ech the name is the public outer name. presence only: grease ech looks the same on the wire
+public struct ServerNameResult: Sendable, Equatable, ExpressibleByStringLiteral {
+    public var name: String
+    public var echPresent: Bool
+    public init(name: String, echPresent: Bool = false) {
+        self.name = name
+        self.echPresent = echPresent
+    }
+    public init(stringLiteral value: String) { self.init(name: value) }
+}
+
+public enum SNIResult: Sendable, Equatable { case found(ServerNameResult), needMore, notHandshake, noSNI }
 
 // reads the server_name extension out of a ClientHello. returns the name only; nothing else is kept.
 
@@ -47,24 +59,33 @@ public enum TLSClientHello {
             let extLen = r.u16(), var ext = r.sub(Int(extLen))
         else { return .noSNI }
 
+        var result: SNIResult = .noSNI
+        var haveName = false
+        var ech = false
         while let extType = ext.u16(), let len = ext.u16(), var body = ext.sub(Int(len)) {
-            guard extType == 0 else { continue }
-            guard let listLen = body.u16(), var list = body.sub(Int(listLen)) else { return .noSNI }
+            if extType == 0xFE0D { ech = true }
+            guard extType == 0, !haveName else { continue }
+            haveName = true
+            guard let listLen = body.u16(), var list = body.sub(Int(listLen)) else { continue }
             while let nameType = list.u8(), let nameLen = list.u16(), let name = list.take(Int(nameLen)) {
                 guard nameType == 0 else { continue }
-                return validated(name)
+                result = validated(name)
+                break
             }
-            return .noSNI
         }
-        // ech (0xFE0D) without a plain name lands here too
-        return .noSNI
+        // ech without a plain name lands as .noSNI: the ech flag is lost
+        if ech, case .found(var found) = result {
+            found.echPresent = true
+            return .found(found)
+        }
+        return result
     }
 
     private static func validated(_ name: [UInt8]) -> SNIResult {
         guard !name.isEmpty, name.count <= 253,
             name.allSatisfy({ $0 > 0x20 && $0 < 0x7F })
         else { return .noSNI }
-        return .found(String(decoding: name, as: UTF8.self).lowercased())
+        return .found(ServerNameResult(name: String(decoding: name, as: UTF8.self).lowercased()))
     }
 
     private struct Reader {

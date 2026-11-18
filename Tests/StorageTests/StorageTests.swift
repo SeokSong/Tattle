@@ -3,6 +3,7 @@ import Flows
 import Foundation
 import PCAPNG
 import PacketDecoder
+import SQLite3
 import Testing
 
 @testable import Storage
@@ -51,11 +52,11 @@ private func makeFlow(_ key: FlowKey, at: TimeInterval = 0) -> Flow {
     var salt1 = ""
     do {
         let s = try Store(path: path)
-        #expect(try s.schemaVersionValue() == 1)
+        #expect(try s.schemaVersionValue() == 2)
         salt1 = try s.deviceHash(udid: "u")
     }
     let s = try Store(path: path)
-    #expect(try s.schemaVersionValue() == 1)
+    #expect(try s.schemaVersionValue() == 2)
     #expect(try s.rowCount(table: "meta") == 2)
     #expect(try s.deviceHash(udid: "u") == salt1)
 }
@@ -313,4 +314,150 @@ private func databaseFilesContainHostname(_ path: URL) throws -> Bool {
     try store.deleteAll()
     print("deleteAll on 5000 flows took \(String(format: "%.3f", Date().timeIntervalSince(start))) s")
     #expect(try store.rowCount(table: "flow") == 0)
+}
+
+// MARK: schema version 2
+
+// version 1 schema copied literally, so the test does not depend on the app's code
+private let v1Schema = """
+    create table meta (key text primary key, value text);
+    create table session (
+      id text primary key, started_at real not null, ended_at real,
+      end_reason text, source text not null,
+      device_hash text, device_name text, watch_version text);
+    create table flow (
+      id text primary key, session_id text not null references session(id) on delete cascade,
+      transport integer not null, local_addr blob not null, local_port integer not null,
+      remote_addr blob not null, remote_port integer not null, interface text not null,
+      first_seen real not null, last_seen real not null,
+      packets_in integer, packets_out integer, ip_bytes_in integer, ip_bytes_out integer,
+      payload_bytes_in integer, payload_bytes_out integer, unknown_direction integer,
+      server_name text, end_reason text);
+    create index flow_session on flow(session_id, first_seen);
+    create table flow_process (
+      flow_id text not null references flow(id) on delete cascade,
+      process_name text, process_id integer, effective_name text, effective_id integer,
+      packets integer not null,
+      primary key (flow_id, process_name, process_id, effective_name, effective_id));
+    create table domain (
+      id integer primary key, session_id text not null references session(id) on delete cascade,
+      time real not null, source text not null, hostname text not null,
+      cname_chain text,
+      ttl integer, flow_id text, process_name text, process_id integer,
+      effective_name text, effective_id integer);
+    create index domain_session_host on domain(session_id, hostname);
+    create table domain_address (
+      domain_id integer not null references domain(id) on delete cascade, addr blob not null);
+    create index domain_address_addr on domain_address(addr);
+    """
+
+private let oldSessionID = UUID()
+private let oldFlowID = UUID()
+
+private func buildV1Database(_ path: URL, version: String = "1") throws {
+    try FileManager.default.createDirectory(
+        at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
+    var h: OpaquePointer?
+    #expect(sqlite3_open(path.path, &h) == SQLITE_OK)
+    defer { sqlite3_close(h) }
+    let sql =
+        v1Schema + """
+        insert into meta values ('schema_version', '\(version)');
+        insert into meta values ('install_salt', '00112233445566778899aabbccddeeff');
+        insert into session(id, started_at, source, watch_version)
+          values ('\(oldSessionID.uuidString)', 1763000000, 'rvi', '0.1');
+        insert into flow(id, session_id, transport, local_addr, local_port, remote_addr, remote_port, interface,
+          first_seen, last_seen, packets_in, packets_out, ip_bytes_in, ip_bytes_out, payload_bytes_in,
+          payload_bytes_out, unknown_direction, server_name, end_reason)
+          values ('\(oldFlowID.uuidString)', '\(oldSessionID.uuidString)', 6, x'0a000002', 1024, x'5db8d800', 443,
+          'en0', 1763000000, 1763000005, 3, 2, 3000, 200, 2900, 100, 0, 'old.test', 'fin');
+        insert into flow_process values ('\(oldFlowID.uuidString)', 'TikTok', 10, null, null, 5);
+        """
+    #expect(sqlite3_exec(h, sql, nil, nil, nil) == SQLITE_OK)
+}
+
+@Test func versionOneDatabaseMigrates() throws {
+    let path = tempPath()
+    defer { cleanup(path) }
+    try buildV1Database(path)
+    let s = try Store(path: path)
+    #expect(try s.schemaVersionValue() == 2)
+    let flows = try s.flows(session: oldSessionID)
+    #expect(flows.count == 1)
+    #expect(flows[0].id == oldFlowID)
+    #expect(flows[0].serverName == "old.test")
+    #expect(flows[0].ipBytesIn == 3000)
+    #expect(flows[0].tally[ProcessPair("TikTok", 10, nil, nil)] == 5)
+    #expect(flows[0].startedMidstream == false)
+    #expect(flows[0].echSeen == false)
+    #expect(try s.sessionStats(id: oldSessionID) == SessionStats())
+    #expect(try s.sessionStats(id: oldSessionID).kernelDropped == nil)
+    // salt survives
+    #expect(try s.rowCount(table: "meta") == 2)
+}
+
+@Test func freshDatabaseIsVersionTwo() throws {
+    let path = tempPath()
+    defer { cleanup(path) }
+    let s = try Store(path: path)
+    #expect(try s.schemaVersionValue() == 2)
+    let sess = session()
+    try s.beginSession(sess)
+    var f = makeFlow(v4Key())
+    f.startedMidstream = true
+    f.echSeen = true
+    try s.save(flows: [f], domains: [], session: sess.id)
+    let back = try s.flows(session: sess.id)
+    #expect(back.count == 1)
+    #expect(back[0].startedMidstream)
+    #expect(back[0].echSeen)
+    // upsert updates the flags too
+    f.echSeen = false
+    try s.save(flows: [f], domains: [], session: sess.id)
+    let again = try s.flows(session: sess.id)
+    #expect(again[0].startedMidstream)
+    #expect(!again[0].echSeen)
+}
+
+@Test func newerSchemaThrows() throws {
+    let path = tempPath()
+    defer { cleanup(path) }
+    try buildV1Database(path, version: "3")
+    #expect(throws: StorageError.newerSchema(found: 3, supported: 2)) {
+        _ = try Store(path: path)
+    }
+}
+
+@Test func sessionStatsRoundTrip() throws {
+    let path = tempPath()
+    defer { cleanup(path) }
+    let s = try Store(path: path)
+    let sess = session()
+    try s.beginSession(sess)
+    #expect(try s.sessionStats(id: sess.id) == SessionStats())
+    let stats = SessionStats(gapCount: 2, maxGapMs: 41_000, kernelDropped: 7, saveFailures: 1, unsavedFlows: 0)
+    try s.recordSessionStats(id: sess.id, stats)
+    #expect(try s.sessionStats(id: sess.id) == stats)
+}
+
+@Test func migrationIsAtomic() throws {
+    let path = tempPath()
+    defer { cleanup(path) }
+    try buildV1Database(path)
+    let bad: [Int: [String]] = [
+        2: ["alter table flow add column started_midstream integer not null default 0", "this is not sql"]
+    ]
+    #expect(throws: (any Error).self) { _ = try Store(path: path, migrations: bad) }
+    // the half-applied step rolled back: still version 1, and a normal open migrates cleanly
+    var h: OpaquePointer?
+    #expect(sqlite3_open(path.path, &h) == SQLITE_OK)
+    var st: OpaquePointer?
+    sqlite3_prepare_v2(h, "select value from meta where key = 'schema_version'", -1, &st, nil)
+    #expect(sqlite3_step(st) == SQLITE_ROW)
+    #expect(String(cString: sqlite3_column_text(st, 0)) == "1")
+    sqlite3_finalize(st)
+    sqlite3_close(h)
+    let s = try Store(path: path)
+    #expect(try s.schemaVersionValue() == 2)
+    #expect(try s.flows(session: oldSessionID).count == 1)
 }

@@ -1,6 +1,6 @@
 # Pipeline
 
-**Status:** Done (2026-11-16). `Sources/Pipeline` (actor `CapturePipeline`), 6 tests; CLI has `read`, `flows <file> [--db path]`, `bench <file>`. Bench on multi-app: ~620,000 packets/s release (N1 target was 1,500). Notes: `run` does not close flows, callers call `stop`; the session begins on the first flush; `retainFlows: true` keeps final flows in memory for the CLI; `echSeen` is always 0 until Domains reports ECH.
+**Status:** Done (2026-11-16). `Sources/Pipeline` (actor `CapturePipeline`), 6 tests; CLI has `read`, `flows <file> [--db path]`, `bench <file>`. Bench on multi-app: ~620,000 packets/s release (N1 target was 1,500). Notes: `run` does not close flows, callers call `stop`; the session begins on the first flush; `retainFlows: true` keeps final flows in memory for the CLI; `echSeen` counts flows whose ClientHello carried the ECH extension (presence only, set with the SNI observation; ECH without an outer SNI is not counted).
 
 ## Purpose
 
@@ -23,7 +23,8 @@ public actor CapturePipeline {
 
 public struct PipelineStats: Sendable {
     public var packets, decoded, skipped, malformed, droppedNoPort: Int
-    public var flowsOpened, flowsClosed, dnsObservations, sniFound, echSeen: Int
+    public var flowsOpened, flowsClosed, dnsObservations, sniFound: Int
+    public var echSeen: Int                     // flows whose ClientHello had the ECH extension (needs an outer SNI)
     public var interfaces: [String: Int]
     public var elapsed: TimeInterval            // wall time of run()
     public var saveFailures: Int                // saves (and endSession calls) that threw

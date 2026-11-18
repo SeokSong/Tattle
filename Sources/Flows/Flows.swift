@@ -58,6 +58,10 @@ public struct Flow: Sendable, Identifiable {
     public var serverName: String?
     /// nil while open
     public var endReason: FlowEndReason?
+    /// TCP flow whose first packet seen had no SYN (first packet seen had no SYN or SYN-ACK)
+    public var startedMidstream = false
+    /// ClientHello carried the encrypted_client_hello extension (set in problem 2.3)
+    public var echSeen = false
 
     public init(id: UUID = UUID(), key: FlowKey, interface: String, at timestamp: Date) {
         self.id = id
@@ -111,6 +115,9 @@ public struct FlowTable: Sendable {
             entry = existing
         } else {
             entry = Entry(flow: Flow(key: key, interface: packet.interface, at: packet.timestamp))
+            // one check per new tcp flow: no syn on the first packet seen means the handshake was missed.
+            // a syn-ack counts as a handshake. udp is never midstream
+            if transport == .tcp { entry.flow.startedMidstream = !(packet.headers.tcpFlags?.contains(.syn) ?? false) }
             event = .opened(entry.flow)
         }
 
@@ -211,6 +218,12 @@ public struct FlowTable: Sendable {
     public mutating func setServerName(_ name: String, for key: FlowKey) {
         guard entries[key] != nil else { return }
         entries[key]?.flow.serverName = name
+        dirty.insert(key)
+    }
+
+    public mutating func markECH(for key: FlowKey) {
+        guard entries[key] != nil else { return }
+        entries[key]?.flow.echSeen = true
         dirty.insert(key)
     }
 

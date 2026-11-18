@@ -75,31 +75,59 @@ public enum Attributor {
     }
 
     public static func isSystemProcess(_ name: String) -> Bool {
-        systemProcessNames.contains(name)
+        systemProcessLookup.contains(name)
     }
 
     public static func supportingDomains(for flow: Flow, in domains: [DomainObservation]) -> [DomainObservation] {
-        let appName: String?
-        switch attribute(flow.tally).primary {
-        case .app(let name, _): appName = name
-        case .onBehalfOf(let app, _): appName = app
-        case .system(let name): appName = name
-        case .unknown: appName = nil
-        }
-
+        let appName = DNSRule.appName(for: flow)
         let sni = domains.filter { $0.source == .sni && $0.flowKey == flow.key }
         let dns = domains.filter { d in
-            guard d.source == .dns, d.addresses.contains(flow.key.remoteAddress) else { return false }
-            let domainApp = d.effectiveProcess?.name ?? d.process?.name
-            if let appName, let domainApp, appName != domainApp { return false }
-            guard d.time <= flow.firstSeen else { return false }
-            let ttl = d.ttl.map(TimeInterval.init) ?? 300
-            return flow.firstSeen.timeIntervalSince(d.time) <= ttl
-        }.sorted { $0.time > $1.time }
+            d.source == .dns && d.addresses.contains(flow.key.remoteAddress)
+                && DNSRule.age(of: d, for: flow, appName: appName) != nil
+        }.sorted(by: DNSRule.newerFirst)
         return sni + dns
     }
 
     private static func rowKey(_ p: ProcessPair) -> String {
         "\(p.processName ?? "")|\(p.processID ?? 0)|\(p.effectiveName ?? "")|\(p.effectiveID ?? 0)"
+    }
+}
+
+/// the one DNS-matching rule, used by `supportingDomains` and by the hostname index
+enum DNSRule {
+    static let defaultTTL: TimeInterval = 300
+
+    /// the flow's app name: the winning app, or the winning system process; nil when unknown
+    static func appName(for flow: Flow) -> String? {
+        switch Attributor.attribute(flow.tally).primary {
+        case .app(let name, _): return name
+        case .onBehalfOf(let app, _): return app
+        case .system(let name): return name
+        case .unknown: return nil
+        }
+    }
+
+    static func ttl(_ d: DomainObservation) -> TimeInterval {
+        d.ttl.map(TimeInterval.init) ?? defaultTTL
+    }
+
+    /// an answer with no process matches any flow; a flow with no app matches only such answers
+    static func appMatches(_ appName: String?, _ d: DomainObservation) -> Bool {
+        guard let answerApp = d.effectiveProcess?.name ?? d.process?.name else { return true }
+        guard let appName else { return false }
+        return ProcessNames.displayName(appName) == ProcessNames.displayName(answerApp)
+    }
+
+    /// seconds between the answer and the flow's first packet when the answer qualifies (address is checked
+    /// by the caller): not after the flow, within ttl inclusive, app matches. nil otherwise
+    static func age(of d: DomainObservation, for flow: Flow, appName: String?) -> TimeInterval? {
+        guard d.time <= flow.firstSeen, appMatches(appName, d) else { return nil }
+        let age = flow.firstSeen.timeIntervalSince(d.time)
+        return age <= ttl(d) ? age : nil
+    }
+
+    /// newest first; equal times go to the smaller hostname
+    static func newerFirst(_ a: DomainObservation, _ b: DomainObservation) -> Bool {
+        a.time != b.time ? a.time > b.time : a.hostname < b.hostname
     }
 }

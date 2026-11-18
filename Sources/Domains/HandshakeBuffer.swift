@@ -40,8 +40,8 @@ public struct HandshakeBuffer: Sendable {
         }
     }
 
-    /// feeds the payload of an outbound packet. returns a server name once, then nothing more for that key
-    public mutating func add(key: FlowKey, payload: ArraySlice<UInt8>, isQUIC: Bool) -> String? {
+    /// feeds the payload of an outbound packet. returns a server name (with the ech flag) once, then nothing more for that key
+    public mutating func add(key: FlowKey, payload: ArraySlice<UInt8>, isQUIC: Bool) -> ServerNameResult? {
         guard !payload.isEmpty else { return nil }
         var pending: Pending
         switch states[key] {
@@ -76,7 +76,7 @@ public struct HandshakeBuffer: Sendable {
             result = QUICInitial.serverName(inDatagrams: pending.chunks.map { $0[...] })
         }
         switch result {
-        case .found(let name): return finish(key, pending.kind, found: name)
+        case .found(let found): return finish(key, pending.kind, found: found)
         case .needMore:
             states[key] = .pending(pending)
             return nil
@@ -89,7 +89,7 @@ public struct HandshakeBuffer: Sendable {
         states[key] = nil
     }
 
-    private mutating func finish(_ key: FlowKey, _ kind: Kind, found: String?) -> String? {
+    private mutating func finish(_ key: FlowKey, _ kind: Kind, found: ServerNameResult?) -> ServerNameResult? {
         states[key] = .done
         if found == nil {
             switch kind {

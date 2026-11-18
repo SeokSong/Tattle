@@ -175,6 +175,10 @@ public actor CapturePipeline {
             case .sni:
                 counters.sniFound += 1
                 if let key = o.flowKey { flowTable.setServerName(o.hostname, for: key) }
+                if o.echPresent, let key = o.flowKey {
+                    flowTable.markECH(for: key)
+                    counters.echSeen += 1
+                }
             }
             pendingDomains.append(o)
         }
