@@ -5,35 +5,93 @@ import Foundation
 // pure grouping of flows (live) or stored tally rows (sessions) into the by-process table
 
 struct ProcessRow: Identifiable, Equatable {
-    enum Kind: Equatable { case app, system, unattributed }
+    enum Kind: Equatable { case app, system, unattributed, setAside }
 
     var id: String
     var kind: Kind
-    /// "TikTok", "System: mDNSResponder" or "Unattributed"
+    /// display name: "TikTok", "System: mDNSResponder" or "Unattributed". for a set-aside row the category label
     var name: String
+    /// the names the kernel reported, before display names are applied (shown in the detail line when different)
+    var rawNames: [String] = []
     var pids: [UInt32] = []
     var packets = 0
     var ipBytes = 0
     /// for system rows: the apps the traffic was made for (mDNSResponder lookups)
     var forApps: [String] = []
+    /// set-aside rows only: the category and the process rows inside it
+    var category: TrafficCategory?
+    var children: [ProcessRow] = []
+
+    /// raw process name when it differs from the display name
+    var rawNameNote: String? {
+        let shown = rawNames.filter { $0 != name && "System: " + $0 != name }
+        return shown.isEmpty ? nil : "process name: " + shown.joined(separator: ", ")
+    }
 }
 
-/// one unit of traffic with its tally: a flow, or one stored tally row
+/// one unit of traffic with its tally: a flow, or one stored tally row of a flow
 struct TallyInput {
     var tally: [ProcessPair: Int]
     var packets: Int
     var ipBytes: Int
+    /// the category of the whole flow this input belongs to
+    var category: TrafficCategory
+
+    init(tally: [ProcessPair: Int], packets: Int, ipBytes: Int, category: TrafficCategory) {
+        self.tally = tally
+        self.packets = packets
+        self.ipBytes = ipBytes
+        self.category = category
+    }
+
+    init(flow: Flow) {
+        self.init(
+            tally: flow.tally, packets: flow.packetsIn + flow.packetsOut, ipBytes: flow.ipBytesIn + flow.ipBytesOut,
+            category: Classifier.classify(flow).category)
+    }
 }
+
+/// the by-process table split in two: phone traffic rows, and the traffic set aside (USB link, local network)
+struct ProcessGrouping: Equatable {
+    /// phone traffic by process
+    var rows: [ProcessRow] = []
+    /// one row per set-aside category, always both, each with its process rows in `children`
+    var setAside: [ProcessRow] = []
+
+    var phonePackets: Int { rows.reduce(0) { $0 + $1.packets } }
+    var phoneBytes: Int { rows.reduce(0) { $0 + $1.ipBytes } }
+    var setAsideBytes: Int { setAside.reduce(0) { $0 + $1.ipBytes } }
+}
+
+/// the categories listed under "Not counted as phone traffic", in display order
+let setAsideCategories: [TrafficCategory] = TrafficCategory.allCases.filter { !$0.isPhoneTraffic }
 
 let unattributedRowID = "unattributed"
 
 /// groups by Attributor's primary result: an app name, "System: name" or "Unattributed", sorted by bytes.
-/// a flow counts for its primary group as a whole. withEmptyUnattributed keeps the Unattributed row
+/// a flow counts for its primary group as a whole. inputs whose category is not phone traffic go to `setAside`,
+/// grouped by category and then by process. withEmptyUnattributed keeps the Unattributed row
 /// present when nothing is unattributed, so the screen never hides it
-func groupByProcess(from inputs: [TallyInput], withEmptyUnattributed: Bool = false) -> [ProcessRow] {
+func groupByProcess(from inputs: [TallyInput], withEmptyUnattributed: Bool = false) -> ProcessGrouping {
+    let phone = inputs.filter { $0.category.isPhoneTraffic }
+    var grouping = ProcessGrouping(rows: groupRows(phone, withEmptyUnattributed: withEmptyUnattributed))
+    for category in setAsideCategories {
+        let inside = inputs.filter { $0.category == category }
+        let children = groupRows(inside, withEmptyUnattributed: false)
+        grouping.setAside.append(
+            ProcessRow(
+                id: "setAside:" + category.rawValue, kind: .setAside, name: category.label,
+                packets: inside.reduce(0) { $0 + $1.packets }, ipBytes: inside.reduce(0) { $0 + $1.ipBytes },
+                category: category, children: children))
+    }
+    return grouping
+}
+
+private func groupRows(_ inputs: [TallyInput], withEmptyUnattributed: Bool) -> [ProcessRow] {
     var rows: [String: ProcessRow] = [:]
     var forApps: [String: Set<String>] = [:]
     var pids: [String: Set<UInt32>] = [:]
+    var raws: [String: Set<String>] = [:]
 
     for input in inputs {
         let key: String
@@ -41,15 +99,18 @@ func groupByProcess(from inputs: [TallyInput], withEmptyUnattributed: Bool = fal
         switch Attributor.attribute(input.tally).primary {
         case .app(let name, let appPids):
             key = "app:" + name
-            row = rows[key] ?? ProcessRow(id: key, kind: .app, name: name)
+            row = rows[key] ?? ProcessRow(id: key, kind: .app, name: ProcessNames.displayName(name))
             pids[key, default: []].formUnion(appPids)
+            raws[key, default: []].insert(name)
         case .system(let name):
             key = "system:" + name
-            row = rows[key] ?? ProcessRow(id: key, kind: .system, name: "System: " + name)
+            row = rows[key] ?? ProcessRow(id: key, kind: .system, name: "System: " + ProcessNames.displayName(name))
+            raws[key, default: []].insert(name)
         case .onBehalfOf(let app, let via):
             key = "system:" + via
-            row = rows[key] ?? ProcessRow(id: key, kind: .system, name: "System: " + via)
-            forApps[key, default: []].insert(app)
+            row = rows[key] ?? ProcessRow(id: key, kind: .system, name: "System: " + ProcessNames.displayName(via))
+            forApps[key, default: []].insert(ProcessNames.displayName(app))
+            raws[key, default: []].insert(via)
         case .unknown:
             key = unattributedRowID
             row = rows[key] ?? ProcessRow(id: key, kind: .unattributed, name: "Unattributed")
@@ -65,17 +126,33 @@ func groupByProcess(from inputs: [TallyInput], withEmptyUnattributed: Bool = fal
     for key in rows.keys {
         rows[key]?.pids = (pids[key] ?? []).sorted()
         rows[key]?.forApps = (forApps[key] ?? []).sorted()
+        rows[key]?.rawNames = (raws[key] ?? []).sorted()
     }
     return rows.values.sorted {
         $0.ipBytes != $1.ipBytes ? $0.ipBytes > $1.ipBytes : $0.name < $1.name
     }
 }
 
-func groupByProcess(from flows: [Flow], withEmptyUnattributed: Bool = false) -> [ProcessRow] {
-    groupByProcess(
-        from: flows.map {
-            TallyInput(tally: $0.tally, packets: $0.packetsIn + $0.packetsOut, ipBytes: $0.ipBytesIn + $0.ipBytesOut)
-        }, withEmptyUnattributed: withEmptyUnattributed)
+func groupByProcess(from flows: [Flow], withEmptyUnattributed: Bool = false) -> ProcessGrouping {
+    groupByProcess(from: flows.map { TallyInput(flow: $0) }, withEmptyUnattributed: withEmptyUnattributed)
+}
+
+/// session detail: one input per stored tally row, with the flow's ip bytes shared out by packet count
+/// (the flow only stores byte totals) and the category of the flow the row belongs to
+func tallyInputs(from flows: [Flow]) -> [TallyInput] {
+    var inputs: [TallyInput] = []
+    for flow in flows {
+        let category = Classifier.classify(flow).category
+        let bytes = flow.ipBytesIn + flow.ipBytesOut
+        let total = max(flow.packetsIn + flow.packetsOut, 1)
+        for (pair, count) in flow.tally {
+            inputs.append(
+                TallyInput(
+                    tally: [pair: count], packets: count,
+                    ipBytes: Int((Double(bytes) * Double(count) / Double(total)).rounded()), category: category))
+        }
+    }
+    return inputs
 }
 
 /// the share of packets in the Unattributed row, nil when there are no packets
@@ -94,14 +171,16 @@ struct FlowLine: Identifiable {
     var address: String
     var ipBytes: Int
     var attribution: String
+    /// the category label, set only for flows that are not phone traffic
+    var setAsideLabel: String?
 }
 
 func describeAttribution(_ result: AttributionResult) -> String {
     var text: String
     switch result.primary {
-    case .app(let name, _): text = name
-    case .onBehalfOf(let app, let via): text = "\(app) via \(via)"
-    case .system(let name): text = "System: \(name)"
+    case .app(let name, _): text = ProcessNames.displayName(name)
+    case .onBehalfOf(let app, let via): text = "\(ProcessNames.displayName(app)) via \(ProcessNames.displayName(via))"
+    case .system(let name): text = "System: \(ProcessNames.displayName(name))"
     case .unknown: text = "Unknown"
     }
     if result.mixed { text += " (mixed)" }
@@ -112,11 +191,13 @@ func topFlows(_ flows: [Flow], limit: Int = 10) -> [FlowLine] {
     flows.sorted { $0.ipBytesIn + $0.ipBytesOut > $1.ipBytesIn + $1.ipBytesOut }
         .prefix(limit)
         .map { flow in
-            FlowLine(
+            let category = Classifier.classify(flow).category
+            return FlowLine(
                 id: flow.id, serverName: flow.serverName,
                 address: "\(flow.key.remoteAddress.description):\(flow.key.remotePort)",
                 ipBytes: flow.ipBytesIn + flow.ipBytesOut,
-                attribution: describeAttribution(Attributor.attribute(flow.tally)))
+                attribution: describeAttribution(Attributor.attribute(flow.tally)),
+                setAsideLabel: category.isPhoneTraffic ? nil : category.label)
         }
 }
 

@@ -1,27 +1,36 @@
 import CryptoKit
 import Foundation
-@testable import Domains
 
-// byte builders shared by the domains tests
+import Domains
 
-func be16(_ v: Int) -> [UInt8] { [UInt8(v >> 8 & 0xFF), UInt8(v & 0xFF)] }
-func be32(_ v: UInt32) -> [UInt8] { (0..<4).map { UInt8(v >> UInt32(24 - 8 * $0) & 0xFF) } }
+// byte builders for dns, tls and quic: shared by the domains tests and the synthetic corpus
+
+public func be16(_ v: Int) -> [UInt8] { [UInt8(v >> 8 & 0xFF), UInt8(v & 0xFF)] }
+public func be32(_ v: UInt32) -> [UInt8] { (0..<4).map { UInt8(v >> UInt32(24 - 8 * $0) & 0xFF) } }
 
 // MARK: dns
 
-func dnsName(_ name: String) -> [UInt8] {
+public func dnsName(_ name: String) -> [UInt8] {
     name.split(separator: ".").flatMap { [UInt8($0.utf8.count)] + Array($0.utf8) } + [0]
 }
 
-struct DNSRecord {
-    var type: Int
-    var ttl: UInt32
-    var rdata: [UInt8]
+
+public struct DNSRecord {
+    public var type: Int
+    public var ttl: UInt32
+    public var rdata: [UInt8]
     /// name bytes for the owner; default is a pointer to the question at offset 12
-    var owner: [UInt8] = [0xC0, 12]
+    public var owner: [UInt8] = [0xC0, 12]
+
+    public init(type: Int, ttl: UInt32, rdata: [UInt8], owner: [UInt8] = [0xC0, 12]) {
+        self.type = type
+        self.ttl = ttl
+        self.rdata = rdata
+        self.owner = owner
+    }
 }
 
-func dnsResponse(question: String, records: [DNSRecord], flags: Int = 0x8180, qdcount: Int = 1) -> [UInt8] {
+public func dnsResponse(question: String, records: [DNSRecord], flags: Int = 0x8180, qdcount: Int = 1) -> [UInt8] {
     var m: [UInt8] = be16(0x1234) + be16(flags) + be16(qdcount) + be16(records.count) + be16(0) + be16(0)
     m += dnsName(question) + be16(1) + be16(1)
     for r in records {
@@ -32,7 +41,7 @@ func dnsResponse(question: String, records: [DNSRecord], flags: Int = 0x8180, qd
 
 // MARK: tls
 
-func clientHello(sni: String?, extraExtensions: [(Int, [UInt8])] = [], sessionID: Int = 32) -> [UInt8] {
+public func clientHello(sni: String?, extraExtensions: [(Int, [UInt8])] = [], sessionID: Int = 32) -> [UInt8] {
     var exts: [UInt8] = []
     if let sni {
         let name = Array(sni.utf8)
@@ -49,20 +58,20 @@ func clientHello(sni: String?, extraExtensions: [(Int, [UInt8])] = [], sessionID
     return [1, UInt8(body.count >> 16), UInt8(body.count >> 8 & 0xFF), UInt8(body.count & 0xFF)] + body
 }
 
-func tlsRecord(_ fragment: [UInt8], type: UInt8 = 22) -> [UInt8] {
+public func tlsRecord(_ fragment: [UInt8], type: UInt8 = 22) -> [UInt8] {
     [type, 3, 1] + be16(fragment.count) + fragment
 }
 
 // MARK: quic
 
-func quicVarint2(_ v: Int) -> [UInt8] { [UInt8(0x40 | (v >> 8)), UInt8(v & 0xFF)] }
+public func quicVarint2(_ v: Int) -> [UInt8] { [UInt8(0x40 | (v >> 8)), UInt8(v & 0xFF)] }
 
-func cryptoFrame(offset: Int, _ data: [UInt8]) -> [UInt8] {
+public func cryptoFrame(offset: Int, _ data: [UInt8]) -> [UInt8] {
     [0x06] + quicVarint2(offset) + quicVarint2(data.count) + data
 }
 
 /// builds a protected client initial. mirrors RFC 9001 section 5 using the library's key derivation
-func quicInitial(
+public func quicInitial(
     dcid: [UInt8], version: UInt32 = 1, pn: UInt16 = 0, frames: [UInt8], padTo: Int = 1200
 ) -> [UInt8] {
     let keys = QUICInitial.deriveKeys(dcid: dcid, version: version)
@@ -89,7 +98,7 @@ func quicInitial(
     return packet
 }
 
-func hex(_ s: String) -> [UInt8] {
+public func hex(_ s: String) -> [UInt8] {
     var out: [UInt8] = []
     var i = s.startIndex
     while i < s.endIndex {

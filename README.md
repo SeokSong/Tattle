@@ -18,7 +18,7 @@ Top flows by IP bytes:
   en0  udp  ...:443  in   10137 out   7528  ad.doubleclick.net          -> YouTube (1 pid)
 ```
 
-The Mac app shows the same data live while a capture runs, with a Stop button, a per-app table and past sessions.
+The Mac app shows the same data live while a capture runs, with a Stop button, a per-app table and past sessions. Traffic is sorted into categories: the USB link to the Mac and local-network-only chatter are shown in their own "Not counted as phone traffic" section, outside the phone total, and never hidden.
 
 ![Live capture mockup](img/03-live-capture.png)
 
@@ -78,7 +78,7 @@ These are deliberate limits, or limits of the platform. They are not bugs.
 | Salted device hash, device name | Same database | Same as sessions | Sessions yes; the install salt is kept so that device hashes stay stable |
 | Raw-packet diagnostic files (opt-in) | `diagnostics` folder next to the database | 24 hours | Yes |
 | Capture script log and run folder | The root script's run folder | Until the next run or reboot | No; no packets or hostnames in it |
-| Quality report JSON | Where the user saves it | User-managed | No |
+| Quality report JSON | Printed by `WatchCapture report`; where the user saves it | User-managed | No |
 | Fixture captures (developers only) | `~/dev/watch-fixtures` | User-managed | No |
 
 Full list: [md/STORAGE.md](md/STORAGE.md#data-inventory).
@@ -90,7 +90,21 @@ Full list: [md/STORAGE.md](md/STORAGE.md#data-inventory).
 | Our PCAPNG reader vs tcpdump | Same packet and per-process counts on all test captures |
 | Throughput (full pipeline, release build) | About 620,000 packets/s. A busy phone produces about 1,500 packets/s |
 | Live captures on a phone | Streams, attributes and stops cleanly. In one 3-minute run: 26,916 packets, 0 malformed |
-| Tests | 131 (Swift Testing). They use hand-built captures, fake `rvictl`/`tcpdump` scripts and optional real fixture captures |
+| Tests | 286 (Swift Testing). They use hand-built captures, fake `rvictl`/`tcpdump` scripts and real fixture captures kept outside the repo |
+
+### Baseline for Milestone 2
+
+Measured on 2026-11-18 on four scripted captures (idle phone, one browser, two social apps one after the other, a video app), with the Milestone 1 behaviour. Later changes are checked against these numbers in the tests: none may fall more than 0.5 points below its baseline.
+
+| Measure | Idle | Browser | Two apps | Video |
+|---|---|---|---|---|
+| Bytes attributed to a process | 99.6% | 98.8% | 99.9% | 99.98% |
+| Bytes with no process tag | 0.4% | 1.2% | 0.05% | 0.02% |
+| HTTPS bytes with a hostname from the handshake | 99.9% | 99.1% | 99.99% | 99.997% |
+| Expected app on top in its time window | no expectation | 1 / 1 | 2 / 2 | 1 / 1 |
+| Expected sites found | none expected | 2 / 2 | none expected | none expected |
+
+These captures start every app fresh, so nearly every connection's handshake is seen. In a long real session it is different: on one earlier session only 5.4% of HTTPS bytes had a hostname, because the largest connections were already open when capture began. Closing that gap is part of Milestone 2.
 
 ## Running it
 
@@ -102,6 +116,9 @@ swift build -c release
 # command line
 .build/release/WatchCapture flows capture.pcapng                    # analyse a saved capture
 sudo .build/release/WatchCapture capture --device iphone --db ~/watch.sqlite   # live capture, Ctrl-C to stop
+
+WatchCapture report capture.pcapng [--detail] [--json]              # quality report; exit 2 if a check fails
+WatchCapture report --db ~/watch.sqlite --session latest          # report on a stored session
 
 # Mac app (prototype)
 swift run WatchApp
@@ -128,4 +145,4 @@ Design notes for each part are in [md/](md/). Start with [OVERVIEW.md](md/OVERVI
 
 ## Status
 
-Capture and analysis on the Mac work end to end. Next: keep the USB link's own traffic out of the results, fill in hostnames for connections that started before the capture, run a long-session stability test, and later add company/tracker classification and a destination map. See the roadmap in [OVERVIEW.md](md/OVERVIEW.md#current-status).
+Capture and analysis on the Mac work end to end. The USB link's own traffic is now kept out of the phone total and shown separately. Next: fill in hostnames for connections that started before the capture, run a long-session stability test, and later add company/tracker classification and a destination map. See the roadmap in [OVERVIEW.md](md/OVERVIEW.md#current-status).

@@ -3,6 +3,8 @@ import Foundation
 import PCAPNG
 import PacketDecoder
 import Testing
+import TestSupport
+
 @testable import Domains
 
 private func parseDNS(_ m: [UInt8]) -> DomainObservation? {

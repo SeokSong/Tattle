@@ -127,6 +127,7 @@ Detail and field types: [FLOWS.md](FLOWS.md), [DOMAINS.md](DOMAINS.md), [STORAGE
 | `Storage` | Flows, Domains | [STORAGE.md](STORAGE.md) | 5 |
 | `Attribution` | Flows, Domains | [ATTRIBUTION.md](ATTRIBUTION.md) | 5 |
 | `Pipeline` | all above | [PIPELINE.md](PIPELINE.md) | 6 |
+| `Report` | Flows, Domains, Attribution, Storage, PacketDecoder | [REPORT.md](REPORT.md) | 7 |
 | `WatchCapture` (CLI) | Pipeline | [PIPELINE.md](PIPELINE.md) | 6 |
 | Capture, App | Pipeline | [CAPTURE.md](CAPTURE.md), [APP.md](APP.md) | after the distribution decision |
 

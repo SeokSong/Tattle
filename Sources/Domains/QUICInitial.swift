@@ -6,10 +6,12 @@ import Foundation
 // initial keys derive from the destination connection id, so anyone on the path can read them.
 
 public enum QUICInitial {
-    struct Keys {
-        let key: SymmetricKey
-        let iv: [UInt8]
-        let hp: [UInt8]
+    /// client initial keys (RFC 9001 section 5.2). derived from public values, so exposing them is safe;
+    /// public so test builders can construct initials in release builds too
+    public struct Keys: Sendable {
+        public let key: SymmetricKey
+        public let iv: [UInt8]
+        public let hp: [UInt8]
     }
 
     static let saltV1: [UInt8] = [
@@ -52,7 +54,7 @@ public enum QUICInitial {
 
     // MARK: keys
 
-    static func deriveKeys(dcid: [UInt8], version: UInt32) -> Keys {
+    public static func deriveKeys(dcid: [UInt8], version: UInt32) -> Keys {
         let v2 = version == 0x6b33_43cf
         // hkdf-extract is a single hmac; cryptokit only exposes it through the full hkdf
         let prk = HMAC<SHA256>.authenticationCode(
@@ -74,7 +76,7 @@ public enum QUICInitial {
     }
 
     /// header protection mask: one AES-128-ECB block over the sample
-    static func headerMask(hp: [UInt8], sample: [UInt8]) -> [UInt8]? {
+    public static func headerMask(hp: [UInt8], sample: [UInt8]) -> [UInt8]? {
         guard hp.count == 16, sample.count == 16 else { return nil }
         var out = [UInt8](repeating: 0, count: 16 + kCCBlockSizeAES128)
         var moved = 0

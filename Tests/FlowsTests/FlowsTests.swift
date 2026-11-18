@@ -23,8 +23,6 @@ private struct Spec {
     var payload = 60
 }
 
-private func be16(_ v: Int) -> [UInt8] { [UInt8(v >> 8 & 0xFF), UInt8(v & 0xFF)] }
-
 // builds a one-interface capture with two TikTok processes (index 0 pid 1, index 1 pid 2), decodes it for real
 private func decode(_ specs: [Spec]) async throws -> [DecodedPacket] {
     var bytes = PCAPNGBuilder.sectionHeader() + PCAPNGBuilder.interface("en0")

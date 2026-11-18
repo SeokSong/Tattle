@@ -27,11 +27,18 @@ Mockups (made before the app was built):
 ## Live capture
 
 - Capture bar always visible while capturing, with a large Stop (F3)
-- Totals: packets, flows, share unattributed
-- By process: name, PIDs, packets, IP bytes
+- Totals: packets, flows, phone traffic (bytes), share unattributed
+    - "Phone traffic" is the IP bytes of flows in the categories `app`, `helper`, `system` and `unknown` (see [REPORT.md](REPORT.md)); it excludes the two set-aside categories below
+- Phone traffic by process: name, PIDs, packets, IP bytes
     - Unattributed is its own row, never hidden or merged
     - System processes labelled as system
     - `mDNSResponder` rows say which apps the lookups were for
+    - Names are display names (`ProcessNames.displayName`); when the kernel's raw name differs, the row shows "process name: ..." under the title
+- "Not counted as phone traffic" section under the table, two lines that are always present, each with its bytes
+    - `USB link to this Mac` (`deviceLink`) and `Local network only` (`localNetwork`); the text comes from `TrafficCategory.label`
+    - Click a line to expand it to the process rows inside; nothing is hidden, only kept out of the phone total
+- Session detail has the same two sections; each flow is classified once and its tally rows carry the flow's category
+- In the top-flows tables a flow that is not phone traffic shows its category label under the app name
 - Labelled "Live · this session" so it can't be mistaken for history
 
 ## Rules for what the UI says
@@ -69,7 +76,7 @@ Target `WatchApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `swi
     - `deviceStatus: DeviceStatus?` refreshed every 5 s while on the Connect screen (devicectl is slow; never block the main thread)
     - `captureState: idle | requestingAccess | starting | capturing(since: Date) | stopping | failed(message)`
     - `liveStats: PipelineStats`, `liveFlows: [Flow]`, refreshed every 2 s from the pipeline (`stats`, `flowsSnapshot()` with `retainFlows: true`)
-    - `processRows: [ProcessRow]` computed from `liveFlows`: group by `Attributor.attribute(flow.tally)` → app name (or "Unattributed", "System: name"), with pid set, packets, IP bytes; sorted by bytes
+    - `grouping: ProcessGrouping` computed from `liveFlows`: `rows` (phone traffic) group by `Attributor.attribute(flow.tally)` → display name (or "Unattributed", "System: name"), with pid set, packets, IP bytes; sorted by bytes. `setAside` has one row per non-phone category, each with its process rows in `children`. `TallyInput.category` comes from `Classifier.classify` on the flow
     - `sessions: [SessionRow]` from `Store.sessions()` plus per-session packet/flow counts
     - settings: `retentionDays` (7 default, `@AppStorage`), `diagnosticCapture` (off)
     - `startCapture()`: device check → `requestingAccess` → launcher.start → new `Store(path:)` for the pipeline (the app keeps its own `Store` for reads; SQLite WAL allows both) → `CapturePipeline(... retainFlows: true)` → `run` on a task → `capturing`. Any failure → `failed(message)` with the launcher stopped
@@ -79,15 +86,15 @@ Target `WatchApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `swi
 - Views, one file each, matching the mockup (see the mockups above):
     - `ConnectView`: three check rows (USB, Device link, Capture access = "Asked on start"), Start button enabled only when ready
     - `AccessView`: the explanation and three buttons; **Allow once** triggers the osascript prompt; **Always allow** disabled with the note "needs the signed helper (later)"; Cancel
-    - `LiveView`: red capture bar (dot, "Capturing", mm:ss timer, interface, Stop), three tiles (packets, flows, % unattributed), the by-process table (Unattributed row always present, system rows labelled), top 10 flows by bytes with server name and attribution
-    - `SessionsView`: list of past sessions (start, duration, packets, flows), select one to see its process totals from `Store.processTotals` and top flows
+    - `LiveView`: red capture bar (dot, "Capturing", mm:ss timer, interface, Stop), four tiles (packets, flows, phone traffic bytes, % unattributed), the phone traffic by-process table (Unattributed row always present, system rows labelled), the "Not counted as phone traffic" section, top 10 flows by bytes with server name and attribution
+    - `SessionsView`: list of past sessions (start, duration, packets, flows), select one to see the same phone traffic table and set-aside section (built from `store.flows`, bytes shared out by packet count per tally row) and top flows
     - `SettingsView`: capture access (shows "Asked each time (prototype)"; Revoke disabled), retention picker 1/3/7 days, Delete all (with confirmation), diagnostic capture toggle (writes the raw stream to `~/Library/Application Support/Watch/diagnostics/diagnostic-<date>.pcapng` via a tee; shown in the capture bar when on; files are deleted after 24 hours at app start and by Delete all, see [CAPTURE.md](CAPTURE.md#diagnostic-capture))
     - Window: sidebar (Connect, Live, Sessions, Settings) + detail, 880×560 minimum. Live is selected automatically when a capture starts
 - The UI never shows the udid or the device hash. Addresses and hostnames are shown (that is the product), nothing else leaves the process
 
 ### Tests (`WatchAppTests`, no UI)
 
-- `processRows` from hand-built flows: an app with two pids collapses to one row; `.none`-only tally → "Unattributed" row; system process → "System:" row; sorted by bytes
+- `groupByProcess` from hand-built flows: an app with two pids collapses to one row; `.none`-only tally → "Unattributed" row; system process → "System:" row; sorted by bytes; `deviceLink` and `localNetwork` flows go to `setAside` and stay out of the phone total; set-aside labels equal `TrafficCategory.label`; display names replace raw names
 - `PrototypeCaptureLauncher.renderScript(udid:, runDirectory:)` contains the rvictl, tcpdump `-P -w -` and `rvictl -x` lines, the stop loop, and exits non-zero without `[SUCCEEDED]`
 - Run directory and script are created `0700`/`0600` and removed by `stop()` even if `start` failed
 - `DeviceLookup` decodes a saved devicectl JSON sample (wired and absent cases)

@@ -1,0 +1,32 @@
+{
+  "baselineLabel" : "M1 baseline 2026-11-18 (28328f8 + part 3 uncommitted)",
+  "metrics" : {
+    "attributedShare" : {
+      "baseline" : 0.988,
+      "ceiling" : 1,
+      "floor" : 0.983
+    },
+    "hostnameCoverageSniOnly" : {
+      "baseline" : 0.991,
+      "ceiling" : 1,
+      "floor" : 0.986
+    },
+    "mixedFlowShare" : {
+      "baseline" : 0.004,
+      "ceiling" : 0.009,
+      "floor" : 0
+    },
+    "noProcessShare" : {
+      "baseline" : 0.012,
+      "ceiling" : 0.017,
+      "floor" : 0
+    }
+  },
+  "notes" : [
+
+  ],
+  "scenario" : "s1-safari",
+  "totalsBand" : {
+    "ipBytes" : "2-3 MB"
+  }
+}

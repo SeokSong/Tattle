@@ -32,15 +32,19 @@ struct LiveView: View {
                 HStack(spacing: 12) {
                     Tile(title: "Packets", value: "\(model.liveStats.packets)")
                     Tile(title: "Flows", value: "\(model.liveStats.flowsOpened)")
-                    Tile(title: "Unattributed", value: percentText(unattributedShare(model.processRows)))
+                    Tile(title: "Phone traffic", value: formatBytes(model.grouping.phoneBytes))
+                    Tile(title: "Unattributed", value: percentText(unattributedShare(model.grouping.rows)))
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Traffic by process").font(.headline)
-                    ProcessTable(rows: model.processRows.isEmpty
-                        ? groupByProcess(from: [] as [TallyInput], withEmptyUnattributed: true) : model.processRows)
+                    Text("Phone traffic by process").font(.headline)
+                    ProcessTable(rows: model.grouping.rows.isEmpty
+                        ? groupByProcess(from: [] as [TallyInput], withEmptyUnattributed: true).rows
+                        : model.grouping.rows)
                     Text("Counts are packets and IP bytes seen on the phone's interface.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                SetAsideSection(rows: model.grouping.setAside.isEmpty
+                    ? groupByProcess(from: [] as [TallyInput]).setAside : model.grouping.setAside)
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Top 10 flows by bytes").font(.headline)
                     FlowTable(flows: model.topFlowLines)
