@@ -130,7 +130,10 @@ Precedence, first match wins:
 - Never moves an app-tagged flow: an `app` or `helper` flow stays in its category whatever the addresses are (a NAS at 192.168.1.20, a work server at 10.x)
 - Local-only addresses: multicast (224.0.0.0/4, ff00::/8), 255.255.255.255, loopback (127.0.0.0/8, ::1), link-local, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7. Not 100.64.0.0/10: real servers can sit there
 - Phone traffic = `app` + `helper` + `system` + `unknown`; app traffic = `app` + `helper`
-- `deviceLinkProcesses` is the only process allowlist; a name like `heartbeat` is an app
+- `deviceLinkProcesses` (`heartbeatd`, `lockdownd`) is the device-link allowlist; a name like `heartbeat` is an app
+- `systemProcessNames` grows only from evidence: a capture id with numbers, a test `allowlist_<name>` and a must-not-match test for the nearest app-like name. Added in 4.4 from the s0 to s3 captures: `attributionkitd`, `mapspushd`, `fitcored`, `mobileassetd` (Apple daemons that had been counted as apps). Names match whole or in their 16-character cut form, never as a prefix
+- Not added: extensions and helpers that belong to a third-party app (they stay `app`), and `airplayd` (it appears as a helper with an effective process)
+- Idle check: `quietShare` (deviceLink + localNetwork + system bytes over all bytes) is a band metric in `Tests/Expected/s0-idle.json` only. Rules are not widened to reach a target; the measured value and reason are in md/milestone2/BASELINE.md
 
 ## Found in the first live capture (2026-11-16)
 

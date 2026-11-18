@@ -83,6 +83,8 @@ Scripted captures, recorded 2026-11-18 with `capture --diagnostic` (scenario scr
 - Who updates a band: the author of the change that moves a metric. Re-run `--write-bands` on the fixtures and add an entry to `notes` with the metric and the reason (for example a narrowed denominator). A band is never loosened without a note
 - A metric whose denominator is under 10,000 bytes is informational and never fails
 
+- `quietShare` (deviceLink + localNetwork + system) is only meaningful for the idle scenario. `--write-bands` writes it into every band file: after regenerating, remove it from all band files except `s0-idle.json`
+
 ## Benchmarks
 
 | What | Target | Result |
