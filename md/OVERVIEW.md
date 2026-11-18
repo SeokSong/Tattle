@@ -166,6 +166,7 @@ Updated 2026-11-17.
 | Fill hostnames for connections older than the capture from earlier DNS, labelled as inferred | Biggest flows often have no name | No |
 | Explain QUIC flows with no handshake | Two Google flows had no SNI | Yes, one `--diagnostic` capture |
 | "On behalf of" label fix, `--device <name>` filter | Small correctness fixes | No |
+| Quality report (`Report` target, `md/REPORT.md`): totals, reconciliation checks, M1-comparable metrics | Every later change must show up as a number | No |
 | 30-minute stability capture | RVI long-session reliability unproven | Yes |
 | VPN double counting | Untested; Private Relay is not a tunnel | Yes, needs a VPN |
 

@@ -58,7 +58,7 @@ struct SessionRow: Identifiable, Equatable {
 }
 
 struct SessionDetail {
-    var rows: [ProcessRow]
+    var grouping: ProcessGrouping
     var flows: [FlowLine]
 }
 
@@ -72,7 +72,7 @@ final class AppModel: ObservableObject {
     @Published var showAccess = false
     @Published var liveStats = PipelineStats()
     @Published var liveFlows: [Flow] = []
-    @Published var processRows: [ProcessRow] = []
+    @Published var grouping = ProcessGrouping()
     @Published var topFlowLines: [FlowLine] = []
     @Published var sessions: [SessionRow] = []
     @Published var storeError: String?
@@ -211,7 +211,7 @@ final class AppModel: ObservableObject {
             diagnosticActive = diagnosticCapture
             liveStats = PipelineStats()
             liveFlows = []
-            processRows = []
+            grouping = ProcessGrouping()
             topFlowLines = []
 
             await pipeline.startFlushTimer()
@@ -294,7 +294,7 @@ final class AppModel: ObservableObject {
     }
 
     private func updateDerived() {
-        processRows = groupByProcess(from: liveFlows, withEmptyUnattributed: true)
+        grouping = groupByProcess(from: liveFlows, withEmptyUnattributed: true)
         topFlowLines = topFlows(liveFlows)
     }
 
@@ -329,10 +329,11 @@ final class AppModel: ObservableObject {
     func detail(for id: UUID) -> SessionDetail? {
         guard let store else { return nil }
         do {
-            let totals = try store.processTotals(session: id)
-            let inputs = totals.map { TallyInput(tally: [$0.0: $0.packets], packets: $0.packets, ipBytes: $0.ipBytes) }
+            // the category is decided per flow, then carried to each of its tally rows
             let flows = try store.flows(session: id)
-            return SessionDetail(rows: groupByProcess(from: inputs, withEmptyUnattributed: true), flows: topFlows(flows))
+            return SessionDetail(
+                grouping: groupByProcess(from: tallyInputs(from: flows), withEmptyUnattributed: true),
+                flows: topFlows(flows))
         } catch {
             storeError = "Session could not be read: \(error.localizedDescription)"
             return nil

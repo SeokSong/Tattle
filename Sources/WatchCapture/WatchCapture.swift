@@ -5,9 +5,11 @@ import IOKit.usb
 import Attribution
 import Capture
 import Dispatch
+import Domains
 import Flows
 import PCAPNG
 import Pipeline
+import Report
 import Storage
 
 let appleVendorID = 1452
@@ -207,9 +209,10 @@ func newSession() -> CaptureSession {
 func describe(_ attribution: AttributionResult) -> String {
     var text: String
     switch attribution.primary {
-    case .app(let name, let pids): text = "\(name) (\(pids.count) pid\(pids.count == 1 ? "" : "s"))"
-    case .onBehalfOf(let app, let via): text = "\(app) via \(via)"
-    case .system(let name): text = "system \(name)"
+    case .app(let name, let pids):
+        text = "\(ProcessNames.displayName(name)) (\(pids.count) pid\(pids.count == 1 ? "" : "s"))"
+    case .onBehalfOf(let app, let via): text = "\(ProcessNames.displayName(app)) via \(ProcessNames.displayName(via))"
+    case .system(let name): text = "system \(ProcessNames.displayName(name))"
     case .unknown: text = "unknown"
     }
     if attribution.mixed { text += " [mixed]" }
@@ -229,7 +232,9 @@ func flowLine(_ flow: Flow) -> String {
     timeFormatter.formatOptions = [.withTime, .withColonSeparatorInTime]
     let key = flow.key
     let transport = key.transport == .tcp ? "tcp" : "udp"
-    var line = "  \(timeFormatter.string(from: flow.firstSeen))  \(flow.interface)  \(transport)  "
+    let category = Classifier.classify(flow).category.rawValue
+    let padded = category.padding(toLength: 12, withPad: " ", startingAt: 0)
+    var line = "  \(padded)  \(timeFormatter.string(from: flow.firstSeen))  \(flow.interface)  \(transport)  "
     line += "\(key.remoteAddress.description):\(key.remotePort)  in \(flow.ipBytesIn) out \(flow.ipBytesOut)"
     if let name = flow.serverName { line += "  \(name)" }
     line += "  -> \(describe(Attributor.attribute(flow.tally)))"
@@ -271,6 +276,22 @@ func printSummary(pipeline: CapturePipeline, stats: PipelineStats, final: Pipeli
     for flow in flows.sorted(by: { $0.ipBytesIn + $0.ipBytesOut > $1.ipBytesIn + $1.ipBytesOut }).prefix(20) {
         print(flowLine(flow))
     }
+
+    print("\nBytes by category (IP bytes, whole flows):")
+    var categoryBytes: [TrafficCategory: Int] = [:]
+    var categoryFlows: [TrafficCategory: Int] = [:]
+    for flow in flows {
+        let category = Classifier.classify(flow).category
+        categoryBytes[category, default: 0] += flow.ipBytesIn + flow.ipBytesOut
+        categoryFlows[category, default: 0] += 1
+    }
+    for category in TrafficCategory.allCases {
+        let name = category.rawValue.padding(toLength: 12, withPad: " ", startingAt: 0)
+        let counted = category.isPhoneTraffic ? "phone traffic" : "not phone traffic"
+        print("  \(name)  \(categoryBytes[category] ?? 0) bytes  \(categoryFlows[category] ?? 0) flows  (\(category.label), \(counted))")
+    }
+    let phoneBytes = TrafficCategory.allCases.filter(\.isPhoneTraffic).reduce(0) { $0 + (categoryBytes[$1] ?? 0) }
+    print("  Phone traffic total: \(phoneBytes) bytes")
 
     print("\nDomains: DNS answers \(stats.dnsObservations)  SNI found \(stats.sniFound)")
     print("Handshake buffers gave up: TLS \(await pipeline.tlsGaveUp)  QUIC \(await pipeline.quicGaveUp)")
@@ -560,12 +581,167 @@ func redactUDIDs(_ text: String, udid: String) -> String {
     udid.isEmpty ? text : text.replacingOccurrences(of: udid, with: "<udid>")
 }
 
+// MARK: - Report
+
+let reportUsage = """
+    usage: WatchCapture report <file.pcap|pcapng> [options]
+           WatchCapture report --db <path> --session <id|latest> [options]
+
+      --detail            add process names (names never appear without it)
+      --json              print the JSON report instead of the text table
+      --scenario <file>   score the capture against a scenario file (numbers only are printed)
+      --bands <file>      compare with a band file; exit 3 on a regression
+      --write-bands <file> --label <text>
+                          write a band file from this report (keeps notes of an existing file)
+    with --json and --scenario or --bands the output is {"report", "score", "regressions"}
+    exit codes: 0 ok, 2 a reconciliation check failed, 3 a band regression, 1 other error
+    """
+
+struct RegressionLine: Encodable {
+    var metric: String, kind: String, value: Double, limit: Double, points: Double
+    init(_ r: Regression) {
+        metric = r.metric
+        kind = r.kind.rawValue
+        value = r.value
+        limit = r.limit
+        points = r.points
+    }
+}
+
+struct ReportBundle: Encodable {
+    var report: QualityReport
+    var score: ScenarioScore?
+    var regressions: [RegressionLine]?
+}
+
+/// returns the exit code. the report goes to stdout only
+func runReport(_ args: [String]) async -> Int32 {
+    var file: String?, db: String?, session: String?
+    var scenarioPath: String?, bandsPath: String?, writeBandsPath: String?, label: String?
+    var detail = false, json = false
+    var i = 0
+    func fail(_ message: String) -> Int32 {
+        FileHandle.standardError.write(Data((message + "\n" + reportUsage + "\n").utf8))
+        return 1
+    }
+    while i < args.count {
+        let a = args[i]
+        switch a {
+        case "--detail": detail = true
+        case "--json": json = true
+        case "--db", "--session", "--scenario", "--bands", "--write-bands", "--label":
+            guard i + 1 < args.count else { return fail("\(a) needs a value") }
+            i += 1
+            switch a {
+            case "--db": db = args[i]
+            case "--session": session = args[i]
+            case "--scenario": scenarioPath = args[i]
+            case "--bands": bandsPath = args[i]
+            case "--write-bands": writeBandsPath = args[i]
+            default: label = args[i]
+            }
+        default:
+            guard !a.hasPrefix("--"), file == nil else { return fail("unexpected argument: \(a)") }
+            file = a
+        }
+        i += 1
+    }
+    if writeBandsPath != nil && label == nil { return fail("--write-bands needs --label") }
+    if writeBandsPath != nil && bandsPath != nil { return fail("use --bands or --write-bands, not both") }
+    let options = ReportOptions(detail: detail)
+    let report: QualityReport
+    var flows: [Flow] = [], domains: [DomainObservation] = []
+    do {
+        switch (file, db) {
+        case (let path?, nil):
+            guard session == nil else { return fail("--session needs --db") }
+            let pipeline = CapturePipeline(store: nil, session: newSession(), retainFlows: true, retainDomains: true)
+            let stats = try await pipeline.run(FilePacketSource(url: URL(fileURLWithPath: path)))
+            await pipeline.stop(reason: .captureStopped)
+            let snapshot = PipelineSnapshot(
+                packets: stats.packets, decoded: stats.decoded, skipped: stats.skipped,
+                malformed: stats.malformed, droppedNoPort: stats.droppedNoPort)
+            flows = await pipeline.flowsSnapshot()
+            domains = await pipeline.domainsSnapshot()
+            report = ReportBuilder.build(flows: flows, domains: domains, pipeline: snapshot, options: options)
+        case (nil, let dbPath?):
+            guard let session else { return fail("--db needs --session <id|latest>") }
+            let store = try Store(path: URL(fileURLWithPath: dbPath))
+            let all = try store.sessions()
+            let chosen: CaptureSession?
+            if session == "latest" {
+                chosen = all.last
+            } else {
+                guard let id = UUID(uuidString: session) else { return fail("not a session id: \(session)") }
+                chosen = all.first { $0.id == id }
+            }
+            guard let chosen else {
+                FileHandle.standardError.write(Data("no such session\n".utf8))
+                return 1
+            }
+            // no pipeline stats are stored: packetsRead and decodedAccounted are skipped
+            flows = try store.flows(session: chosen.id)
+            domains = try store.domains(session: chosen.id)
+            report = ReportBuilder.build(flows: flows, domains: domains, pipeline: nil, options: options)
+        default:
+            return fail("give either a capture file or --db")
+        }
+        var score: ScenarioScore?
+        if let scenarioPath {
+            score = try Scenario.load(URL(fileURLWithPath: scenarioPath)).score(flows: flows, domains: domains)
+        }
+        var regressions: [Regression]?
+        if let bandsPath {
+            let bands = try BandsFile.load(URL(fileURLWithPath: bandsPath))
+            if let score, score.scenario != bands.scenario {
+                return fail("scenario file and band file name different scenarios")
+            }
+            regressions = Ratchet.check(report: report, bands: bands)
+        }
+        if let writeBandsPath, let label {
+            let url = URL(fileURLWithPath: writeBandsPath)
+            let previous = try? BandsFile.load(url)
+            let name = score?.scenario ?? previous?.scenario ?? url.deletingPathExtension().lastPathComponent
+            let bands = Bands.make(from: report, scenario: name, baselineLabel: label, previous: previous)
+            try Data(bands.json().utf8).write(to: url, options: .atomic)
+            FileHandle.standardError.write(Data("wrote bands to \(writeBandsPath)\n".utf8))
+        }
+        if json && (score != nil || regressions != nil) {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+            let out = ReportBundle(
+                report: report, score: score,
+                regressions: regressions?.map { RegressionLine($0) })
+            print(String(decoding: try encoder.encode(out), as: UTF8.self))
+        } else if json {
+            print(try report.json())
+        } else {
+            print(ReportRendering.text(report), terminator: "")
+            if let score { print("\n" + score.text(), terminator: "") }
+            if let regressions {
+                print("\nBands: " + (regressions.isEmpty ? "no regressions" : "REGRESSION"))
+                for r in regressions { print(r.description) }
+            }
+        }
+        if !report.reconciliation.ok { return 2 }
+        if let regressions, !regressions.isEmpty { return 3 }
+    } catch {
+        FileHandle.standardError.write(Data("report failed: \(error)\n".utf8))
+        return 1
+    }
+    return 0
+}
+
 // MARK: - Main
 
 let arguments = CommandLine.arguments
 
 if arguments.count >= 2 && arguments[1] == "capture" {
     exit(await runCapture(Array(arguments.dropFirst(2))))
+}
+
+if arguments.count >= 2 && arguments[1] == "report" {
+    exit(await runReport(Array(arguments.dropFirst(2))))
 }
 
 if arguments.count == 3 && arguments[1] == "read" {

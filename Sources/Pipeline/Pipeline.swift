@@ -31,11 +31,13 @@ public actor CapturePipeline {
     private let session: CaptureSession
     private let flushInterval: TimeInterval
     private let retainFlows: Bool
+    private let retainDomains: Bool
 
     private var decoder = PacketDecoder()
     private var flowTable = FlowTable()
     private var extractor = DomainExtractor()
     private var pendingDomains: [DomainObservation] = []
+    private var retainedDomains: [DomainObservation] = []
     private var retained: [UUID: Flow] = [:]
     private var counters = PipelineStats()
     private var lastExpire: Date?
@@ -44,15 +46,17 @@ public actor CapturePipeline {
     private var lastRequeued = 0
     private var timer: Task<Void, Never>?
 
-    /// retainFlows keeps the final state of every flow in memory for flowsSnapshot(); for the CLI and tests
+    /// retainFlows keeps the final state of every flow in memory for flowsSnapshot(); for the CLI and tests.
+    /// retainDomains does the same for domainsSnapshot(). both are unbounded: never set them in the app
     public init(
         store: sending (any FlowStore)?, session: CaptureSession, flushInterval: TimeInterval = 2,
-        retainFlows: Bool = false
+        retainFlows: Bool = false, retainDomains: Bool = false
     ) {
         self.store = store
         self.session = session
         self.flushInterval = flushInterval
         self.retainFlows = retainFlows
+        self.retainDomains = retainDomains
     }
 
     public var stats: PipelineStats {
@@ -63,6 +67,9 @@ public actor CapturePipeline {
 
     /// final state of every flow seen, only when retainFlows is set. call after stop
     public func flowsSnapshot() -> [Flow] { Array(retained.values) }
+
+    /// every domain observation flushed so far, only when retainDomains is set. call after stop
+    public func domainsSnapshot() -> [DomainObservation] { retainedDomains }
 
     public var tlsGaveUp: Int { extractor.tlsGaveUp }
     public var quicGaveUp: Int { extractor.quicGaveUp }
@@ -210,6 +217,7 @@ public actor CapturePipeline {
         let flows = flowTable.drainDirty()
         if retainFlows { for f in flows { retained[f.id] = f } }
         guard let store else {
+            if retainDomains { retainedDomains += pendingDomains }
             pendingDomains.removeAll(keepingCapacity: true)
             return
         }
@@ -223,6 +231,7 @@ public actor CapturePipeline {
             counters.saveFailures += 1
             throw error
         }
+        if retainDomains { retainedDomains += pendingDomains }
         pendingDomains.removeAll(keepingCapacity: true)
     }
 }

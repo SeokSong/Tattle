@@ -164,7 +164,7 @@ Every place Watch keeps data. Each later change that stores something new must a
 | Salted device hash and device name | Same database | Same as sessions (install salt stays) | Sessions yes; the install salt stays |
 | Diagnostic raw-packet files (opt-in) | `diagnostics/` next to the database | 24 hours | Yes |
 | Capture script log and run directory | Root script's run folder (see [CAPTURE.md](CAPTURE.md)) | Until the next run or reboot | Not touched; contains no packets, no hostnames |
-| Quality report JSON | Printed or saved by the user | User-managed | No (outside the database) |
+| Report JSON (`WatchCapture report --json`) | Printed to stdout only; saved only if the user redirects it | User-managed | No (outside the database) |
 | Fixture captures and scenario files | `~/dev/watch-fixtures` (developer only) | User-managed | No |
 
 ### Privacy

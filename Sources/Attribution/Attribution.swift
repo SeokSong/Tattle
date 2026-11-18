@@ -18,12 +18,16 @@ public struct AttributionResult: Sendable {
     public let packetsTotal: Int
     /// more than one non-system app name in the tally
     public let mixed: Bool
+    /// the biggest row of the winning group: the one row that decided `primary` (nil when unknown).
+    /// the classifier reads this instead of choosing a row itself, so both always agree
+    public let topRow: ProcessPair?
 
-    public init(primary: AppAttribution, packetsForPrimary: Int, packetsTotal: Int, mixed: Bool) {
+    public init(primary: AppAttribution, packetsForPrimary: Int, packetsTotal: Int, mixed: Bool, topRow: ProcessPair? = nil) {
         self.primary = primary
         self.packetsForPrimary = packetsForPrimary
         self.packetsTotal = packetsTotal
         self.mixed = mixed
+        self.topRow = topRow
     }
 }
 
@@ -71,7 +75,7 @@ public enum Attributor {
             primary = .app(name: name, pids: pids)
         }
         return AttributionResult(
-            primary: primary, packetsForPrimary: group.packets, packetsTotal: total, mixed: mixed)
+            primary: primary, packetsForPrimary: group.packets, packetsTotal: total, mixed: mixed, topRow: top)
     }
 
     public static func isSystemProcess(_ name: String) -> Bool {

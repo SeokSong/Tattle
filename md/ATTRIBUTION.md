@@ -103,10 +103,39 @@ public enum Attributor {
 - `HostnameIndex.resolve` agrees with `supportingDomains` on generated data; see `HostnamesTests`
 - Rerunning over the same input gives equal results (pure)
 
+## Traffic categories
+
+The report prints bytes, packets, flows and share per category, bytes per rule and the bytes moved out of app totals: see [REPORT.md](REPORT.md#categories).
+
+`Classifier.classify(_ flow:)` gives each flow one `TrafficCategory` and the name of the rule that decided it. It reads the flow's tally, the winning row's process names and both addresses.
+
+| Category | Label | Rule names |
+|---|---|---|
+| `app` | From app | `app.process` |
+| `helper` | Helper for an app | `helper.eproc` |
+| `system` | iOS system | `system.process` |
+| `deviceLink` | USB link to this Mac | `deviceLink.process`, `deviceLink.linkLocal` |
+| `localNetwork` | Local network only | `localNetwork.address` |
+| `unknown` | No process info | `unknown.noProcess` |
+
+Precedence, first match wins:
+
+1. `deviceLink.process`: the winning row's process is in `deviceLinkProcesses` (`heartbeatd`, `lockdownd`), compared in cut form
+2. `app.process` or `helper.eproc`: the winning group is an app. `helper.eproc` when the winning row has a process and a different effective process, or a system process works for an app
+3. `deviceLink.linkLocal`: no app evidence and both addresses are link-local (169.254.0.0/16, fe80::/10)
+4. `localNetwork.address`: no app evidence and the remote address is local-only
+5. `system.process`: the winning group is a system process
+6. `unknown.noProcess`: no process evidence
+
+- Never moves an app-tagged flow: an `app` or `helper` flow stays in its category whatever the addresses are (a NAS at 192.168.1.20, a work server at 10.x)
+- Local-only addresses: multicast (224.0.0.0/4, ff00::/8), 255.255.255.255, loopback (127.0.0.0/8, ::1), link-local, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7. Not 100.64.0.0/10: real servers can sit there
+- Phone traffic = `app` + `helper` + `system` + `unknown`; app traffic = `app` + `helper`
+- `deviceLinkProcesses` is the only process allowlist; a name like `heartbeat` is an app
+
 ## Found in the first live capture (2026-11-16)
 
 - Process names are truncated to 16 characters by the kernel (`appstorecomponen`, `AppStoreOverlays`). Any name-to-app mapping must match on the truncated form. Implemented, see "Names are cut to 16 characters"
-- The Mac–phone USB link shows up in the capture: `heartbeatd`/`lockdownd` TCP on a `fd5d:...` address, and link-local `169.254.100.1`. Classify as `deviceLink` and keep out of app totals. Not implemented yet: only the `deviceLinkProcesses` set exists (`heartbeatd`, `lockdownd`), unused until the category rules land
+- The Mac–phone USB link shows up in the capture: `heartbeatd`/`lockdownd` TCP on a `fd5d:...` address, and link-local `169.254.100.1`. Classify as `deviceLink` and keep out of app totals. Implemented by `Classifier`, see "Traffic categories"
 - A connection that already existed when the capture started has no handshake and no DNS in the capture, so it shows as app-attributed with no hostname (a 27 MB YouTube flow in the live run). Expected; later, earlier DNS evidence could fill it in, labelled as such
 
 ## Names are cut to 16 characters; matching rules

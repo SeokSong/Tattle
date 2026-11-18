@@ -28,11 +28,13 @@ struct SessionsView: View {
                 if let detail {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 20) {
-                            Text("Traffic by process").font(.headline)
-                            ProcessTable(rows: detail.rows)
+                            Text("Phone traffic: \(formatBytes(detail.grouping.phoneBytes))").font(.headline)
+                            Text("Phone traffic by process").font(.headline)
+                            ProcessTable(rows: detail.grouping.rows)
+                            SetAsideSection(rows: detail.grouping.setAside)
                             Text("Top flows by bytes").font(.headline)
                             FlowTable(flows: detail.flows)
-                            Text("Byte totals per process are shared out by packet count from stored flow totals.")
+                            Text("Byte totals per process are shared out by packet count from stored flow totals. Each flow is placed in one category as a whole.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         .padding(24)

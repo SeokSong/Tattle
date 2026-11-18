@@ -6,8 +6,6 @@ import TestSupport
 
 // MARK: builders
 
-private func be16(_ v: Int) -> [UInt8] { [UInt8(v >> 8 & 0xFF), UInt8(v & 0xFF)] }
-
 private let mac: [UInt8] = Array(repeating: 0xAA, count: 6) + Array(repeating: 0xBB, count: 6)
 
 private func ipv4(

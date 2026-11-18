@@ -347,3 +347,20 @@ private func resetFlows() -> [UInt8] {
     #expect(ech.echSeen && ech.serverName == "public.example.com")
     #expect(!plain.echSeen && plain.serverName == "example.org")
 }
+
+@Test func domainsSnapshotKeepsDomains() async throws {
+    let (bytes, _) = SyntheticCorpus.mixed()
+    let pipeline = CapturePipeline(store: nil, session: session(), retainFlows: true, retainDomains: true)
+    let stats = try await pipeline.run(DataPacketSource(bytes))
+    await pipeline.stop(reason: .captureStopped)
+    let domains = await pipeline.domainsSnapshot()
+    #expect(domains.filter { $0.source == .dns }.count == stats.dnsObservations)
+    #expect(domains.filter { $0.source == .sni }.count == stats.sniFound)
+    #expect(stats.dnsObservations == 2)
+    #expect(domains.count == stats.dnsObservations + stats.sniFound)
+    // off by default
+    let plain = CapturePipeline(store: nil, session: session())
+    _ = try await plain.run(DataPacketSource(bytes))
+    await plain.stop(reason: .captureStopped)
+    #expect(await plain.domainsSnapshot().isEmpty)
+}

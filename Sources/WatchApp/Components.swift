@@ -39,6 +39,9 @@ struct ProcessTable: View {
                             Text("lookups for " + row.forApps.joined(separator: ", "))
                                 .font(.caption).foregroundStyle(.secondary)
                         }
+                        if let note = row.rawNameNote {
+                            Text(note).font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                     Text(row.pids.isEmpty ? "unknown" : row.pids.map(String.init).joined(separator: ", "))
                         .foregroundStyle(.secondary)
@@ -47,6 +50,44 @@ struct ProcessTable: View {
                     Text(formatBytes(row.ipBytes)).monospacedDigit()
                 }
             }
+        }
+    }
+}
+
+/// the set-aside lines under the phone traffic table: category, bytes, and a toggle to the process rows inside
+struct SetAsideSection: View {
+    var rows: [ProcessRow]
+    @State private var expanded: Set<String> = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Not counted as phone traffic").font(.headline)
+            ForEach(rows) { row in
+                VStack(alignment: .leading, spacing: 6) {
+                    Button {
+                        if expanded.contains(row.id) { expanded.remove(row.id) } else { expanded.insert(row.id) }
+                    } label: {
+                        HStack {
+                            Image(systemName: expanded.contains(row.id) ? "chevron.down" : "chevron.right")
+                                .frame(width: 12)
+                            Text(row.name)
+                            Spacer()
+                            Text(formatBytes(row.ipBytes)).monospacedDigit()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if expanded.contains(row.id) {
+                        if row.children.isEmpty {
+                            Text("Nothing in this category").foregroundStyle(.secondary).padding(.leading, 20)
+                        } else {
+                            ProcessTable(rows: row.children).padding(.leading, 20)
+                        }
+                    }
+                }
+            }
+            Text("Seen on the phone's interface, but not traffic the phone sent to the internet for its apps.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 }
@@ -75,7 +116,12 @@ struct FlowTable: View {
                             .foregroundStyle(flow.serverName == nil ? Color.secondary : Color.primary)
                             .lineLimit(1)
                         Text(flow.address).foregroundStyle(.secondary).lineLimit(1).textSelection(.enabled)
-                        Text(flow.attribution).lineLimit(1)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(flow.attribution).lineLimit(1)
+                            if let label = flow.setAsideLabel {
+                                Text(label).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
                         Text(formatBytes(flow.ipBytes)).monospacedDigit()
                     }
                 }

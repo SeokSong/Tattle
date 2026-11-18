@@ -53,6 +53,7 @@ public struct PipelineStats: Sendable {
 - After `stop`, `process` returns at once and the public flush paths (`run`, timer) do nothing: no packet is counted or saved after the session ends
 - The pipeline takes any `FlowStore` (protocol in `Sources/Storage/FlowStore.swift`), so tests can inject a store that fails
 - `store == nil` → run without saving (used by the CLI for a quick summary and by tests)
+- `retainDomains: true` keeps every flushed `DomainObservation` for `domainsSnapshot()`, as `retainFlows` does for flows. CLI and tests only: unbounded, never set in the app
 
 ### Errors
 
@@ -69,9 +70,13 @@ public struct PipelineStats: Sendable {
 | Command | Does |
 |---|---|
 | `read <file>` | Existing summary (packets, interfaces, by process) |
-| `flows <file> [--db path]` | Runs the pipeline on a file; prints stats, top flows by bytes with attribution, DNS and SNI counts; saves when `--db` is given |
+| `flows <file> [--db path]` | Runs the pipeline on a file; prints stats, top flows by bytes (each line starts with the category code name, e.g. `app`, `deviceLink`; names are display names), bytes and flows per category with the phone traffic total, DNS and SNI counts; saves when `--db` is given |
+| `report <file> [--detail] [--json]`, `report --db <path> --session <id\|latest> [...]` | Quality report (see [REPORT.md](REPORT.md)). Exit 0 all checks pass, 2 a check failed, 1 other error |
 | `bench <file>` | Runs the pipeline with no store 3 times; prints packets/s. Target ≥ 1,500 (N1); expected far higher |
 
+- `flows` output sample:
+    - flow line: `  app           12:00:01  rvi0  tcp  93.184.34.34:443  in 900 out 100  example.com  -> TikTok (1 pid)`
+    - summary block: `Bytes by category (IP bytes, whole flows):` then one line per category, `  deviceLink    700 bytes  1 flows  (USB link to this Mac, not phone traffic)`, then `  Phone traffic total: N bytes`
 - Output never prints the device id. Addresses and hostnames print only in `flows` output, which is a local developer command
 
 ### Tests
