@@ -7,6 +7,8 @@ let systemProcessNames: Set<String> = [
     "sharingd", "timed", "assistantd", "akd", "accountsd", "AppleIDAuthAgent", "appleaccountd",
     "familycircled", "findmydeviced", "fmfd", "gamed", "homed", "healthd", "mediaremoted",
     "siriknowledged", "suggestd", "weatherd", "webbookmarksd", "wifianalyticsd",
+    // added from real captures in 4.4 (each has an allowlist_ test in ClassifierTests)
+    "attributionkitd", "mapspushd", "fitcored", "mobileassetd",
 ]
 
 /// the system names plus their 16-character cut forms, built once

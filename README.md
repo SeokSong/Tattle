@@ -104,6 +104,20 @@ Measured on 2026-11-18 on four scripted captures (idle phone, one browser, two s
 | Expected app on top in its time window | no expectation | 1 / 1 | 2 / 2 | 1 / 1 |
 | Expected sites found | none expected | 2 / 2 | none expected | none expected |
 
+Share of bytes by category on the same captures (Milestone 2, after validation on real data):
+
+| Category | Idle | Browser | Two apps | Video |
+|---|---|---|---|---|
+| From app | 23.9% | 0.6% | 99.4% | 99.5% |
+| Helper for an app | 2.5% | 80.6% | 0.2% | 0.1% |
+| iOS system | 72.5% | 16.8% | 0.3% | 0.3% |
+| USB link to this Mac | 0.3% | 0.7% | 0.0% | 0.0% |
+| Local network only | 0.7% | 1.3% | 0.0% | 0.1% |
+| No process info | 0.1% | 0.1% | 0.0% | 0.0% |
+| Expected apps wrongly counted as USB link | 0 | 0 | 0 | 0 |
+
+In the browser capture most bytes are "Helper for an app" because Safari does its networking through a separate WebKit process that works on Safari's behalf; it still counts as the browser's traffic. The idle capture was not quiet: link + local + system is 73.5% of its bytes, not the 95% first guessed. One app opened about 185 connections after a notification arrived (26% of bytes). The rules never move app-tagged traffic, so the idle check is set to 71.4% (measured minus 2 points).
+
 These captures start every app fresh, so nearly every connection's handshake is seen. In a long real session it is different: on one earlier session only 5.4% of HTTPS bytes had a hostname, because the largest connections were already open when capture began. Closing that gap is part of Milestone 2.
 
 ## Running it

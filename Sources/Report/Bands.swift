@@ -81,12 +81,25 @@ public struct BandsFile: Codable, Equatable, Sendable {
 extension QualityReport {
     /// the metrics a band file can name, by key
     public var metrics: [String: Ratio] {
-        [
+        var all: [String: Ratio] = [
             "attributedShare": attribution.attributedShare,
             "noProcessShare": attribution.noProcessShare,
             "mixedFlowShare": attribution.mixedFlowShare,
             "hostnameCoverageSniOnly": hostnames.hostnameCoverageSniOnly,
         ]
+        // category fields (4.2); old reports without categories add nothing
+        if categories.unknownShare.denominator > 0 {
+            all["unknownShare"] = categories.unknownShare
+            all["quietShare"] = quietShare
+        }
+        return all
+    }
+
+    /// deviceLink + localNetwork + system bytes over all bytes: the idle-scenario figure.
+    /// only the idle band file names it
+    public var quietShare: Ratio {
+        let quiet = ["deviceLink", "localNetwork", "system"].reduce(0) { $0 + (categories.byCategory[$1]?.ipBytes ?? 0) }
+        return Ratio(numerator: quiet, denominator: totals.ipBytes)
     }
 }
 
@@ -95,7 +108,7 @@ public enum Bands {
     public static let minDenominator = 10_000
     public static let tolerance = 0.005
     /// metrics where a smaller value is better; the rest are "higher is better"
-    public static let lowerIsBetter: Set<String> = ["noProcessShare", "mixedFlowShare"]
+    public static let lowerIsBetter: Set<String> = ["noProcessShare", "mixedFlowShare", "unknownShare"]
 
     static func round3(_ x: Double) -> Double { (x * 1000).rounded() / 1000 }
 

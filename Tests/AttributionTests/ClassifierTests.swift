@@ -203,3 +203,31 @@ private func classify(_ f: Flow) -> Classification { Classifier.classify(f) }
     let f5 = flow([(.none, 2)], remote: v4(224, 0, 0, 251))
     #expect(classify(f5).category == .localNetwork)
 }
+
+// evidence 2026-11-18, see md/milestone2/BASELINE.md
+@Test func allowlist_attributionkitd() {
+    #expect(classify(flow([(proc("attributionkitd"), 5)])) == Classification(category: .system, rule: "system.process"))
+    // the name never matches as a prefix or in an app's cut form
+    #expect(classify(flow([(proc("attributionkit"), 5)])).category == .app)
+}
+
+// evidence 2026-11-18, see md/milestone2/BASELINE.md
+@Test func allowlist_mapspushd() {
+    #expect(classify(flow([(proc("mapspushd"), 5)])) == Classification(category: .system, rule: "system.process"))
+    // the name never matches as a prefix or in an app's cut form
+    #expect(classify(flow([(proc("mapspush"), 5)])).category == .app)
+}
+
+// evidence 2026-11-18, see md/milestone2/BASELINE.md
+@Test func allowlist_fitcored() {
+    #expect(classify(flow([(proc("fitcored"), 5)])) == Classification(category: .system, rule: "system.process"))
+    // the name never matches as a prefix or in an app's cut form
+    #expect(classify(flow([(proc("fitcore"), 5)])).category == .app)
+}
+
+// evidence 2026-11-18, see md/milestone2/BASELINE.md
+@Test func allowlist_mobileassetd() {
+    #expect(classify(flow([(proc("mobileassetd"), 5)])) == Classification(category: .system, rule: "system.process"))
+    // the name never matches as a prefix or in an app's cut form
+    #expect(classify(flow([(proc("mobileasset"), 5)])).category == .app)
+}
