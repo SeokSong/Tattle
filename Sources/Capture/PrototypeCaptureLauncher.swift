@@ -68,6 +68,11 @@ public actor PrototypeCaptureLauncher {
 
     /// where the last capture's script log was kept (never contains the udid), nil before the first stop
     public private(set) var lastLogURL: URL?
+    /// tcpdump's "packets dropped by kernel" from the last capture's script log; nil when unknown (tcpdump
+    /// was killed before it printed its summary) or before the first stop
+    public private(set) var lastKernelDropped: Int?
+    /// true when the last capture's script log has tcpdump's "interface disappeared" line (cable pull)
+    public private(set) var lastLinkLost = false
     /// logs kept besides the newest
     static let logsToKeep = 10
 
@@ -178,6 +183,8 @@ public actor PrototypeCaptureLauncher {
     /// on any failure everything is stopped and the run directory removed
     public func start(udid: String, tee: FileHandle? = nil) async throws -> FileHandlePacketSource {
         guard directory == nil else { throw CaptureError.alreadyRunning }
+        lastKernelDropped = nil
+        lastLinkLost = false
         do {
             return try await startInner(udid: udid, tee: tee)
         } catch {
@@ -323,6 +330,10 @@ public actor PrototypeCaptureLauncher {
             let deadline = Date().addingTimeInterval(1)
             while !source.isFinished, Date() < deadline { try? await Task.sleep(nanoseconds: 20_000_000) }
         }
+        if let lines = logLines() {
+            lastKernelDropped = CaptureController.droppedByKernel(in: lines)
+            lastLinkLost = CaptureController.interfaceDisappeared(in: lines)
+        }
         keepLog()
         if let directory { try? FileManager.default.removeItem(at: directory) }
         directory = nil
@@ -331,6 +342,83 @@ public actor PrototypeCaptureLauncher {
         errorFile = nil
         source = nil
         logURL = nil
+    }
+
+    private func logLines() -> [String]? {
+        guard let logURL, let text = try? String(contentsOf: logURL, encoding: .utf8) else { return nil }
+        return text.components(separatedBy: "\n")
+    }
+
+    /// the drop count in the log right now, for a pipeline that stops before `stop()` runs here
+    public func kernelDroppedNow() -> Int? { logLines().flatMap { CaptureController.droppedByKernel(in: $0) } }
+
+    // MARK: stale run directories
+
+    /// every file the launcher puts in a run directory. a directory holding anything else is not ours
+    static let runDirectoryFiles: Set<String> = ["script.sh", "stream", "log", "osascript.err", "stop"]
+
+    /// what a stale cleanup did, by directory name (a uuid; never a path, never file contents)
+    public struct StaleRunResult: Sendable, Equatable {
+        /// given the stop file
+        public var stopped: [String] = []
+        public var removed: [String] = []
+        /// could not be removed (for example root-owned files); left in place
+        public var failed: [String] = []
+        public init() {}
+    }
+
+    /// the same cleanup for this launcher's run root, never touching the capture in progress
+    public func cleanStaleRunDirectories(grace: TimeInterval = 10) async -> StaleRunResult {
+        await Self.cleanStaleRunDirectories(runRoot: runRoot, ownDirectory: directory, grace: grace)
+    }
+
+    /// a crashed app can leave a run directory with a root tcpdump still writing to it. the script exits
+    /// when its directory gets a `stop` file or disappears, and the app cannot signal root, so: create the
+    /// stop file in each stale directory, wait `grace`, then remove the files and the directory.
+    /// only directories Watch made are touched: a real directory (never a symlink) directly under the run
+    /// root, named exactly like `UUID().uuidString`, owned by this user, holding only the launcher's own
+    /// files. nothing is followed, nothing is removed recursively, the logs directory is never looked at,
+    /// and no root is needed. a directory that cannot be cleared goes to `failed`
+    public static func cleanStaleRunDirectories(
+        runRoot: URL, ownDirectory: URL? = nil, grace: TimeInterval = 10
+    ) async -> StaleRunResult {
+        var result = StaleRunResult()
+        var rootInfo = stat()
+        guard lstat(runRoot.path, &rootInfo) == 0, rootInfo.st_mode & S_IFMT == S_IFDIR else { return result }
+        let own = ownDirectory?.lastPathComponent
+        let names = ((try? FileManager.default.contentsOfDirectory(atPath: runRoot.path)) ?? []).sorted()
+        let candidates = names.filter { $0 != own && staleCandidate(runRoot.appendingPathComponent($0, isDirectory: true)) }
+
+        for name in candidates {
+            let stop = runRoot.appendingPathComponent(name).appendingPathComponent("stop").path
+            // no-follow, never overwrites: a leftover file or link named stop stays as it is
+            let fd = open(stop, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
+            if fd >= 0 { close(fd) }
+            if fd >= 0 || errno == EEXIST { result.stopped.append(name) }
+        }
+        if !result.stopped.isEmpty, grace > 0 { try? await Task.sleep(nanoseconds: UInt64(grace * 1e9)) }
+
+        for name in candidates {
+            let dir = runRoot.appendingPathComponent(name, isDirectory: true)
+            // checked again: the directory may have changed during the wait
+            guard staleCandidate(dir) else { continue }
+            var failed = false
+            for entry in (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [] {
+                // unlink removes a link itself, never what it points to
+                if unlink(dir.appendingPathComponent(entry).path) != 0 && errno != ENOENT { failed = true }
+            }
+            if !failed && rmdir(dir.path) == 0 { result.removed.append(name) } else { result.failed.append(name) }
+        }
+        return result
+    }
+
+    private static func staleCandidate(_ dir: URL) -> Bool {
+        let name = dir.lastPathComponent
+        guard UUID(uuidString: name)?.uuidString == name else { return false }
+        var info = stat()
+        guard lstat(dir.path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR, info.st_uid == getuid() else { return false }
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return false }
+        return Set(entries).isSubset(of: runDirectoryFiles)
     }
 
     /// moves the script log (plus osascript's own output) to the logs directory, newest 10 kept

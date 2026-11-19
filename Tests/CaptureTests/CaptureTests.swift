@@ -46,6 +46,11 @@ private struct Fake {
         return url
     }
 
+    /// fake ifconfig: logs "ifconfig <args>" then runs body
+    mutating func addIfconfig(_ body: String) throws {
+        tools.ifconfig = try write("ifconfig", "#!/bin/sh\necho \"ifconfig $@\" >> \"\(log.path)\"\n\(body)\n")
+    }
+
     func markListed() { FileManager.default.createFile(atPath: dir.appendingPathComponent("listed").path, contents: Data()) }
 
     func cleanup() { try? FileManager.default.removeItem(at: dir) }
@@ -99,6 +104,36 @@ private func collect(_ source: ProcessPacketSource) async throws -> (packets: In
         }
     }
     return (packets, end)
+}
+
+private final class CallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    var count: Int { lock.lock(); defer { lock.unlock() }; return value }
+    func hit() { lock.lock(); value += 1; lock.unlock() }
+}
+
+private final class TickClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func next() -> Date { lock.lock(); defer { lock.unlock() }; value += 1; return Date(timeIntervalSince1970: Double(value)) }
+}
+
+private func linkWatchdog(
+    source: ProcessPacketSource, interface: String, tools: CaptureTools, controller: CaptureController,
+    pipeline: CapturePipeline
+) -> Task<StallWatchdog.Verdict?, Never> {
+    Task {
+        await runStallWatchdog(
+            StallWatchdog(stallAfter: 0.3, checkEvery: 0.1),
+            lastByteAt: { source.lastByteAt },
+            processRunning: { source.terminationStatus == nil },
+            linkUp: { await LinkProbe.isUp(interface: interface, tools: tools) },
+            onLinkDown: {
+                await controller.stop()
+                await pipeline.stop(reason: .interrupted)
+            })
+    }
 }
 
 private func pidAlive(_ pid: Int32) -> Bool { kill(pid, 0) == 0 }
@@ -311,4 +346,240 @@ private func pidAlive(_ pid: Int32) -> Bool { kill(pid, 0) == 0 }
     await controller.stop()
 }
 
+@Test func fakeIfconfigDrivesVerdict() async throws {
+    var up = try Fake(tcpdumpBody: { _ in "exit 0" })
+    defer { up.cleanup() }
+    try up.addIfconfig("echo 'rvi9: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 0'")
+    var down = try Fake(tcpdumpBody: { _ in "exit 0" })
+    defer { down.cleanup() }
+    try down.addIfconfig("echo 'ifconfig: interface rvi9 does not exist' >&2; exit 1")
+    var noUp = try Fake(tcpdumpBody: { _ in "exit 0" })
+    defer { noUp.cleanup() }
+    try noUp.addIfconfig("echo 'rvi9: flags=8822<BROADCAST,SMART,SIMULATE,MULTICAST> mtu 0'")
+
+    let old = Date(timeIntervalSince1970: 1000)
+    let now = old.addingTimeInterval(20)
+    for (fake, expected) in [(up, StallWatchdog.Verdict.quietButAlive), (down, .linkDown), (noUp, .linkDown)] {
+        var watchdog = StallWatchdog()
+        let tools = fake.tools
+        let verdict = await watchdog.evaluate(now: now, lastByteAt: old, processRunning: true) {
+            await LinkProbe.isUp(interface: "rvi9", tools: tools)
+        }
+        #expect(verdict == expected)
+    }
+    // the probe passes only the interface name, never a device id
+    #expect(up.logText.contains("ifconfig rvi9"))
+    #expect(!up.logText.contains(udid))
+    // a name that is not plain is refused without running anything
+    #expect(await LinkProbe.isUp(interface: "rvi9; rm", tools: up.tools) == false)
+}
+
+@Test func runnerStopsSessionOnLinkDown() async throws {
+    // a stream of 3 flows, then silence; ifconfig says the interface is gone
+    var bytes = PCAPNGBuilder.sectionHeader() + PCAPNGBuilder.interface("rvi9")
+    for i in 0..<3 {
+        let frame = PacketBuilder.ethernetIPv4TCP(
+            src: PacketBuilder.v4(10, 0, 0, 2), dst: PacketBuilder.v4(93, 184, 216, 34),
+            srcPort: 50_000 + i, dstPort: 80, flags: 0x10, payload: [1, 2, 3])
+        bytes += PCAPNGBuilder.packet(
+            interface: 0, microseconds: 1_763_000_000_000_000 + UInt64(i) * 1000, process: nil, payload: frame)
+    }
+    var fake = try Fake(tcpdumpBody: Fake.catBody(bytes, chunk: 1 << 20, thenHang: true))
+    defer { fake.cleanup() }
+    try fake.addIfconfig("exit 1")
+
+    let dbURL = fake.dir.appendingPathComponent("test.db")
+    let hash = try Store(path: dbURL).deviceHash(udid: udid)
+    let session = CaptureSession(id: UUID(), startedAt: Date(), source: "rvi", deviceHash: hash, watchVersion: "test")
+    let openedStore = try Store(path: dbURL)
+    let pipeline = CapturePipeline(store: openedStore, session: session, retainFlows: true)
+    let controller = CaptureController(tools: fake.tools)
+    let (interface, source) = try await controller.start(udid: udid)
+    let tools = fake.tools
+
+    // real clock with small thresholds, so the test waits under a second
+    let watchdog = linkWatchdog(source: source, interface: interface, tools: tools, controller: controller, pipeline: pipeline)
+    let began = ContinuousClock.now
+    _ = try await pipeline.run(source)
+    let verdict = await watchdog.value
+    let took = ContinuousClock.now - began
+    #expect(verdict == .linkDown)
+    #expect(took < .seconds(10))
+
+    // data is saved and the session ended as interrupted
+    let store = try Store(path: dbURL)
+    let finalStats = await pipeline.stats
+    #expect(finalStats.packets == 3)
+    let savedFlows = try store.flows(session: session.id)
+    #expect(savedFlows.count == 3)
+    let saved = try store.sessions()
+    let endReason = saved.first(where: { $0.id == session.id })?.endReason
+    #expect(endReason == "interrupted")
+    #expect(fake.logText.contains("rvictl -x \(udid)"))
+    #expect(!fake.logText.contains("ifconfig \(udid)"))
+}
+
+@Test func quietButAliveDoesNotEndTheSession() async throws {
+    let cat = Fake.catBody(sampleStream(packets: 3), thenHang: true)
+    var fake = try Fake(tcpdumpBody: cat)
+    defer { fake.cleanup() }
+    try fake.addIfconfig("echo 'rvi9: flags=8863<UP,RUNNING> mtu 0'")
+    let controller = CaptureController(tools: fake.tools)
+    let (interface, source) = try await controller.start(udid: udid)
+    let tools = fake.tools
+    let called = CallCounter()
+    let watchdog = Task {
+        await runStallWatchdog(
+            StallWatchdog(stallAfter: 0.2, checkEvery: 0.1),
+            lastByteAt: { source.lastByteAt },
+            processRunning: { source.terminationStatus == nil },
+            linkUp: { called.hit(); return await LinkProbe.isUp(interface: interface, tools: tools) },
+            onLinkDown: { Issue.record("link judged down") })
+    }
+    let reader = Task { try await collect(source) }
+    try await Task.sleep(for: .milliseconds(800))
+    #expect(called.count >= 1)
+    watchdog.cancel()
+    #expect(await watchdog.value == nil)
+    await controller.stop()
+    _ = try await reader.value
+}
+
+@Test func lastByteAtUpdates() async throws {
+    // a clock that ticks once per call: each chunk read moves lastByteAt strictly forward
+    let clock = TickClock()
+    let fake = try Fake(tcpdumpBody: Fake.catBody(sampleStream(packets: 20), chunk: 256, sleep: "0.02"))
+    defer { fake.cleanup() }
+    let process = Process()
+    process.executableURL = fake.tools.tcpdump
+    let pipe = Pipe()
+    process.standardOutput = pipe
+    let source = ProcessPacketSource(process: process, clock: { clock.next() })
+    let start = source.lastByteAt
+    try process.run()
+
+    var seen: [Date] = [start]
+    let reader = Task { try await collect(source) }
+    while process.isRunning {
+        seen.append(source.lastByteAt)
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    _ = try await reader.value
+    seen.append(source.lastByteAt)
+    #expect(zip(seen, seen.dropFirst()).allSatisfy { $0 <= $1 })
+    #expect(seen.last! > start)
+}
+
+
+}
+
+// MARK: - kernel drop summary (6.4)
+
+@Test func parsesDropLine() {
+    #expect(CaptureController.droppedByKernel(in: ["26916 packets captured", "26916 packets received by filter", "12 packets dropped by kernel"]) == 12)
+    #expect(CaptureController.droppedByKernel(in: ["1 packet dropped by kernel"]) == 1)
+    #expect(CaptureController.droppedByKernel(in: ["0 packets dropped by kernel"]) == 0)
+    #expect(CaptureController.droppedByKernel(in: ["tcpdump: listening on rvi0", "26916 packets captured"]) == nil)
+    #expect(CaptureController.droppedByKernel(in: []) == nil)
+}
+
+@Test func ignoresOtherLines() {
+    #expect(CaptureController.droppedByKernel(in: ["0 packets received by filter"]) == nil)
+    #expect(CaptureController.droppedByKernel(in: ["12 packets dropped by interface"]) == nil)
+    #expect(CaptureController.droppedByKernel(in: ["note: 12 packets dropped by kernel"]) == nil)
+    #expect(CaptureController.droppedByKernel(in: ["12:00:01 tcpdump status 0"]) == nil)
+}
+
+@Test func redactedLinesStillParse() {
+    let line = redact("12 packets dropped by kernel \(udid)", udid: udid)
+    #expect(CaptureController.droppedByKernel(in: [line]) == 12)
+}
+
+@Test func kernelDroppedStoredAtEnd() async throws {
+    let fake = try Fake(tcpdumpBody: { dir in
+        try Data(sampleStream(packets: 5)).write(to: dir.appendingPathComponent("s.pcapng"))
+        return "cat \"\(dir.path)/s.pcapng\"\necho \"30 packets captured\" >&2\necho \"12 packets dropped by kernel\" >&2\n"
+    })
+    defer { fake.cleanup() }
+    let dbURL = fake.dir.appendingPathComponent("test.db")
+    let reader = try Store(path: dbURL)
+    let session = CaptureSession(
+        id: UUID(), startedAt: Date(), source: "rvi", deviceHash: try reader.deviceHash(udid: udid), watchVersion: "test")
+    let pipeline = CapturePipeline(store: try Store(path: dbURL), session: session)
+    let controller = CaptureController(tools: fake.tools)
+    let (_, source) = try await controller.start(udid: udid)
+    _ = try await pipeline.run(source)
+    await controller.stop()
+    await pipeline.setKernelDropped(await controller.kernelDropped())
+    await pipeline.stop(reason: .captureStopped)
+    #expect(try reader.sessionStats(id: session.id).kernelDropped == 12)
+}
+
+@Test func missingSummaryLeavesKernelDroppedUnknown() async throws {
+    let fake = try Fake(tcpdumpBody: { dir in
+        try Data(sampleStream(packets: 5)).write(to: dir.appendingPathComponent("s.pcapng"))
+        return "cat \"\(dir.path)/s.pcapng\"\n"
+    })
+    defer { fake.cleanup() }
+    let controller = CaptureController(tools: fake.tools)
+    let (_, source) = try await controller.start(udid: udid)
+    _ = try await collect(source)
+    await controller.stop()
+    #expect(await controller.kernelDropped() == nil)
+}
+
+// MARK: - link loss seen by tcpdump (6.5, PH-5)
+
+private let ph5Stderr = [
+    "tcpdump: pcap_loop: The interface disappeared", "5197 packets captured",
+    "5209 packets received by filter", "0 packets dropped by kernel",
+]
+
+@Test func interfaceDisappearedMatchesVariants() {
+    #expect(CaptureController.interfaceDisappeared(in: ph5Stderr))
+    #expect(CaptureController.interfaceDisappeared(in: ["the interface disappeared"]))
+    #expect(CaptureController.interfaceDisappeared(in: ["TCPDUMP: PCAP_LOOP: THE INTERFACE DISAPPEARED"]))
+    #expect(!CaptureController.interfaceDisappeared(in: ["tcpdump: rvi0: No such device exists", "0 packets dropped by kernel"]))
+    #expect(!CaptureController.interfaceDisappeared(in: []))
+}
+
+// the PH-5 order: tcpdump prints its stats on stderr, exits 1, the stream fails inside run (which stops
+// the pipeline); the stored session must still carry kernel_dropped 0 and end as interrupted
+@Test func tcpdumpExitingOnItselfStoresKernelDropped() async throws {
+    let fake = try Fake(tcpdumpBody: { dir in
+        try Data(sampleStream(packets: 5)).write(to: dir.appendingPathComponent("s.pcapng"))
+        let lines = ph5Stderr.map { "echo \"\($0)\" >&2" }.joined(separator: "\n")
+        return "cat \"\(dir.path)/s.pcapng\"\n\(lines)\nexit 1\n"
+    })
+    defer { fake.cleanup() }
+    let dbURL = fake.dir.appendingPathComponent("test.db")
+    let reader = try Store(path: dbURL)
+    let session = CaptureSession(
+        id: UUID(), startedAt: Date(), source: "rvi", deviceHash: try reader.deviceHash(udid: udid), watchVersion: "test")
+    let pipeline = CapturePipeline(store: try Store(path: dbURL), session: session)
+    let controller = CaptureController(tools: fake.tools)
+    await pipeline.setKernelDroppedProvider { await controller.kernelDropped() }
+    let (_, source) = try await controller.start(udid: udid)
+    var failure: Error?
+    do { _ = try await pipeline.run(source) } catch { failure = error }
+    guard case CaptureError.tcpdumpExited(1)? = failure else {
+        Issue.record("expected tcpdumpExited(1), got \(String(describing: failure))")
+        return
+    }
+    #expect(await controller.linkLostByTcpdump())
+    await controller.stop()
+    let stats = try reader.sessionStats(id: session.id)
+    #expect(stats.kernelDropped == 0)
+    #expect(try reader.sessions().first(where: { $0.id == session.id })?.endReason == "interrupted")
+}
+
+@Test func genuineTcpdumpFailureIsNotLinkLoss() async throws {
+    let fake = try Fake(tcpdumpBody: { _ in "echo \"tcpdump: rvi9: permission denied\" >&2\nexit 1\n" })
+    defer { fake.cleanup() }
+    let controller = CaptureController(tools: fake.tools)
+    let (_, source) = try await controller.start(udid: udid)
+    do { _ = try await collect(source); Issue.record("expected a failure") } catch {}
+    #expect(await controller.linkLostByTcpdump() == false)
+    #expect(await controller.kernelDropped() == nil)
+    await controller.stop()
 }

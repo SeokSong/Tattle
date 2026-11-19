@@ -5,6 +5,7 @@ import TestSupport
 
 @testable import Capture
 
+private let staleName = "0F3B1E3A-1C2D-4E5F-8A9B-0123456789AB"
 private let udid = "00008110-FAKEUDID0001"
 
 private func makeRoot() throws -> URL {
@@ -47,6 +48,20 @@ private func fakeTools(in root: URL, rvictlOutput: String = "Starting device X [
         while :; do sleep 0.1; done
         """)
     return tools
+}
+
+/// true when the body finishes within the time limit; the body is cancelled otherwise
+func endsWithin(seconds: Double, _ body: @escaping @Sendable () async throws -> Void) async -> Bool {
+    await withTaskGroup(of: Bool.self) { group in
+        group.addTask { (try? await body()) != nil }
+        group.addTask {
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1e9))
+            return false
+        }
+        let first = await group.next() ?? false
+        group.cancelAll()
+        return first
+    }
 }
 
 private let shRunner: PrototypeCaptureLauncher.Runner = { path in (URL(fileURLWithPath: "/bin/sh"), [path]) }
@@ -265,6 +280,8 @@ extension CaptureSuite {
     #expect(text.contains("rvi down"))
     #expect(!text.contains(udid))
     #expect((try? FileManager.default.contentsOfDirectory(atPath: runRoot.path))?.isEmpty ?? true)
+    // killed before it could print its summary: the count is unknown, not 0
+    #expect(await launcher.lastKernelDropped == nil)
 }
 
 @Test func onlyTheNewestTenLogsAreKept() async throws {
@@ -324,5 +341,153 @@ private final class Counter: @unchecked Sendable {
     #expect(!text.contains("KILL sent"))
     #expect(text.contains("tcpdump status 130"))
     #expect(text.contains("rvi down"))
+}
+
+// MARK: - kernel drops and stale run directories (6.4)
+
+@Test func launcherReadsKernelDropsFromTheScriptLog() async throws {
+    let root = try makeRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let tools = try fakeTools(in: root)
+    let data = root.appendingPathComponent("data.pcapng").path
+    // a cooperative tcpdump prints its summary to stderr (the script's log) when told to stop
+    try writeScript(tools.tcpdump, """
+        trap 'echo "30 packets captured" >&2; echo "30 packets received by filter" >&2; echo "12 packets dropped by kernel" >&2; exit 0' TERM INT
+        cat "\(data)"
+        while :; do sleep 0.1; done
+        """)
+    let launcher = PrototypeCaptureLauncher(runRoot: root.appendingPathComponent("run"), tools: tools, runner: shRunner)
+    let source = try await launcher.start(udid: udid)
+    let seen = Counter()
+    let reader = Task { () -> Int in
+        for try await event in source.events() { if case .packet = event { seen.increment() } }
+        return seen.value
+    }
+    let ready = Date().addingTimeInterval(30)
+    while seen.value < 10, Date() < ready { try await Task.sleep(nanoseconds: 50_000_000) }
+    await launcher.stop()
+    _ = await reader.result
+    #expect(await launcher.lastKernelDropped == 12)
+}
+
+@Test func launcherSeesLinkLossInTheScriptLog() async throws {
+    let root = try makeRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let tools = try fakeTools(in: root)
+    let data = root.appendingPathComponent("data.pcapng").path
+    // PH-5: tcpdump prints these on stderr, then exits 1 by itself
+    try writeScript(tools.tcpdump, """
+        cat "\(data)"
+        echo "tcpdump: pcap_loop: The interface disappeared" >&2
+        echo "5197 packets captured" >&2
+        echo "0 packets dropped by kernel" >&2
+        exit 1
+        """)
+    let launcher = PrototypeCaptureLauncher(runRoot: root.appendingPathComponent("run"), tools: tools, runner: shRunner)
+    let source = try await launcher.start(udid: udid)
+    // tcpdump exits by itself: the stream must reach its end without stop() (macOS poll() never reports
+    // end of file on a FIFO; the source reads after each wake-up instead). bounded so a regression fails
+    // instead of hanging the suite
+    let ended = await endsWithin(seconds: 10) { for try await _ in source.events() {} }
+    #expect(ended, "the stream did not end after tcpdump exited")
+    #expect(await launcher.kernelDroppedNow() == 0)
+    await launcher.stop()
+    #expect(await launcher.lastLinkLost)
+    #expect(await launcher.lastKernelDropped == 0)
+}
+
+private func makeStale(in runRoot: URL, name: String = staleName, files: [String] = ["script.sh", "log", "osascript.err"]) throws -> URL {
+    let dir = runRoot.appendingPathComponent(name, isDirectory: true)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    for file in files { FileManager.default.createFile(atPath: dir.appendingPathComponent(file).path, contents: Data("x".utf8)) }
+    return dir
+}
+
+@Test func staleRunDirectoryGetsStopFile() async throws {
+    let root = try makeRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let runRoot = root.appendingPathComponent("run")
+    let stale = try makeStale(in: runRoot)
+    let foreign = try makeStale(in: runRoot, name: "run-notours", files: ["script.sh"])
+    let odd = try makeStale(in: runRoot, name: "1F3B1E3A-1C2D-4E5F-8A9B-0123456789AB", files: ["script.sh", "notes.txt"])
+    let logs = root.appendingPathComponent("logs")
+    try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+    FileManager.default.createFile(atPath: logs.appendingPathComponent("capture-1.log").path, contents: Data("keep".utf8))
+
+    // a long grace shows the stop file is written first: check it from a concurrent look
+    let task = Task { await PrototypeCaptureLauncher.cleanStaleRunDirectories(runRoot: runRoot, grace: 1) }
+    let deadline = Date().addingTimeInterval(0.8)
+    var sawStop = false
+    while Date() < deadline, !sawStop {
+        sawStop = FileManager.default.fileExists(atPath: stale.appendingPathComponent("stop").path)
+        try await Task.sleep(nanoseconds: 20_000_000)
+    }
+    let result = await task.value
+    #expect(sawStop)
+    #expect(result.stopped == [staleName])
+    #expect(result.removed == [staleName])
+    #expect(result.failed.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: stale.path))
+    // another name, and a uuid directory with foreign content, are left exactly as they were
+    #expect(FileManager.default.fileExists(atPath: foreign.appendingPathComponent("script.sh").path))
+    #expect(!FileManager.default.fileExists(atPath: foreign.appendingPathComponent("stop").path))
+    #expect(try FileManager.default.contentsOfDirectory(atPath: odd.path).sorted() == ["notes.txt", "script.sh"])
+    #expect(FileManager.default.fileExists(atPath: logs.appendingPathComponent("capture-1.log").path))
+}
+
+@Test func ownRunDirectoryNotStopped() async throws {
+    let root = try makeRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let tools = try fakeTools(in: root)
+    let runRoot = root.appendingPathComponent("run")
+    let stale = try makeStale(in: runRoot)
+    let launcher = PrototypeCaptureLauncher(runRoot: runRoot, tools: tools, runner: shRunner)
+    _ = try await launcher.start(udid: udid)
+    let own = try #require(await launcher.runDirectory)
+
+    let result = await launcher.cleanStaleRunDirectories(grace: 0)
+    #expect(result.removed == [staleName])
+    #expect(FileManager.default.fileExists(atPath: own.path))
+    #expect(!FileManager.default.fileExists(atPath: own.appendingPathComponent("stop").path))
+    #expect(!FileManager.default.fileExists(atPath: stale.path))
+    await launcher.stop()
+}
+
+@Test func staleCleanupNeverFollowsSymlinks() async throws {
+    let root = try makeRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let runRoot = root.appendingPathComponent("run")
+    let target = root.appendingPathComponent("target")
+    try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+    FileManager.default.createFile(atPath: target.appendingPathComponent("script.sh").path, contents: Data("keep".utf8))
+    try FileManager.default.createDirectory(at: runRoot, withIntermediateDirectories: true)
+    // a uuid-named link to a directory elsewhere
+    try FileManager.default.createSymbolicLink(atPath: runRoot.appendingPathComponent(staleName).path, withDestinationPath: target.path)
+    // a real stale directory whose log is a link to a file elsewhere: only the link goes
+    let outside = root.appendingPathComponent("outside.txt")
+    try "keep".write(to: outside, atomically: true, encoding: .utf8)
+    let real = try makeStale(in: runRoot, name: "2F3B1E3A-1C2D-4E5F-8A9B-0123456789AB", files: ["script.sh"])
+    try FileManager.default.createSymbolicLink(atPath: real.appendingPathComponent("log").path, withDestinationPath: outside.path)
+
+    let result = await PrototypeCaptureLauncher.cleanStaleRunDirectories(runRoot: runRoot, grace: 0)
+    #expect(result.removed == ["2F3B1E3A-1C2D-4E5F-8A9B-0123456789AB"])
+    #expect(FileManager.default.fileExists(atPath: target.appendingPathComponent("script.sh").path))
+    #expect(!FileManager.default.fileExists(atPath: target.appendingPathComponent("stop").path))
+    #expect(try String(contentsOf: outside, encoding: .utf8) == "keep")
+    #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: runRoot.appendingPathComponent(staleName).path)) != nil)
+}
+
+@Test func unremovableStaleDirectoryIsReportedNotFatal() async throws {
+    let root = try makeRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let runRoot = root.appendingPathComponent("run")
+    let stuck = try makeStale(in: runRoot)
+    // a directory that cannot be written to stands in for root-owned files
+    try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: stuck.path)
+    defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: stuck.path) }
+    let result = await PrototypeCaptureLauncher.cleanStaleRunDirectories(runRoot: runRoot, grace: 0)
+    #expect(result.failed == [staleName])
+    #expect(result.removed.isEmpty)
+    #expect(FileManager.default.fileExists(atPath: stuck.path))
 }
 }

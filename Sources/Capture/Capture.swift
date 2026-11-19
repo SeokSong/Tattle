@@ -9,6 +9,8 @@ import PCAPNG
 public struct CaptureTools: Sendable {
     public var rvictl = URL(fileURLWithPath: "/Library/Apple/usr/bin/rvictl")
     public var tcpdump = URL(fileURLWithPath: "/usr/sbin/tcpdump")
+    /// the link check runs `ifconfig <interface>`; it needs no root
+    public var ifconfig = URL(fileURLWithPath: "/sbin/ifconfig")
     public var extraTcpdumpArguments: [String] = []
 
     public init() {}
@@ -93,10 +95,15 @@ public final class ProcessPacketSource: PacketSource, @unchecked Sendable {
     private let lock = NSLock()
     private var status: Int32?
     private var streamEnd: PCAPNGEnd?
+    private var lastRead: Date
+    private let clock: @Sendable () -> Date
 
-    /// tee receives every raw byte read, for the diagnostic capture; it is closed at the end
-    public init(process: Process, tee: FileHandle? = nil) {
+    /// tee receives every raw byte read, for the diagnostic capture; it is closed at the end.
+    /// clock is injectable for tests; lastByteAt starts at the time of init
+    public init(process: Process, tee: FileHandle? = nil, clock: @escaping @Sendable () -> Date = { Date() }) {
         self.process = process
+        self.clock = clock
+        self.lastRead = clock()
         self.output = (process.standardOutput as? Pipe)?.fileHandleForReading
         self.tee = tee
     }
@@ -113,6 +120,21 @@ public final class ProcessPacketSource: PacketSource, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return streamEnd
+    }
+
+    /// when bytes were last read from the process (the time of init until the first read). read by the
+    /// stall watchdog; costs one lock and one clock read per 64 KB chunk
+    public var lastByteAt: Date {
+        lock.lock()
+        defer { lock.unlock() }
+        return lastRead
+    }
+
+    private func noteBytes() {
+        let now = clock()
+        lock.lock()
+        lastRead = now
+        lock.unlock()
     }
 
     private func setEnd(_ value: PCAPNGEnd) {
@@ -173,6 +195,7 @@ public final class ProcessPacketSource: PacketSource, @unchecked Sendable {
                     break
                 }
                 if n == 0 { break }
+                noteBytes()
                 if let tee { try? tee.write(contentsOf: buffer[0..<n]) }
                 for event in try parser.append(buffer[0..<n]) { continuation.yield(event) }
             }
@@ -229,7 +252,21 @@ private final class StderrTail: @unchecked Sendable {
     private let lock = NSLock()
     private var lines: [String] = []
     private var partial = ""
+    private var ended = false
     static let limit = 20
+
+    /// set when the pipe reached end of file, so the exit summary has been read
+    func finish() {
+        lock.lock()
+        ended = true
+        lock.unlock()
+    }
+
+    var isFinished: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return ended
+    }
 
     func append(_ data: Data) {
         lock.lock()
@@ -270,6 +307,42 @@ public actor CaptureController {
         return lines.map { redact($0, udid: udid) }
     }
 
+    /// tcpdump's "packets dropped by kernel" count, once the process has ended and its stderr is read
+    /// (waits up to `timeout` for the end of the pipe). nil when the line is absent: tcpdump was killed,
+    /// so the count is unknown, never 0
+    public func kernelDropped(timeout: TimeInterval = 1) async -> Int? {
+        guard let tail = stderr else { return nil }
+        let deadline = Date().addingTimeInterval(timeout)
+        while !tail.isFinished, Date() < deadline { try? await Task.sleep(nanoseconds: 20_000_000) }
+        return Self.droppedByKernel(in: tail.snapshot)
+    }
+
+    /// true when tcpdump's stderr says the interface vanished ("tcpdump: pcap_loop: The interface
+    /// disappeared"): a cable pull or a phone that dropped off. seen on a real phone (PH-5): tcpdump then
+    /// prints its summary and exits 1. matched case-insensitively, with or without the pcap_loop prefix
+    public static func interfaceDisappeared(in lines: [String]) -> Bool {
+        lines.contains { $0.range(of: "the interface disappeared", options: .caseInsensitive) != nil }
+    }
+
+    /// whether tcpdump reported a vanished interface; waits up to `timeout` for the end of its stderr
+    public func linkLostByTcpdump(timeout: TimeInterval = 1) async -> Bool {
+        guard let tail = stderr else { return false }
+        let deadline = Date().addingTimeInterval(timeout)
+        while !tail.isFinished, Date() < deadline { try? await Task.sleep(nanoseconds: 20_000_000) }
+        return Self.interfaceDisappeared(in: tail.snapshot)
+    }
+
+    /// the value of the last "N packets dropped by kernel" line (tcpdump prints it on a clean exit), or nil.
+    /// the count is a number only, so redaction never changes it
+    public static func droppedByKernel(in lines: [String]) -> Int? {
+        for line in lines.reversed() {
+            let text = line.trimmingCharacters(in: .whitespaces)
+            guard let match = text.range(of: #"^\d+ packets? dropped by kernel"#, options: .regularExpression) else { continue }
+            if let count = Int(text[match].prefix { $0.isNumber }) { return count }
+        }
+        return nil
+    }
+
     /// starts rvi for the udid, then tcpdump on it. returns the interface name (rvi0) and the source.
     /// on failure everything started so far is stopped again. tee gets the raw stream (diagnostic capture)
     public func start(udid: String, tee: FileHandle? = nil) async throws -> (interface: String, source: ProcessPacketSource) {
@@ -299,7 +372,12 @@ public actor CaptureController {
             let tail = StderrTail()
             err.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
-                if data.isEmpty { handle.readabilityHandler = nil } else { tail.append(data) }
+                if data.isEmpty {
+                    handle.readabilityHandler = nil
+                    tail.finish()
+                } else {
+                    tail.append(data)
+                }
             }
             let source = ProcessPacketSource(process: process, tee: tee)
             do {

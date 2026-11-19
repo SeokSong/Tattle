@@ -1,6 +1,6 @@
 # App
 
-**Status:** Working prototype (2026-11-17). Connect → admin password → Live → Stop → Sessions all verified on the phone (35,577 packets / 446 flows in one run). Stop ends tcpdump with KILL after ~2 s by design (see [CAPTURE.md](CAPTURE.md)). Known cosmetic bug: system rows other than mDNSResponder say "lookups for" instead of "on behalf of".
+**Status:** Working prototype (2026-11-17). Connect → admin password → Live → Stop → Sessions all verified on the phone (35,577 packets / 446 flows in one run). Stop ends tcpdump with KILL after ~2 s by design (see [CAPTURE.md](CAPTURE.md)). Milestone 2 additions (categories, hostname sources, link-loss handling) are described below and in [CAPTURE.md](CAPTURE.md). In Milestone 2 an app capture that ends by itself (cable pulled) should now end as soon as tcpdump exits (the FIFO end-of-file fix in [CAPTURE.md](CAPTURE.md); tested with fake tools, not yet repeated on a phone).
 
 Mockups (made before the app was built):
 
@@ -43,6 +43,7 @@ Mockups (made before the app was built):
 - Bounded memory (6.1): the live list is built from the pipeline's retained flows, at most 50,000. When older closed flows were dropped (`retainedDropped > 0`) the screen says "Older flows are in the saved session. The totals below cover the newest flows only." The saved session in the database is complete
 - The top-flows table shows 10 rows. Flows left out fold into one grey line "N more flows" (`FlowRows.foldLine`); the same helper, `flowRows(_:limit:)`, defaults to 500 rows for a longer list
 - The cap table is in [PIPELINE.md](PIPELINE.md)
+- Link loss (6.3): no bytes for 15 s and the rvi interface gone or not `UP` ends the capture. The session is saved as `interrupted` with everything received so far, and the error area says "The iPhone link was lost (cable or phone disconnected). Everything received so far was saved. Check the cable, then start again." A quiet phone with the link up (for example locked) does not end the capture; the pause is shown as a gap. Details and thresholds in [CAPTURE.md](CAPTURE.md#stall-watchdog-and-link-health). Not yet validated on a real cable pull (6.5)
 
 ## Rules for what the UI says
 
@@ -67,7 +68,7 @@ Target `WatchApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `swi
     - makes a private run directory (`0700`, under `~/Library/Application Support/Watch/run/<uuid>/`) holding `script.sh` (`0600`), a FIFO `stream`, and the path of a `stop` marker
     - `script.sh`: run `rvictl -s <udid>`; require `[SUCCEEDED]` and parse `with interface <rviN>`; `exec tcpdump -i <rviN> -n -p -s 0 -U -P -w - > stream &`; loop `while [ ! -e stop ] && kill -0 $pid; do sleep 0.2; done`; `kill -INT $pid; wait $pid`; `rvictl -x <udid>`; exit codes 1 rvi failed, 2 tcpdump failed. Its stderr goes to `log` in the run dir
     - `start(udid:) async throws -> FileHandlePacketSource`: writes the script, runs osascript on a background task, opens the FIFO for reading (opening blocks until tcpdump opens the write end; do it on a background task with a 60 s timeout for the password dialog) and returns the source
-    - `stop() async`: creates the `stop` file, waits for osascript to exit (up to 5 s), deletes the run directory including the script (the udid lives only there, briefly, and in memory)
+    - `stop() async`: creates the `stop` file, waits for osascript to exit (up to 5 s), deletes the run directory including the script (it first parses tcpdump's "packets dropped by kernel" from `log` into `lastKernelDropped`; see [CAPTURE.md](CAPTURE.md#kernel-drop-summary-64)). On app launch, run directories left by a crashed app are stopped and removed ([CAPTURE.md](CAPTURE.md#stale-run-directories-64)) (the udid lives only there, briefly, and in memory)
     - osascript cancelled by the user → `CaptureError.accessDenied`; nothing started
 - `FileHandlePacketSource` (in `PCAPNG`): a `PacketSource` over a `FileHandle`, 64 KB reads through `PCAPNGStreamParser`; `ProcessPacketSource` can be rebuilt on top of it, but leave it as is
 - `DeviceLookup` (in `Capture`): move the devicectl lookup out of the CLI into `public struct DeviceLookup { static func wiredDevices() async throws -> [DeviceSummary] }` with `DeviceSummary { name, udid, transport, pairing, tunnel }`; the CLI's `capture --device` and the app both use it. `DeviceSummary` is never printed whole; views show `name` only

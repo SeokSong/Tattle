@@ -160,11 +160,15 @@ Every place Watch keeps data. Each later change that stores something new must a
 
 | What | Where | Retention | Cleared by Delete all |
 |---|---|---|---|
-| Sessions, flows, per-process tallies, DNS answers, server names, mid-connection and ECH flags, per-session gap, drop and save-failure counts | `watch.sqlite` (0600, folder 0700) | 7 days after a session ends | Yes (checkpoint and vacuum) |
+| Sessions, flows, per-process tallies, DNS answers, server names, mid-connection and ECH flags, per-session gap count and longest gap, kernel drop and save-failure counts (numbers only, no content) | `watch.sqlite` plus `-wal` and `-shm` (0600, folder 0700) | 7 days after a session ends | Yes (checkpoint and vacuum) |
 | Salted device hash and device name | Same database | Same as sessions (install salt stays) | Sessions yes; the install salt stays |
-| Diagnostic raw-packet files (opt-in) | `diagnostics/` next to the database | 24 hours | Yes |
-| Capture script log and run directory | Root script's run folder (see [CAPTURE.md](CAPTURE.md)) | Until the next run or reboot | Not touched; contains no packets, no hostnames |
+| Diagnostic raw-packet files (opt-in) | App: `diagnostics/` next to the database. CLI: the path given to `--diagnostic` (created new, 0600) | App: 24 hours. CLI: user-managed | App files yes; CLI files no |
+| Retention setting (days, one number) | `UserDefaults` of the app (`AppModel.retentionKey`) | Until changed | No |
+| Temporary files: `devicectl` JSON output (device name and id; `DeviceLookup`, `getDeviceInfo`), tool output of `rvictl`, `ifconfig` (`CaptureController.run`, 0600) | `FileManager.temporaryDirectory` (per-user, 0700) | Removed in a `defer` when the command ends; a crash can leave one until the system clears the folder | No |
+| Band files (`report --write-bands`): numbers only | The path given (the repo's `Tests/Expected/` for committed ones) | User-managed | No |
+| Capture script log and run directory | Root script's run folder (see [CAPTURE.md](CAPTURE.md)) | Removed by `stop()`; a directory a crashed app left is stopped and removed at the next launch. The script log moves to `logs/` (newest 10 kept) | Not touched; contains no packets, no hostnames |
 | Report JSON (`WatchCapture report --json`) | Printed to stdout only; saved only if the user redirects it | User-managed | No (outside the database) |
+| Metrics file (`capture --metrics`, opt-in): one csv row every 2 s of counts and memory, numbers only (no hostnames, addresses or device ids) | The path given, created new (0600), `~/dev/watch-fixtures/reports` for the long run | User-managed | No (outside the database) |
 | Fixture captures and scenario files | `~/dev/watch-fixtures` (developer only) | User-managed | No |
 
 ### Privacy

@@ -232,3 +232,15 @@ private func dnsAnswer(_ host: String, _ address: IPAddress, ago: TimeInterval =
     #expect(flowRows(Array(flows.prefix(500))).foldLine == nil)
     #expect(flowRows(Array(flows.prefix(11)), limit: 10).foldLine == "1 more flow")
 }
+
+@Test func gapTextShowsOnlyWhenThereAreGaps() {
+    #expect(gapText(count: 0, maxGapMs: 0) == nil)
+    #expect(gapText(count: 2, maxGapMs: 41_000) == "Gaps: 2 (longest 41 s)")
+    #expect(gapText(count: 1, maxGapMs: 5_001) == "Gaps: 1 (longest 5 s)")
+}
+
+@Test func kernelDroppedTextOnlyForKnownNonzero() {
+    #expect(kernelDroppedText(nil) == nil)
+    #expect(kernelDroppedText(0) == nil)
+    #expect(kernelDroppedText(12)?.contains("12 packets") == true)
+}

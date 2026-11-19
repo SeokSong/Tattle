@@ -54,6 +54,8 @@ struct SessionRow: Identifiable, Equatable {
     var packets: Int
     var flows: Int
     var endReason: String?
+    var gapCount = 0
+    var maxGapMs = 0
 
     var duration: TimeInterval? { endedAt.map { $0.timeIntervalSince(startedAt) } }
 }
@@ -61,6 +63,10 @@ struct SessionRow: Identifiable, Equatable {
 struct SessionDetail {
     var grouping: ProcessGrouping
     var flows: [FlowLine]
+    var gapCount = 0
+    var maxGapMs = 0
+    /// tcpdump's drop count; nil when unknown (the capture was ended by KILL)
+    var kernelDropped: Int?
 }
 
 @MainActor
@@ -104,6 +110,9 @@ final class AppModel: ObservableObject {
     private var pipeline: CapturePipeline?
     private var runTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
+    private var watchdogTask: Task<Void, Never>?
+    /// set when the stall watchdog judged the iPhone link dead; the capture end then says so
+    private var linkLost = false
     private var currentSession: UUID?
     private var countCache: [UUID: (packets: Int, flows: Int)] = [:]
 
@@ -118,6 +127,13 @@ final class AppModel: ObservableObject {
             try opened.expire(olderThan: TimeInterval(retentionDays) * 86400)
         } catch {
             storeError = "The session database could not be opened: \(error.localizedDescription)"
+        }
+        // a crashed app can leave a run directory (and a root tcpdump) behind: ask it to stop, then clear it
+        Task { [weak self] in
+            let result = await PrototypeCaptureLauncher.cleanStaleRunDirectories(runRoot: PrototypeCaptureLauncher.defaultRunRoot())
+            if !result.failed.isEmpty {
+                self?.storeError = "\(result.failed.count) old capture folder(s) could not be removed. They hold no packets and are safe to delete from ~/Library/Application Support/Watch/run."
+            }
         }
         DiagnosticFiles.purge(in: DiagnosticFiles.directory(under: storePath.deletingLastPathComponent()), now: Date())
         refreshSessions()
@@ -224,6 +240,8 @@ final class AppModel: ObservableObject {
             topFlowLines = []
             moreFlows = 0
 
+            // a failing stream stops the pipeline inside run, before the launcher is stopped: read the log then
+            await pipeline.setKernelDroppedProvider { await started.kernelDroppedNow() }
             await pipeline.startFlushTimer()
             runTask = Task { [weak self] in
                 var failure: String?
@@ -231,6 +249,7 @@ final class AppModel: ObservableObject {
                 await self?.captureEnded(failure: failure)
             }
             startRefreshing()
+            startWatchdog(source: source, launcher: started, pipeline: pipeline)
             captureState = .capturing(since: Date())
             selection = .live
         } catch {
@@ -263,15 +282,53 @@ final class AppModel: ObservableObject {
         guard isCapturing else { return }
         captureState = .stopping
         await launcher?.stop()
+        let tcpdumpSawLinkLoss = await launcher?.lastLinkLost ?? false
         await finish(reason: .interrupted)
-        captureState = .failed(message: failure.map { "The capture stopped unexpectedly: \($0)" }
-            ?? "The capture stopped unexpectedly. Check the phone and cable, then start again.")
+        if linkLost || tcpdumpSawLinkLoss {
+            captureState = .failed(message: StallWatchdog.linkLostMessage
+                + ". Everything received so far was saved. Check the cable, then start again.")
+        } else {
+            captureState = .failed(message: failure.map { "The capture stopped unexpectedly: \($0)" }
+                ?? "The capture stopped unexpectedly. Check the phone and cable, then start again.")
+        }
     }
+
+    /// 6.3: no bytes for 15 s and the rvi interface gone or down ends the session as interrupted. a quiet
+    /// but alive link ends nothing (the gap is counted from packet time)
+    private func startWatchdog(source: FileHandlePacketSource, launcher: PrototypeCaptureLauncher, pipeline: CapturePipeline) {
+        linkLost = false
+        let tools = CaptureTools()
+        watchdogTask?.cancel()
+        watchdogTask = Task { [weak self] in
+            guard let owner = self else { return }
+            _ = await runStallWatchdog(
+                StallWatchdog(),
+                lastByteAt: { source.lastByteAt },
+                processRunning: { !source.isFinished },
+                linkUp: {
+                    // the script, not the app, knows the interface; the packets carry its name
+                    let name = await pipeline.stats.interfaces.keys.filter { !$0.isEmpty }.sorted().first
+                    if let name { return await LinkProbe.isUp(interface: name, tools: tools) }
+                    return await LinkProbe.anyRVIPresent(tools: tools)
+                },
+                onLinkDown: {
+                    await owner.markLinkLost()
+                    await launcher.stop()
+                    await pipeline.setKernelDropped(await launcher.lastKernelDropped)
+                    await pipeline.stop(reason: .interrupted)
+                })
+        }
+    }
+
+    private func markLinkLost() { linkLost = true }
 
     private func finish(reason: FlowEndReason) async {
         refreshTask?.cancel()
         refreshTask = nil
+        watchdogTask?.cancel()
+        watchdogTask = nil
         if let pipeline {
+            if let launcher { await pipeline.setKernelDropped(await launcher.lastKernelDropped) }
             await pipeline.stop(reason: reason)
             liveStats = await pipeline.stats
             liveFlows = await pipeline.flowsSnapshot()
@@ -337,6 +394,10 @@ final class AppModel: ObservableObject {
                 rows.append(SessionRow(
                     id: session.id, startedAt: session.startedAt, endedAt: session.endedAt,
                     packets: counts?.packets ?? 0, flows: counts?.flows ?? 0, endReason: session.endReason))
+                if let stats = try? store.sessionStats(id: session.id) {
+                    rows[rows.count - 1].gapCount = stats.gapCount
+                    rows[rows.count - 1].maxGapMs = stats.maxGapMs
+                }
             }
             sessions = rows.sorted { $0.startedAt > $1.startedAt }
         } catch {
@@ -349,9 +410,11 @@ final class AppModel: ObservableObject {
         do {
             // the category is decided per flow, then carried to each of its tally rows
             let flows = try store.flows(session: id)
+            let stats = try store.sessionStats(id: id)
             return SessionDetail(
                 grouping: groupByProcess(from: tallyInputs(from: flows), withEmptyUnattributed: true),
-                flows: topFlows(flows, observations: try store.domains(session: id)))
+                flows: topFlows(flows, observations: try store.domains(session: id)),
+                gapCount: stats.gapCount, maxGapMs: stats.maxGapMs, kernelDropped: stats.kernelDropped)
         } catch {
             storeError = "Session could not be read: \(error.localizedDescription)"
             return nil

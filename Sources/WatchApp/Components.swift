@@ -154,3 +154,15 @@ func durationText(_ seconds: TimeInterval) -> String {
     let h = total / 3600, m = (total % 3600) / 60, s = total % 60
     return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%02d:%02d", m, s)
 }
+
+/// "Gaps: 2 (longest 41 s)"; nil when there were none. a gap is a silence over 5 s, such as a locked phone
+func gapText(count: Int, maxGapMs: Int) -> String? {
+    guard count > 0 else { return nil }
+    return "Gaps: \(count) (longest \((maxGapMs + 500) / 1000) s)"
+}
+
+/// "Dropped by the Mac: 12 packets" for a known nonzero count; nil when zero or unknown
+func kernelDroppedText(_ count: Int?) -> String? {
+    guard let count, count > 0 else { return nil }
+    return "Warning: the Mac dropped \(count) packets while capturing, so these totals are too low."
+}

@@ -231,3 +231,17 @@ private func classify(_ f: Flow) -> Classification { Classifier.classify(f) }
     // the name never matches as a prefix or in an app's cut form
     #expect(classify(flow([(proc("mobileasset"), 5)])).category == .app)
 }
+
+// evidence 2026-11-18 (PH-5), see md/milestone2/BASELINE.md
+@Test func allowlist_mdmd() {
+    #expect(classify(flow([(proc("mdmd"), 5)])) == Classification(category: .system, rule: "system.process"))
+    // the name never matches as a prefix or in an app's cut form
+    #expect(classify(flow([(proc("mdm"), 5)])).category == .app)
+}
+
+// evidence 2026-11-18 (PH-5), see md/milestone2/BASELINE.md
+@Test func allowlist_webprivacyd() {
+    #expect(classify(flow([(proc("webprivacyd"), 5)])) == Classification(category: .system, rule: "system.process"))
+    // the name never matches as a prefix or in an app's cut form
+    #expect(classify(flow([(proc("webprivacy"), 5)])).category == .app)
+}

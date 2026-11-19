@@ -234,6 +234,39 @@ private func describe(_ event: PCAPNGEvent) -> String {
     }
 }
 
+@Test func fileHandleSourceEndsWhenFifoWriterCloses() async throws {
+    // macOS poll() reports nothing on a FIFO after its last writer closed; the source must still see EOF
+    let bytes = B.sampleCapture() + B.pcapTrailer
+    let path = FileManager.default.temporaryDirectory.appendingPathComponent("fifo-" + UUID().uuidString).path
+    #expect(mkfifo(path, 0o600) == 0)
+    defer { unlink(path) }
+    let writing = Thread {
+        let w = open(path, O_WRONLY)
+        _ = bytes.withUnsafeBytes { write(w, $0.baseAddress, $0.count) }
+        close(w)
+    }
+    writing.start()
+    let fd = open(path, O_RDONLY)
+    let source = FileHandlePacketSource(handle: FileHandle(fileDescriptor: fd, closeOnDealloc: true), tolerateTruncation: true)
+
+    let ended = await withTaskGroup(of: Bool.self) { group in
+        group.addTask {
+            var packets = 0
+            do { for try await event in source.events() { if case .packet = event { packets += 1 } } } catch { return false }
+            return packets == 3
+        }
+        group.addTask {
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            return false
+        }
+        let first = await group.next() ?? false
+        group.cancelAll()
+        return first
+    }
+    #expect(ended)
+    #expect(source.isFinished)
+}
+
 // MARK: - Caps
 
 @Test func streamRejectsOversizeBlockInsteadOfWaiting() throws {

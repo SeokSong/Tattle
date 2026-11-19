@@ -4,6 +4,7 @@ import Flows
 import Foundation
 import PCAPNG
 import PacketDecoder
+import Storage
 import Testing
 
 @testable import Report
@@ -472,4 +473,37 @@ private func addr(_ n: UInt32) -> IPAddress { .v4(0xC000_0200 + n) }
     #expect(bands.metrics["hostnameCoverage"]?.informational == true)
     #expect(bands.metrics["hostnameCoverageSniOnly"]?.informational == false)
     #expect(Ratchet.check(report: r, bands: bands).isEmpty)
+}
+
+@Test func reportShowsSessionSection() throws {
+    let flows = [flow(bytes: 100)]
+    let stats = SessionStats(gapCount: 2, maxGapMs: 41_500, kernelDropped: nil, saveFailures: 1, unsavedFlows: 3)
+    let r = ReportBuilder.build(flows: flows, domains: [], pipeline: nil, session: stats)
+    #expect(r.session == .init(gapCount: 2, maxGapSeconds: 41.5, saveFailures: 1, unsavedFlows: 3, kernelDropped: nil))
+    let json = try r.json()
+    #expect(json.contains("\"session\""))
+    #expect(json.contains("\"gapCount\" : 2"))
+    #expect(json.contains("\"maxGapSeconds\" : 41.5"))
+    #expect(!json.contains("kernelDropped"))
+    let text = ReportRendering.text(r)
+    #expect(text.contains("gaps 2  longest 41.5 s"))
+    #expect(text.contains("kernelDropped unknown"))
+
+    let plain = build(flows)
+    #expect(plain.session == nil)
+    #expect(!(try plain.json().contains("\"session\"")))
+    #expect(!ReportRendering.text(plain).contains("gaps "))
+}
+
+@Test func reportShowsKernelDropsWithWarning() throws {
+    let stats = SessionStats(gapCount: 0, maxGapMs: 0, kernelDropped: 12, saveFailures: 0, unsavedFlows: 0)
+    let r = ReportBuilder.build(flows: [flow(bytes: 100)], domains: [], pipeline: nil, session: stats)
+    #expect(try r.json().contains("\"kernelDropped\" : 12"))
+    let text = ReportRendering.text(r)
+    #expect(text.contains("kernelDropped 12"))
+    #expect(text.contains("WARNING"))
+    let zero = ReportBuilder.build(
+        flows: [flow(bytes: 100)], domains: [], pipeline: nil,
+        session: SessionStats(gapCount: 0, maxGapMs: 0, kernelDropped: 0, saveFailures: 0, unsavedFlows: 0))
+    #expect(!ReportRendering.text(zero).contains("WARNING"))
 }

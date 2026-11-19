@@ -35,6 +35,10 @@ public struct PipelineStats: Sendable {
     public var droppedClosedFlows = 0
     /// packets counted under the "no process" row because a flow already had 64 process rows
     public var tallyRowsFolded = 0
+    /// domain observations waiting for a flush right now
+    public var pendingDomains = 0
+    /// handshake entries held right now
+    public var handshakeStates = 0
     /// most domain observations waiting for a flush at once
     public var peakPendingDomains = 0
     /// domain observations lost because saves kept failing until 40,000 were waiting
@@ -49,6 +53,12 @@ public struct PipelineStats: Sendable {
     public var retainedDomainsDropped = 0
     /// packets counted under the "(other)" interface because 64 interface names were already counted
     public var interfacesFolded = 0
+
+    /// silences longer than `CapturePipeline.gapSeconds` between packets, in packet time (6.2). a locked
+    /// phone is a gap, not an end: the session keeps running
+    public var gapCount = 0
+    /// the longest gap, in seconds of packet time
+    public var maxGap: TimeInterval = 0
 
     /// true when any cap removed or folded something. the live screen's totals are then lower than the truth
     public var anyCapHit: Bool {
@@ -79,6 +89,9 @@ public actor CapturePipeline {
     /// distinct interface names counted in `PipelineStats.interfaces`; later names count as "(other)"
     public static let maxInterfaceNames = 64
 
+    /// a silence strictly longer than this many seconds of packet time is a gap
+    public static let gapSeconds: UInt64 = 5
+
     private let store: (any FlowStore)?
     private let session: CaptureSession
     private let flushInterval: TimeInterval
@@ -98,8 +111,13 @@ public actor CapturePipeline {
     private var domainFlushAt = CapturePipeline.maxPendingDomains
     private var lastExpire: Date?
     private var sessionStarted = false
+    private var kernelDropped: Int?
+    private var kernelDroppedProvider: (@Sendable () async -> Int?)?
     private var stopped = false
     private var lastRequeued = 0
+    /// packet time of the latest packet in its own interface ticks (0 ticks per second = none yet)
+    private var lastTicks: UInt64 = 0
+    private var lastTicksPerSecond: UInt64 = 0
     private var timer: Task<Void, Never>?
 
     /// retainFlows keeps the final state of flows in memory for flowsSnapshot(), at most `maxRetainedFlows`
@@ -121,6 +139,8 @@ public actor CapturePipeline {
         s.flowsClosed = s.flowsOpened - flowTable.openCount
         s.recentDNSCount = recentDNS.count
         s.openFlows = flowTable.openCount
+        s.pendingDomains = pendingDomains.count
+        s.handshakeStates = extractor.buffer.stateCount
         s.peakOpenFlows = flowTable.peakOpenFlows
         s.evictedFlows = flowTable.evictedFlows
         s.droppedClosedFlows = flowTable.droppedClosedFlows
@@ -175,6 +195,15 @@ public actor CapturePipeline {
         return stats
     }
 
+    /// tcpdump's kernel drop count, nil when unknown. set once tcpdump has ended and before `stop`, which
+    /// writes the session stats once
+    public func setKernelDropped(_ value: Int?) { kernelDropped = value }
+
+    /// asked for the drop count inside `stop`, just before the session stats are written, when none was
+    /// set. needed because a source that fails (tcpdump exiting on its own) makes `run` stop the pipeline
+    /// before the caller can read tcpdump's summary
+    public func setKernelDroppedProvider(_ provider: (@Sendable () async -> Int?)?) { kernelDroppedProvider = provider }
+
     /// closes every flow, flushes a last time and ends the session
     public func stop(reason: FlowEndReason) async {
         guard !stopped else { return }
@@ -186,10 +215,16 @@ public actor CapturePipeline {
         do { try flush(final: true) } catch {
             do { try flush(final: true) } catch { counters.unsavedFlows = lastRequeued }
         }
+        if kernelDropped == nil, let provider = kernelDroppedProvider { kernelDropped = await provider() }
         if let store, sessionStarted {
             do { try store.endSession(id: session.id, at: lastExpire ?? Date(), reason: reason.rawValue) } catch {
                 counters.saveFailures += 1
             }
+            // last, so the failure counts above are included
+            let stats = SessionStats(
+                gapCount: counters.gapCount, maxGapMs: Int((counters.maxGap * 1000).rounded()),
+                kernelDropped: kernelDropped, saveFailures: counters.saveFailures, unsavedFlows: counters.unsavedFlows)
+            do { try store.recordSessionStats(id: session.id, stats) } catch { counters.saveFailures += 1 }
         }
     }
 
@@ -225,6 +260,7 @@ public actor CapturePipeline {
     func process(_ raw: PCAPNGPacket) {
         guard !stopped else { return }
         counters.packets += 1
+        trackGap(raw)
         let interfaceName = raw.interface.name ?? ""
         if counters.interfaces.count < Self.maxInterfaceNames || counters.interfaces[interfaceName] != nil {
             counters.interfaces[interfaceName, default: 0] += 1
@@ -300,6 +336,32 @@ public actor CapturePipeline {
         } else {
             lastExpire = now
         }
+    }
+
+    /// every packet read counts, decoded or not. integer compare in interface ticks; no allocation.
+    /// a backwards timestamp is ignored and does not move the previous time
+    @inline(__always)
+    private func trackGap(_ raw: PCAPNGPacket) {
+        let ticks = raw.rawTimestamp
+        let perSecond = raw.interface.ticksPerSecond
+        if perSecond != lastTicksPerSecond { rebaseGapClock(to: perSecond) }
+        guard lastTicksPerSecond != 0 else { return }
+        if ticks > lastTicks {
+            if lastTicks != 0, ticks - lastTicks > Self.gapSeconds &* perSecond {
+                counters.gapCount += 1
+                let seconds = Double(ticks - lastTicks) / Double(perSecond)
+                if seconds > counters.maxGap { counters.maxGap = seconds }
+            }
+            lastTicks = ticks
+        }
+    }
+
+    /// first packet, or an interface with another timestamp resolution: carry the previous time over
+    private func rebaseGapClock(to perSecond: UInt64) {
+        if lastTicksPerSecond != 0, lastTicks != 0, perSecond != 0 {
+            lastTicks = UInt64(Double(lastTicks) / Double(lastTicksPerSecond) * Double(perSecond))
+        }
+        lastTicksPerSecond = perSecond
     }
 
     /// keeps the pending queue bounded: flush early at `maxPendingDomains`; if saves keep failing, drop the oldest
