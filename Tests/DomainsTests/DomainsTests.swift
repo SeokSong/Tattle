@@ -304,3 +304,176 @@ private let rfcDCID = hex("8394c8f03e515708")
     packet[0] |= 0x20  // handshake type bits
     #expect(QUICInitial.serverName(inDatagram: packet[...]) == .notHandshake)
 }
+
+// MARK: handshake give-up reasons
+
+private func udpKey(_ port: UInt16 = 50000) -> FlowKey {
+    FlowKey(transport: .udp, localAddress: .v4(1), localPort: port, remoteAddress: .v4(2), remotePort: 443)
+}
+
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var n = 0
+    func bump() { lock.lock(); n += 1; lock.unlock() }
+    var value: Int { lock.lock(); defer { lock.unlock() }; return n }
+}
+
+/// a long-header datagram with the given version that carries no valid packet
+private func junkLongHeader(version: UInt32, type: UInt8 = 0, fill: UInt8 = 0xAB) -> [UInt8] {
+    [0xC0 | type << 4] + be32(version) + [8] + [UInt8](repeating: 1, count: 8) + [0]
+        + [UInt8](repeating: fill, count: 1100)
+}
+
+private func total(_ b: HandshakeBuffer) -> Int { b.gaveUpReasons.values.reduce(0, +) }
+
+@Test func quicVersionNegotiationIsUnsupportedVersion() {
+    var b = HandshakeBuffer()
+    #expect(b.add(key: udpKey(), payload: junkLongHeader(version: 0)[...], isQUIC: true) == nil)
+    #expect(b.gaveUpReasons == [.unsupportedVersion: 1])
+    #expect(b.pendingCount == 0)
+    // later datagrams of the flow are ignored
+    #expect(b.add(key: udpKey(), payload: junkLongHeader(version: 0)[...], isQUIC: true) == nil)
+    #expect(b.gaveUpReasons == [.unsupportedVersion: 1])
+}
+
+@Test func quicUnknownVersionIsUnsupportedVersion() {
+    var b = HandshakeBuffer()
+    #expect(b.add(key: udpKey(), payload: junkLongHeader(version: 0x1a2a_3a4a)[...], isQUIC: true) == nil)
+    #expect(b.gaveUpReasons == [.unsupportedVersion: 1])
+    #expect(b.quicGaveUp == 1)
+}
+
+@Test func quicShortHeaderFirstIsCounted() {
+    var b = HandshakeBuffer()
+    #expect(b.add(key: udpKey(), payload: [0x40, 1, 2, 3, 4, 5, 6, 7, 8][...], isQUIC: true) == nil)
+    #expect(b.gaveUpReasons == [.shortHeaderFirst: 1])
+    #expect(b.quicGaveUp == 1)
+    #expect(b.pendingCount == 0)
+    // counted once per flow
+    #expect(b.add(key: udpKey(), payload: [0x40, 1, 2][...], isQUIC: true) == nil)
+    #expect(b.gaveUpReasons == [.shortHeaderFirst: 1])
+}
+
+@Test func shortHeaderFirstKeysAreDrainedOnce() {
+    var b = HandshakeBuffer()
+    let other = FlowKey(
+        transport: .udp, localAddress: .v4(0x0A00_0002), localPort: 40001, remoteAddress: .v4(0xC000_0263), remotePort: 443)
+    #expect(b.add(key: udpKey(), payload: [0x40, 1, 2][...], isQUIC: true) == nil)
+    // not a short header (long bit set, not an Initial): gave up, but no evidence of a midstream start
+    #expect(b.add(key: other, payload: [0x80, 1, 2][...], isQUIC: true) == nil)
+    #expect(b.drainShortHeaderFirst() == [udpKey()])
+    #expect(b.drainShortHeaderFirst().isEmpty)
+    // a second datagram of the same flow adds nothing
+    #expect(b.add(key: udpKey(), payload: [0x40, 1][...], isQUIC: true) == nil)
+    #expect(b.drainShortHeaderFirst().isEmpty)
+}
+
+@Test func quicDecryptIsAttemptedAtMostThreeTimes() {
+    var b = HandshakeBuffer()
+    let counter = Counter()
+    b.decryptProbe = { counter.bump() }
+    for i in 0..<5 {
+        #expect(b.add(key: udpKey(), payload: junkLongHeader(version: 1, fill: UInt8(i))[...], isQUIC: true) == nil)
+    }
+    #expect(counter.value == 3)
+    #expect(b.gaveUpReasons == [.decryptFailed: 1])
+    #expect(b.pendingCount == 0)
+}
+
+@Test func quicAttemptCapAppliesAfterGoodDatagramsToo() {
+    // three readable datagrams that never complete the hello: capReached, not decryptFailed
+    var b = HandshakeBuffer()
+    let hello = clientHello(sni: "cap.example.org")
+    for i in 0..<3 {
+        let piece = cryptoFrame(offset: i * 10, Array(hello[(i * 10)..<(i * 10 + 10)]))
+        #expect(b.add(key: udpKey(), payload: quicInitial(dcid: rfcDCID, pn: UInt16(i), frames: piece)[...], isQUIC: true) == nil)
+    }
+    #expect(b.gaveUpReasons == [.capReached: 1])
+}
+
+@Test func tlsNoSniIsNoServerName() {
+    var b = HandshakeBuffer()
+    let bytes = tlsRecord(clientHello(sni: nil))
+    #expect(b.add(key: tcpKey(), payload: bytes[...], isQUIC: false) == nil)
+    #expect(b.gaveUpReasons == [.noServerName: 1])
+    #expect(b.tlsGaveUp == 1)
+}
+
+@Test func tlsOverCapIsCapReached() {
+    var b = HandshakeBuffer()
+    let bytes = tlsRecord(clientHello(sni: "cap.example.org"))
+    for i in 0..<6 { _ = b.add(key: tcpKey(), payload: bytes[i..<(i + 1)], isQUIC: false) }
+    #expect(b.gaveUpReasons == [.capReached: 1])
+    #expect(b.pendingCount == 0)
+}
+
+@Test func reasonsSumToGaveUpTotals() {
+    var b = HandshakeBuffer()
+    let noSNI = tlsRecord(clientHello(sni: nil))
+    _ = b.add(key: tcpKey(1), payload: noSNI[...], isQUIC: false)
+    for i in 0..<6 { _ = b.add(key: tcpKey(2), payload: noSNI[i..<(i + 1)], isQUIC: false) }
+    _ = b.add(key: udpKey(3), payload: [0x40, 1][...], isQUIC: true)
+    _ = b.add(key: udpKey(4), payload: junkLongHeader(version: 0)[...], isQUIC: true)
+    for _ in 0..<4 { _ = b.add(key: udpKey(5), payload: junkLongHeader(version: 1)[...], isQUIC: true) }
+    #expect(b.tlsGaveUp + b.quicGaveUp == total(b))
+    #expect(total(b) == 5)
+    let extractor = DomainExtractor(buffer: b)
+    #expect(extractor.gaveUpReasons == b.gaveUpReasons)
+}
+
+@Test func existingSniExtractionUnchanged() {
+    var b = HandshakeBuffer()
+    let hello = clientHello(sni: "quic.example.org")
+    let packet = quicInitial(dcid: rfcDCID, frames: cryptoFrame(offset: 0, hello))
+    #expect(b.add(key: udpKey(), payload: packet[...], isQUIC: true) == "quic.example.org")
+    #expect(b.gaveUpReasons.isEmpty)
+    // split across datagrams still reassembles
+    let cut = 40
+    let first = quicInitial(dcid: rfcDCID, pn: 0, frames: cryptoFrame(offset: 0, Array(hello[..<cut])))
+    let second = quicInitial(dcid: rfcDCID, pn: 1, frames: cryptoFrame(offset: cut, Array(hello[cut...])))
+    #expect(b.add(key: udpKey(2), payload: first[...], isQUIC: true) == nil)
+    #expect(b.add(key: udpKey(2), payload: second[...], isQUIC: true) == "quic.example.org")
+    #expect(b.gaveUpReasons.isEmpty)
+}
+
+// MARK: caps
+
+private func tcpKey(_ port: Int) -> FlowKey {
+    FlowKey(transport: .tcp, localAddress: .v4(1), localPort: UInt16(port), remoteAddress: .v4(2), remotePort: 443)
+}
+
+/// the first half of a ClientHello record: a pending buffer that waits for more
+private func halfHello() -> [UInt8] {
+    let record = tlsRecord(clientHello(sni: "half.example.com"))
+    return Array(record[..<(record.count / 2)])
+}
+
+@Test func handshakeStatesAreCapped() {
+    var b = HandshakeBuffer()
+    let half = halfHello()
+    for i in 0..<5_000 { #expect(b.add(key: tcpKey(1_000 + i), payload: half[...], isQUIC: false) == nil) }
+    #expect(b.stateCount <= HandshakeBuffer.defaultMaxStates)
+    #expect(b.peakStates <= HandshakeBuffer.defaultMaxStates)
+    // all 4,096 were pending: a quarter was finished early on the way to 5,000, and each is counted
+    #expect(b.statesDropped == 1_024)
+    #expect(b.gaveUpReasons[.capReached] == 1_024)
+    // a later ClientHello on a new flow is still read
+    let full = tlsRecord(clientHello(sni: "late.example.com"))
+    let found = b.add(key: tcpKey(60_000), payload: full[...], isQUIC: false)
+    #expect(found?.name == "late.example.com")
+    #expect(b.stateCount <= HandshakeBuffer.defaultMaxStates)
+}
+
+@Test func handshakeDoneEntriesGoBeforePendingOnes() {
+    var b = HandshakeBuffer(maxStates: 8)
+    let half = halfHello()
+    for i in 0..<4 { _ = b.add(key: tcpKey(1_000 + i), payload: half[...], isQUIC: false) }
+    // a payload that is not a handshake is done at once
+    for i in 0..<4 { _ = b.add(key: tcpKey(2_000 + i), payload: [0x17, 3, 3, 0, 1, 0][...], isQUIC: false) }
+    #expect(b.stateCount == 8 && b.pendingCount == 4)
+    _ = b.add(key: tcpKey(3_000), payload: half[...], isQUIC: false)
+    // the four done entries went; no pending buffer was finished early
+    #expect(b.statesDropped == 4)
+    #expect(b.pendingCount == 5 && b.stateCount == 5)
+    #expect(b.gaveUpReasons.isEmpty)
+}

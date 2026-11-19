@@ -85,7 +85,7 @@ public enum Attributor {
 | Source | Label | Rule |
 |---|---|---|
 | `sni` | Seen in connection | `flow.serverName`, else the SNI observation for `flow.key`. `echPresent` is true when the flow or the observation saw ECH (the name is then the outer name) |
-| `dns` | Seen in DNS this session | newest answer containing `flow.key.remoteAddress` with `time ≤ flow.firstSeen`, `flow.firstSeen − time ≤ ttl` (inclusive; nil ttl → 300 s) and an app match |
+| `dns` | From DNS (may be another service on the same server) | newest answer containing `flow.key.remoteAddress` with `time ≤ flow.firstSeen`, `flow.firstSeen − time ≤ ttl` (inclusive; nil ttl → 300 s) and an app match |
 
 - App match: flow app = winner of `attribute(tally)` (app, on-behalf-of app, or system process name). Answer app = `effectiveProcess?.name ?? process?.name`. Names are compared after `ProcessNames.displayName`. An answer with no app matches any flow. A flow with no app (unknown) matches only answers with no app
 - Ties on time: smaller hostname wins

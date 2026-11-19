@@ -110,6 +110,7 @@ public enum PCAPNGEvent: Sendable {
 - Section header byte order is read before the block length, as now
 - `PCAPNGReader.parse(_:)` = one `append` + `finish`, collecting events into `PCAPNGCapture` (keep this API; the CLI `read` command uses it)
 - Everything stays `Sendable`; the parser is a value type owned by whoever feeds it
+- Caps (6.1): a block longer than `maxBlockLength` (16 MB) throws `badBlockLength` at once instead of buffering toward it; at most `maxSectionProcesses` (100,000) process blocks are remembered per section (later ones are still events but packets cannot refer to them: `unresolvedProcessReferences`, and `processBlocksDropped` counts them); `skippedBlocks` keeps at most `maxSkippedBlockTypes` (64) separate types, the rest count under `UInt32.max`. These are parser properties, not `PipelineStats`: the pipeline never sees the parser
 
 ### `PacketSource`
 

@@ -28,19 +28,38 @@ public enum QUICInitial {
         serverName(inDatagrams: [datagram])
     }
 
+    /// what one datagram turned out to be
+    public enum DatagramOutcome: Sendable {
+        case frames([(Int, [UInt8])])
+        /// long header, version other than v1 / v2 (version 0 is version negotiation)
+        case unsupportedVersion
+        /// not a client Initial (short header, or another long-header type)
+        case notInitial
+        /// an Initial that is malformed or failed to decrypt
+        case decryptFailed
+    }
+
     /// datagrams in arrival order, all from the same client. crypto frames are reassembled by offset across them
     public static func serverName(inDatagrams datagrams: [ArraySlice<UInt8>]) -> SNIResult {
         var pieces: [Int: [UInt8]] = [:]
         var decrypted = false
         for datagram in datagrams {
-            guard let frames = cryptoFrames(inDatagram: Array(datagram)) else { continue }
-            decrypted = true
-            for (offset, data) in frames where (pieces[offset]?.count ?? 0) < data.count {
-                pieces[offset] = data
+            switch inspect(datagram: Array(datagram)) {
+            case .frames(let frames):
+                decrypted = true
+                for (offset, data) in frames where (pieces[offset]?.count ?? 0) < data.count {
+                    pieces[offset] = data
+                }
+            case .unsupportedVersion, .decryptFailed, .notInitial: break
             }
         }
+        // the stateless api folds every failure into notHandshake; the buffer uses inspect for the reasons
         guard decrypted else { return .notHandshake }
+        return TLSClientHello.serverName(inHandshake: reassemble(pieces)[...])
+    }
 
+    /// joins crypto pieces that are contiguous from offset 0
+    static func reassemble(_ pieces: [Int: [UInt8]]) -> [UInt8] {
         var stream: [UInt8] = []
         for offset in pieces.keys.sorted() {
             guard offset <= stream.count else { break }
@@ -49,7 +68,7 @@ public enum QUICInitial {
                 stream.append(contentsOf: data[(stream.count - offset)...])
             }
         }
-        return TLSClientHello.serverName(inHandshake: stream[...])
+        return stream
     }
 
     // MARK: keys
@@ -92,14 +111,26 @@ public enum QUICInitial {
     /// decrypts the first Initial packet of the datagram and returns its crypto frames as (offset, data).
     /// nil when it is not a client Initial or does not decrypt
     static func cryptoFrames(inDatagram d: [UInt8]) -> [(Int, [UInt8])]? {
-        guard d.count >= 7, d[0] & 0xC0 == 0xC0 else { return nil }
+        if case .frames(let f) = inspect(datagram: d) { return f }
+        return nil
+    }
+
+    /// classifies one datagram and decrypts its first Initial packet when it is a v1 / v2 client Initial
+    public static func inspect(datagram d: [UInt8]) -> DatagramOutcome {
+        guard d.count >= 5, d[0] & 0xC0 == 0xC0 else { return .notInitial }
         let version = u32(d, 1)
         let typeBits = (d[0] >> 4) & 0x03
         switch version {
-        case 1 where typeBits == 0: break
-        case 0x6b33_43cf where typeBits == 1: break
-        default: return nil
+        case 1: if typeBits != 0 { return .notInitial }
+        case 0x6b33_43cf: if typeBits != 1 { return .notInitial }
+        default: return .unsupportedVersion
         }
+        guard d.count >= 7 else { return .decryptFailed }
+        if let frames = decryptInitial(d, version: version) { return .frames(frames) }
+        return .decryptFailed
+    }
+
+    private static func decryptInitial(_ d: [UInt8], version: UInt32) -> [(Int, [UInt8])]? {
         var pos = 5
         let dcidLen = Int(d[pos])
         pos += 1

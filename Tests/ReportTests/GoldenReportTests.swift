@@ -1,3 +1,4 @@
+import Attribution
 import Domains
 import Flows
 import Foundation
@@ -30,6 +31,7 @@ private struct Result {
     var report: QualityReport
     var flows: [Flow]
     var stats: PipelineStats
+    var domains: [DomainObservation]
 }
 
 private func run(_ bytes: [UInt8]) async throws -> Result {
@@ -46,7 +48,7 @@ private func run(_ bytes: [UInt8]) async throws -> Result {
         malformed: stats.malformed, droppedNoPort: stats.droppedNoPort)
     let report = ReportBuilder.build(
         flows: flows, domains: store.domains, pipeline: p, options: ReportOptions(watchVersion: "test"))
-    return Result(report: report, flows: flows, stats: await pipeline.stats)
+    return Result(report: report, flows: flows, stats: await pipeline.stats, domains: store.domains)
 }
 
 @Test func goldenTotals() async throws {
@@ -174,4 +176,84 @@ private func run(_ bytes: [UInt8]) async throws -> Result {
     let (bytes, _) = SyntheticCorpus.mixed()
     let report = try await run(bytes).report
     #expect(report.categories.rules.values.reduce(0, +) == report.totals.ipBytes)
+}
+
+@Test func goldenHostnames() async throws {
+    let (bytes, expected) = SyntheticCorpus.mixed()
+    let r = try await run(bytes)
+    let h = r.report.hostnames
+    let d = expected.hostnameDenominatorBytes
+    // observed names only: sni 6243 of 10065. the dns hint (F6 1240) is in hintShare, not in the headline
+    #expect(h.hostnameCoverage == Ratio(numerator: expected.sniBytes, denominator: d))
+    #expect(h.hintShare == Ratio(numerator: expected.dnsBytes, denominator: d))
+    #expect(h.sniShare == Ratio(numerator: expected.sniBytes, denominator: d))
+    #expect(h.dnsShare == Ratio(numerator: expected.dnsBytes, denominator: d))
+    #expect(h.unnamedShare.count == 4)
+    for (reason, b) in expected.unnamedBytes {
+        #expect(h.unnamedShare[reason] == Ratio(numerator: b, denominator: d), "\(reason)")
+    }
+    #expect(h.midstreamShare == Ratio(numerator: expected.midstreamBytes, denominator: d))
+    #expect(h.echShare == Ratio(numerator: expected.echBytes, denominator: d))
+    #expect(h.dnsPrecision == Ratio(numerator: expected.dnsPrecisionAgreeBytes, denominator: expected.dnsPrecisionBytes))
+    // the denominator is the 443 bytes of app and helper flows; here every 443 flow is app traffic
+    #expect(d == expected.port443Bytes)
+    // the M1 figure is unchanged
+    #expect(h.hostnameCoverageSniOnly == Ratio(numerator: expected.sniNamedBytes, denominator: expected.port443Bytes))
+    // per flow: source or reason
+    let index = HostnameIndex(r.domains)
+    for (label, want) in expected.hostnameOutcome {
+        let e = expected.flow(label)
+        let flow = try #require(r.flows.first { $0.key.remoteAddress == e.remote && $0.key.remotePort == e.remotePort })
+        switch index.outcome(for: flow) {
+        case .named(let n): #expect(n.source.rawValue == want, "\(label)")
+        case .unnamed(let reason): #expect(reason.rawValue == want, "\(label)")
+        }
+    }
+}
+
+@Test func goldenHints() async throws {
+    let (bytes, e) = HintCorpus.build()
+    let r = try await run(bytes)
+    let h = r.report.hostnames
+    let d = e.denominator
+    // every flow is app traffic to 443: the denominator is all ip bytes
+    #expect(r.report.totals.ipBytes == d)
+    #expect(h.sniShare == Ratio(numerator: e.sniBytes, denominator: d))
+    #expect(h.dnsShare == Ratio(numerator: 0, denominator: d))
+    #expect(h.sameAddressShare == Ratio(numerator: e.sameAddressBytes, denominator: d))
+    // the hint is not in the headline figure
+    #expect(h.hostnameCoverage == Ratio(numerator: e.sniBytes, denominator: d))
+    // hintShare = dns 0 + sameAddress 356 = 356 of 2763
+    #expect(h.hintShare == Ratio(numerator: e.sameAddressBytes, denominator: d))
+    for (reason, b) in e.unnamedBytes { #expect(h.unnamedShare[reason] == Ratio(numerator: b, denominator: d), "\(reason)") }
+    #expect(h.midstreamShare == Ratio(numerator: e.midstreamBytes, denominator: d))
+    #expect(h.sameAddressPrecision == Ratio(
+        numerator: e.sameAddressPrecisionAgreeBytes, denominator: e.sameAddressPrecisionBytes))
+    #expect(h.dnsPrecision == Ratio(numerator: 0, denominator: 0))
+    #expect(r.report.reconciliation.ok)
+    #expect(r.stats.handshakeGaveUp["shortHeaderFirst"] == e.shortHeaderFirst)
+    let index = HostnameIndex(r.domains, flows: r.flows)
+    for (label, want) in e.outcome {
+        let flow = try #require(r.flows.first {
+            $0.key.remoteAddress == .v4(HintCorpus.remote(label)) && $0.ipBytesIn + $0.ipBytesOut == e.bytes[label]
+        }, "\(label)")
+        switch index.outcome(for: flow) {
+        case .named(let n): #expect(n.source.rawValue == want, "\(label)")
+        case .unnamed(let reason): #expect(reason.rawValue == want, "\(label)")
+        }
+        // the quic flows that began with a short header carry the flag
+        #expect(flow.startedMidstream == (label == "H2" || label == "H3"), "\(label) midstream")
+    }
+    let hinted = try #require(r.flows.first { $0.ipBytesIn + $0.ipBytesOut == e.bytes["H2"] })
+    #expect(index.resolve(hinted)?.name == "named.tiktok.test")
+}
+
+@Test func goldenHostnameReasonsAddUp() async throws {
+    let (bytes, _) = SyntheticCorpus.mixed()
+    let report = try await run(bytes).report
+    let h = report.hostnames
+    let sum = [h.sniShare, h.dnsShare, h.sameAddressShare].compactMap(\.value).reduce(0, +) + h.unnamedShare.values.compactMap(\.value).reduce(0, +)
+    #expect(abs(sum - 1) < 1e-12)
+    let check = try #require(report.reconciliation.checks.first { $0.name == "hostnameReasons" })
+    #expect(check.ok && check.expected == 10065)
 }

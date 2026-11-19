@@ -34,6 +34,8 @@ struct SessionsView: View {
                             SetAsideSection(rows: detail.grouping.setAside)
                             Text("Top flows by bytes").font(.headline)
                             FlowTable(flows: detail.flows)
+                            Text("A name seen in the connection was read from that connection. A name from DNS is a lookup answer for the same server address and may be another service on that server.")
+                                .font(.caption).foregroundStyle(.secondary)
                             Text("Byte totals per process are shared out by packet count from stored flow totals. Each flow is placed in one category as a whole.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }

@@ -87,6 +87,21 @@ extension QualityReport {
             "mixedFlowShare": attribution.mixedFlowShare,
             "hostnameCoverageSniOnly": hostnames.hostnameCoverageSniOnly,
         ]
+        // hostname fields (5.1); a report without app traffic to 443 adds nothing
+        if hostnames.hostnameCoverage.denominator > 0 {
+            all["hostnameCoverage"] = hostnames.hostnameCoverage
+            all["sniShare"] = hostnames.sniShare
+            all["dnsShare"] = hostnames.dnsShare
+            all["sameAddressShare"] = hostnames.sameAddressShare
+            all["hintShare"] = hostnames.hintShare
+            all["midstreamShare"] = hostnames.midstreamShare
+            all["echShare"] = hostnames.echShare
+            for (reason, ratio) in hostnames.unnamedShare { all["unnamedShare.\(reason)"] = ratio }
+            if hostnames.dnsPrecision.denominator > 0 { all["dnsPrecision"] = hostnames.dnsPrecision }
+            if hostnames.sameAddressPrecision.denominator > 0 {
+                all["sameAddressPrecision"] = hostnames.sameAddressPrecision
+            }
+        }
         // category fields (4.2); old reports without categories add nothing
         if categories.unknownShare.denominator > 0 {
             all["unknownShare"] = categories.unknownShare
@@ -110,6 +125,16 @@ public enum Bands {
     /// metrics where a smaller value is better; the rest are "higher is better"
     public static let lowerIsBetter: Set<String> = ["noProcessShare", "mixedFlowShare", "unknownShare"]
 
+    /// new in 5.1: written to band files as informational until reviewed, then enforced
+    public static let informationalMetrics: Set<String> = [
+        "hostnameCoverage", "sniShare", "dnsShare", "midstreamShare", "echShare", "dnsPrecision",
+        "sameAddressShare", "sameAddressPrecision", "hintShare",
+    ]
+
+    static func isInformational(_ name: String) -> Bool {
+        informationalMetrics.contains(name) || name.hasPrefix("unnamedShare.")
+    }
+
     static func round3(_ x: Double) -> Double { (x * 1000).rounded() / 1000 }
 
     /// tolerance rule, used when a band file is created or updated:
@@ -125,7 +150,7 @@ public enum Bands {
         for (name, ratio) in report.metrics {
             guard let value = ratio.value else { continue }
             let baseline = round3(value)
-            if ratio.denominator < minDenominator {
+            if ratio.denominator < minDenominator || isInformational(name) {
                 metrics[name] = MetricBand(baseline: baseline, informational: true)
             } else if lowerIsBetter.contains(name) {
                 metrics[name] = MetricBand(baseline: baseline, floor: 0, ceiling: min(1, round3(value + tolerance)))

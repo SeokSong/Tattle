@@ -16,6 +16,9 @@ public enum TrafficCategory: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// `app` + `helper`: traffic an app caused, directly or through a helper
+    public var isAppTraffic: Bool { self == .app || self == .helper }
+
     /// counts as phone traffic: everything except the Mac link and local-only chatter
     public var isPhoneTraffic: Bool {
         switch self {

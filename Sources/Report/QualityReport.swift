@@ -38,8 +38,53 @@ public struct QualityReport: Codable, Sendable, Equatable {
     }
 
     public struct Hostnames: Codable, Sendable, Equatable {
-        /// M1 view: denominator is all flows with remote port 443 (5.1 narrows it to app traffic)
+        /// M1 view: denominator is all flows with remote port 443, any category, any serverName.
+        /// unchanged since M1 so the baseline stays comparable
         public var hostnameCoverageSniOnly: Ratio
+        /// 5.1 fields. denominator of all of them: bytes of `appTraffic` (app + helper) flows with remote port 443
+        /// observed names only: bytes named by the connection itself (`sni`), so it equals `sniShare`.
+        /// hints never count toward it
+        public var hostnameCoverage: Ratio
+        /// bytes named by the flow's own server name (not ech)
+        public var sniShare: Ratio
+        /// bytes named only by a dns answer from this session
+        public var dnsShare: Ratio
+        /// bytes named only by another flow's sni name (same remote address, same app). a hint, never in
+        /// `hostnameCoverage`
+        public var sameAddressShare: Ratio
+        /// `dnsShare` + `sameAddressShare`: bytes whose name is a hint, not observed in the connection
+        public var hintShare: Ratio
+        /// bytes per `UnnamedReason` raw value; all four keys always present
+        public var unnamedShare: [String: Ratio]
+        /// flows that started before the capture (tcp without a syn, quic starting with a short header)
+        public var midstreamShare: Ratio
+        /// flows with `echSeen`
+        public var echShare: Ratio
+        /// of bytes with an sni name and a dns match, bytes where the dns name equals the sni name
+        public var dnsPrecision: Ratio
+        /// of bytes with an sni name and a same-address match, bytes where the other flow's name equals the sni name
+        public var sameAddressPrecision: Ratio
+
+        public static let empty = Ratio(numerator: 0, denominator: 0)
+
+        public init(
+            hostnameCoverageSniOnly: Ratio, hostnameCoverage: Ratio = empty, sniShare: Ratio = empty,
+            dnsShare: Ratio = empty, sameAddressShare: Ratio = empty, hintShare: Ratio = empty, unnamedShare: [String: Ratio] = [:], midstreamShare: Ratio = empty,
+            echShare: Ratio = empty, dnsPrecision: Ratio = empty,
+            sameAddressPrecision: Ratio = empty
+        ) {
+            self.hostnameCoverageSniOnly = hostnameCoverageSniOnly
+            self.hostnameCoverage = hostnameCoverage
+            self.sniShare = sniShare
+            self.dnsShare = dnsShare
+            self.unnamedShare = unnamedShare
+            self.midstreamShare = midstreamShare
+            self.echShare = echShare
+            self.dnsPrecision = dnsPrecision
+            self.sameAddressShare = sameAddressShare
+            self.hintShare = hintShare
+            self.sameAddressPrecision = sameAddressPrecision
+        }
     }
 
     public struct Check: Codable, Sendable, Equatable {
@@ -89,6 +134,15 @@ public struct QualityReport: Codable, Sendable, Equatable {
             systemTopProcessShare: Ratio(numerator: 0, denominator: 0))
     }
 
+    public struct UnnamedFlowLine: Codable, Sendable, Equatable {
+        public var reason: String
+        public var port: Int
+        public var transport: String
+        public var category: String
+        public var process: String
+        public var ipBytes: Int
+    }
+
     public struct Detail: Codable, Sendable, Equatable {
         public var topProcesses: [ProcessLine]
         /// `system` category bytes by process display name
@@ -96,11 +150,15 @@ public struct QualityReport: Codable, Sendable, Equatable {
         /// `deviceLink` category bytes by process display name
         public var deviceLinkProcesses: [ProcessLine]
         public var systemTopProcess: String?
+        /// the 10 largest unnamed app-traffic 443 flows; no address, no hostname
+        public var topUnnamed: [UnnamedFlowLine]
 
         public init(
             topProcesses: [ProcessLine], systemProcesses: [ProcessLine] = [],
-            deviceLinkProcesses: [ProcessLine] = [], systemTopProcess: String? = nil
+            deviceLinkProcesses: [ProcessLine] = [], systemTopProcess: String? = nil,
+            topUnnamed: [UnnamedFlowLine] = []
         ) {
+            self.topUnnamed = topUnnamed
             self.topProcesses = topProcesses
             self.systemProcesses = systemProcesses
             self.deviceLinkProcesses = deviceLinkProcesses

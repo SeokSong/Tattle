@@ -1,5 +1,6 @@
 import Attribution
 import Capture
+import Domains
 import Flows
 import Foundation
 import PCAPNG
@@ -65,6 +66,10 @@ struct SessionDetail {
 @MainActor
 final class AppModel: ObservableObject {
     static let retentionChoices = [1, 3, 7]
+    /// rows in the live flow table; the rest fold into one "N more flows" line
+    static let liveTableRows = 10
+    /// the session count cache is cleared when it passes this (one entry per ended session)
+    static let maxCountCache = 1_000
 
     @Published var selection: SidebarItem = .connect
     @Published var deviceStatus: DeviceStatus?
@@ -72,8 +77,11 @@ final class AppModel: ObservableObject {
     @Published var showAccess = false
     @Published var liveStats = PipelineStats()
     @Published var liveFlows: [Flow] = []
+    @Published var liveDNS: [DomainObservation] = []
     @Published var grouping = ProcessGrouping()
     @Published var topFlowLines: [FlowLine] = []
+    /// flows beyond the ones in `topFlowLines`; shown as the fold line
+    @Published var moreFlows = 0
     @Published var sessions: [SessionRow] = []
     @Published var storeError: String?
 
@@ -211,8 +219,10 @@ final class AppModel: ObservableObject {
             diagnosticActive = diagnosticCapture
             liveStats = PipelineStats()
             liveFlows = []
+            liveDNS = []
             grouping = ProcessGrouping()
             topFlowLines = []
+            moreFlows = 0
 
             await pipeline.startFlushTimer()
             runTask = Task { [weak self] in
@@ -265,6 +275,7 @@ final class AppModel: ObservableObject {
             await pipeline.stop(reason: reason)
             liveStats = await pipeline.stats
             liveFlows = await pipeline.flowsSnapshot()
+            liveDNS = await pipeline.dnsSnapshot()
             updateDerived()
         }
         pipeline = nil
@@ -285,9 +296,11 @@ final class AppModel: ObservableObject {
                 guard !Task.isCancelled, let self, let pipeline = self.pipeline else { return }
                 let stats = await pipeline.stats
                 let flows = await pipeline.flowsSnapshot()
+                let dns = await pipeline.dnsSnapshot()
                 if Task.isCancelled { return }
                 self.liveStats = stats
                 self.liveFlows = flows
+                self.liveDNS = dns
                 self.updateDerived()
             }
         }
@@ -295,7 +308,9 @@ final class AppModel: ObservableObject {
 
     private func updateDerived() {
         grouping = groupByProcess(from: liveFlows, withEmptyUnattributed: true)
-        topFlowLines = topFlows(liveFlows)
+        let rows = flowRows(liveFlows, observations: liveDNS, limit: Self.liveTableRows)
+        topFlowLines = rows.lines
+        moreFlows = rows.moreFlows
     }
 
     var interfaceName: String? {
@@ -314,7 +329,10 @@ final class AppModel: ObservableObject {
                     let totals = try store.processTotals(session: session.id)
                     let flows = try store.flows(session: session.id).count
                     counts = (totals.reduce(0) { $0 + $1.packets }, flows)
-                    if session.endedAt != nil { countCache[session.id] = counts }
+                    if session.endedAt != nil {
+                        if countCache.count >= Self.maxCountCache { countCache.removeAll() }
+                        countCache[session.id] = counts
+                    }
                 }
                 rows.append(SessionRow(
                     id: session.id, startedAt: session.startedAt, endedAt: session.endedAt,
@@ -333,7 +351,7 @@ final class AppModel: ObservableObject {
             let flows = try store.flows(session: id)
             return SessionDetail(
                 grouping: groupByProcess(from: tallyInputs(from: flows), withEmptyUnattributed: true),
-                flows: topFlows(flows))
+                flows: topFlows(flows, observations: try store.domains(session: id)))
         } catch {
             storeError = "Session could not be read: \(error.localizedDescription)"
             return nil

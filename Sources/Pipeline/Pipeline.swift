@@ -19,6 +19,42 @@ public struct PipelineStats: Sendable {
     public var unsavedFlows = 0
     /// wall time of run()
     public var elapsed: TimeInterval = 0
+    /// dns observations held in the recent ring (at most `CapturePipeline.recentDNSCapacity`)
+    public var recentDNSCount = 0
+    /// handshake buffers that gave up, by `GaveUpReason` raw value. counts only
+    public var handshakeGaveUp: [String: Int] = [:]
+
+    // caps and evictions (see the table in md/PIPELINE.md). every counter is 0 on the five real captures
+    /// flows open right now
+    public var openFlows = 0
+    /// most flows open at once
+    public var peakOpenFlows = 0
+    /// open flows closed early with end reason `evicted` because the table was full. they are saved
+    public var evictedFlows = 0
+    /// closed flows lost because saves kept failing until the closed queue was full
+    public var droppedClosedFlows = 0
+    /// packets counted under the "no process" row because a flow already had 64 process rows
+    public var tallyRowsFolded = 0
+    /// most domain observations waiting for a flush at once
+    public var peakPendingDomains = 0
+    /// domain observations lost because saves kept failing until 40,000 were waiting
+    public var droppedDomains = 0
+    /// handshake entries removed because the buffer was full (done entries dropped, pending ones finished early)
+    public var handshakeStatesDropped = 0
+    /// most handshake entries held at once
+    public var peakHandshakeStates = 0
+    /// closed flows removed from the in-memory retained list (they stay in the database)
+    public var retainedDropped = 0
+    /// retained domain observations removed from the in-memory list
+    public var retainedDomainsDropped = 0
+    /// packets counted under the "(other)" interface because 64 interface names were already counted
+    public var interfacesFolded = 0
+
+    /// true when any cap removed or folded something. the live screen's totals are then lower than the truth
+    public var anyCapHit: Bool {
+        evictedFlows + droppedClosedFlows + tallyRowsFolded + droppedDomains + handshakeStatesDropped
+            + retainedDropped + retainedDomainsDropped + interfacesFolded > 0
+    }
 
     public init() {}
 }
@@ -26,6 +62,22 @@ public struct PipelineStats: Sendable {
 public actor CapturePipeline {
     /// replay flushes every this many packets
     public static let replayFlushPackets = 5_000
+
+    /// the live screen's dns ring keeps this many answers; the oldest is overwritten
+    public static let recentDNSCapacity = 5_000
+
+    /// observations waiting for a flush: reaching this flushes early
+    public static let maxPendingDomains = 20_000
+    /// a failing save lets the queue grow to this, then the oldest `maxPendingDomains` are dropped
+    public static let hardPendingDomains = 40_000
+    /// after a failed early flush, the next try comes this many observations later
+    public static let domainRetryStep = 5_000
+    /// flows kept for `flowsSnapshot()`; past this the oldest closed ones are dropped
+    public static let maxRetainedFlows = 50_000
+    /// observations kept for `domainsSnapshot()` (CLI and tests only)
+    public static let maxRetainedDomains = 200_000
+    /// distinct interface names counted in `PipelineStats.interfaces`; later names count as "(other)"
+    public static let maxInterfaceNames = 64
 
     private let store: (any FlowStore)?
     private let session: CaptureSession
@@ -39,15 +91,20 @@ public actor CapturePipeline {
     private var pendingDomains: [DomainObservation] = []
     private var retainedDomains: [DomainObservation] = []
     private var retained: [UUID: Flow] = [:]
+    /// fixed-size ring of the latest dns answers; `recentDNSNext` is the slot written next once full
+    private var recentDNS: [DomainObservation] = []
+    private var recentDNSNext = 0
     private var counters = PipelineStats()
+    private var domainFlushAt = CapturePipeline.maxPendingDomains
     private var lastExpire: Date?
     private var sessionStarted = false
     private var stopped = false
     private var lastRequeued = 0
     private var timer: Task<Void, Never>?
 
-    /// retainFlows keeps the final state of every flow in memory for flowsSnapshot(); for the CLI and tests.
-    /// retainDomains does the same for domainsSnapshot(). both are unbounded: never set them in the app
+    /// retainFlows keeps the final state of flows in memory for flowsSnapshot(), at most `maxRetainedFlows`
+    /// (the oldest closed ones are dropped and counted). the app uses it for its live list.
+    /// retainDomains does the same for domainsSnapshot(), at most `maxRetainedDomains`; CLI and tests only
     public init(
         store: sending (any FlowStore)?, session: CaptureSession, flushInterval: TimeInterval = 2,
         retainFlows: Bool = false, retainDomains: Bool = false
@@ -62,6 +119,15 @@ public actor CapturePipeline {
     public var stats: PipelineStats {
         var s = counters
         s.flowsClosed = s.flowsOpened - flowTable.openCount
+        s.recentDNSCount = recentDNS.count
+        s.openFlows = flowTable.openCount
+        s.peakOpenFlows = flowTable.peakOpenFlows
+        s.evictedFlows = flowTable.evictedFlows
+        s.droppedClosedFlows = flowTable.droppedClosedFlows
+        s.tallyRowsFolded = flowTable.tallyRowsFolded
+        s.handshakeStatesDropped = extractor.handshakeStatesDropped
+        s.peakHandshakeStates = extractor.handshakeStatesPeak
+        s.handshakeGaveUp = Dictionary(uniqueKeysWithValues: extractor.gaveUpReasons.map { ($0.key.rawValue, $0.value) })
         return s
     }
 
@@ -70,6 +136,13 @@ public actor CapturePipeline {
 
     /// every domain observation flushed so far, only when retainDomains is set. call after stop
     public func domainsSnapshot() -> [DomainObservation] { retainedDomains }
+
+    /// the last `recentDNSCapacity` dns answers, oldest first. always on, dns only, fixed size. the live
+    /// screen resolves hostnames from it; the flow's own server name covers sni
+    public func dnsSnapshot() -> [DomainObservation] {
+        guard recentDNS.count == Self.recentDNSCapacity else { return recentDNS }
+        return Array(recentDNS[recentDNSNext...] + recentDNS[..<recentDNSNext])
+    }
 
     public var tlsGaveUp: Int { extractor.tlsGaveUp }
     public var quicGaveUp: Int { extractor.quicGaveUp }
@@ -148,10 +221,17 @@ public actor CapturePipeline {
         Double(d.components.seconds) + Double(d.components.attoseconds) / 1e18
     }
 
-    private func process(_ raw: PCAPNGPacket) {
+    /// internal so tests can feed packets without `run`'s periodic flush
+    func process(_ raw: PCAPNGPacket) {
         guard !stopped else { return }
         counters.packets += 1
-        counters.interfaces[raw.interface.name ?? "", default: 0] += 1
+        let interfaceName = raw.interface.name ?? ""
+        if counters.interfaces.count < Self.maxInterfaceNames || counters.interfaces[interfaceName] != nil {
+            counters.interfaces[interfaceName, default: 0] += 1
+        } else {
+            counters.interfaces["(other)", default: 0] += 1
+            counters.interfacesFolded += 1
+        }
 
         let packet: DecodedPacket
         switch decoder.decode(raw) {
@@ -174,11 +254,18 @@ public actor CapturePipeline {
 
         let event = flowTable.add(packet)
         if case .opened = event { counters.flowsOpened += 1 }
+        if flowTable.hasEvictedKeys { for key in flowTable.takeEvictedKeys() { extractor.flowClosed(key) } }
 
         for o in extractor.observe(packet) {
             switch o.source {
             case .dns:
                 counters.dnsObservations += 1
+                if recentDNS.count < Self.recentDNSCapacity {
+                    recentDNS.append(o)
+                } else {
+                    recentDNS[recentDNSNext] = o
+                    recentDNSNext = (recentDNSNext + 1) % Self.recentDNSCapacity
+                }
             case .sni:
                 counters.sniFound += 1
                 if let key = o.flowKey { flowTable.setServerName(o.hostname, for: key) }
@@ -188,7 +275,11 @@ public actor CapturePipeline {
                 }
             }
             pendingDomains.append(o)
+            capPendingDomains()
         }
+
+        // a quic flow whose first payload was a short header began before the capture
+        for key in extractor.drainMidstreamUDP() { flowTable.markMidstream(for: key) }
 
         // a reset closes the flow at once, even when it was also the first packet
         if transport == .tcp, packet.headers.tcpFlags?.contains(.rst) == true,
@@ -211,14 +302,52 @@ public actor CapturePipeline {
         }
     }
 
+    /// keeps the pending queue bounded: flush early at `maxPendingDomains`; if saves keep failing, drop the oldest
+    /// `maxPendingDomains` at `hardPendingDomains`. a failed early flush is retried every `domainRetryStep`
+    /// observations, not on every packet. the failure itself is counted and rethrown by the next regular flush
+    private func capPendingDomains() {
+        let count = pendingDomains.count
+        if count > counters.peakPendingDomains { counters.peakPendingDomains = count }
+        if count >= Self.hardPendingDomains {
+            pendingDomains.removeFirst(Self.maxPendingDomains)
+            counters.droppedDomains += Self.maxPendingDomains
+            domainFlushAt = pendingDomains.count + Self.domainRetryStep
+        } else if count >= domainFlushAt {
+            do { try flush() } catch { domainFlushAt = pendingDomains.count + Self.domainRetryStep }
+        }
+    }
+
+    /// drops the oldest closed flows (by last packet) until `retained` is back at its cap
+    private func trimRetained() {
+        let excess = retained.count - Self.maxRetainedFlows
+        guard excess > 0 else { return }
+        let victims = retained.values.filter { $0.endReason != nil }.sorted { $0.lastSeen < $1.lastSeen }.prefix(excess)
+        for flow in victims { retained[flow.id] = nil }
+        counters.retainedDropped += victims.count
+    }
+
+    private func retain(domains: [DomainObservation]) {
+        guard retainDomains else { return }
+        retainedDomains += domains
+        let excess = retainedDomains.count - Self.maxRetainedDomains
+        if excess > 0 {
+            retainedDomains.removeFirst(excess)
+            counters.retainedDomainsDropped += excess
+        }
+    }
+
     /// save first, clear on success. final is only set by stop, which has already set stopped
     private func flush(final: Bool = false) throws {
         guard final || !stopped else { return }
         let flows = flowTable.drainDirty()
-        if retainFlows { for f in flows { retained[f.id] = f } }
+        if retainFlows {
+            for f in flows { retained[f.id] = f }
+            trimRetained()
+        }
         guard let store else {
-            if retainDomains { retainedDomains += pendingDomains }
+            retain(domains: pendingDomains)
             pendingDomains.removeAll(keepingCapacity: true)
+            domainFlushAt = Self.maxPendingDomains
             return
         }
         guard !flows.isEmpty || !pendingDomains.isEmpty else { return }
@@ -231,7 +360,8 @@ public actor CapturePipeline {
             counters.saveFailures += 1
             throw error
         }
-        if retainDomains { retainedDomains += pendingDomains }
+        retain(domains: pendingDomains)
         pendingDomains.removeAll(keepingCapacity: true)
+        domainFlushAt = Self.maxPendingDomains
     }
 }

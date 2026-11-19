@@ -1,6 +1,6 @@
 # Testing
 
-**Status:** 286 tests, green with and without fixtures (2026-11-18). Four scripted captures are the fixture set; the baseline is frozen in `Tests/Expected/`.
+**Status:** 340 tests, green with and without fixtures (2026-11-18). Four scripted captures are the fixture set; the baseline is frozen in `Tests/Expected/`.
 
 ## Approach
 
@@ -92,6 +92,7 @@ Scripted captures, recorded 2026-11-18 with `capture --diagnostic` (scenario scr
 | Reader, multi-app (50,766 packets) | — | 0.11 s release, Mac |
 | Full pipeline (`bench`, multi-app, release) | ≥1,500 packets/s (N1) | ~620,000 packets/s (best of 3, 2026-11-16) |
 | Throughput baseline (`bench`, s3-youtube-quic, 83,047 packets, release) | No more than 10% below this after M2 changes | 662,830 packets/s (best of 3, 2026-11-18) |
+| After 5.4 + 6.1 (back to back with the baseline tool, same machine) | Within 10% of the baseline tool | ~598k vs ~655k packets/s: about 9% slower (2026-11-18). After 5.3 the two were level, so 5.4 and 6.1 cost about 9%. Less than 1% budget left: later problems must bench back to back |
 | Synthetic pipeline throughput (`syntheticThroughput`, 200,000 hand-built UDP packets, `store: nil`) | ≥50,000 packets/s (sanity floor) | ~200,000 packets/s (debug test build, 2026-11-17) |
 | Memory, open flows | — | Not measured |
 | Live capture (phone, YouTube), 2026-11-16 | Streams, stops on Ctrl-C | 26,916 packets / 177 s, 0 malformed, 91 flows, 25 SNI, 30 DNS, exit 0 |

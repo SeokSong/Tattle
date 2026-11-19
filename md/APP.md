@@ -40,6 +40,9 @@ Mockups (made before the app was built):
 - Session detail has the same two sections; each flow is classified once and its tally rows carry the flow's category
 - In the top-flows tables a flow that is not phone traffic shows its category label under the app name
 - Labelled "Live · this session" so it can't be mistaken for history
+- Bounded memory (6.1): the live list is built from the pipeline's retained flows, at most 50,000. When older closed flows were dropped (`retainedDropped > 0`) the screen says "Older flows are in the saved session. The totals below cover the newest flows only." The saved session in the database is complete
+- The top-flows table shows 10 rows. Flows left out fold into one grey line "N more flows" (`FlowRows.foldLine`); the same helper, `flowRows(_:limit:)`, defaults to 500 rows for a longer list
+- The cap table is in [PIPELINE.md](PIPELINE.md)
 
 ## Rules for what the UI says
 
@@ -75,7 +78,7 @@ Target `WatchApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `swi
 - `@MainActor final class AppModel: ObservableObject` owns everything the views show:
     - `deviceStatus: DeviceStatus?` refreshed every 5 s while on the Connect screen (devicectl is slow; never block the main thread)
     - `captureState: idle | requestingAccess | starting | capturing(since: Date) | stopping | failed(message)`
-    - `liveStats: PipelineStats`, `liveFlows: [Flow]`, refreshed every 2 s from the pipeline (`stats`, `flowsSnapshot()` with `retainFlows: true`)
+    - `liveStats: PipelineStats`, `liveFlows: [Flow]`, `liveDNS: [DomainObservation]`, refreshed every 2 s from the pipeline (`stats`, `flowsSnapshot()` with `retainFlows: true`, `dnsSnapshot()`)
     - `grouping: ProcessGrouping` computed from `liveFlows`: `rows` (phone traffic) group by `Attributor.attribute(flow.tally)` → display name (or "Unattributed", "System: name"), with pid set, packets, IP bytes; sorted by bytes. `setAside` has one row per non-phone category, each with its process rows in `children`. `TallyInput.category` comes from `Classifier.classify` on the flow
     - `sessions: [SessionRow]` from `Store.sessions()` plus per-session packet/flow counts
     - settings: `retentionDays` (7 default, `@AppStorage`), `diagnosticCapture` (off)
@@ -86,15 +89,32 @@ Target `WatchApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `swi
 - Views, one file each, matching the mockup (see the mockups above):
     - `ConnectView`: three check rows (USB, Device link, Capture access = "Asked on start"), Start button enabled only when ready
     - `AccessView`: the explanation and three buttons; **Allow once** triggers the osascript prompt; **Always allow** disabled with the note "needs the signed helper (later)"; Cancel
-    - `LiveView`: red capture bar (dot, "Capturing", mm:ss timer, interface, Stop), four tiles (packets, flows, phone traffic bytes, % unattributed), the phone traffic by-process table (Unattributed row always present, system rows labelled), the "Not counted as phone traffic" section, top 10 flows by bytes with server name and attribution
+    - `LiveView`: red capture bar (dot, "Capturing", mm:ss timer, interface, Stop), four tiles (packets, flows, phone traffic bytes, % unattributed), the phone traffic by-process table (Unattributed row always present, system rows labelled), the "Not counted as phone traffic" section, top 10 flows by bytes with hostname, its source or the reason it has none, and attribution
     - `SessionsView`: list of past sessions (start, duration, packets, flows), select one to see the same phone traffic table and set-aside section (built from `store.flows`, bytes shared out by packet count per tally row) and top flows
     - `SettingsView`: capture access (shows "Asked each time (prototype)"; Revoke disabled), retention picker 1/3/7 days, Delete all (with confirmation), diagnostic capture toggle (writes the raw stream to `~/Library/Application Support/Watch/diagnostics/diagnostic-<date>.pcapng` via a tee; shown in the capture bar when on; files are deleted after 24 hours at app start and by Delete all, see [CAPTURE.md](CAPTURE.md#diagnostic-capture))
     - Window: sidebar (Connect, Live, Sessions, Settings) + detail, 880×560 minimum. Live is selected automatically when a capture starts
 - The UI never shows the udid or the device hash. Addresses and hostnames are shown (that is the product), nothing else leaves the process
 
+### Hostname labels in the flow tables
+
+- `topFlows(flows, observations:)` builds one `HostnameIndex` per refresh (live: `dnsSnapshot()`; sessions: `store.domains(session:)`), then calls `outcome(for:)` for each shown flow. Reason logic is shared with the report and the CLI; the screens only map it to text
+- A name from DNS is a guess about shared server addresses (on real captures, 0.07 to 0.999 of DNS names equalled the connection's own name). It is shown in italic secondary style with a caveat, never like an observed name. The tooltip gives the full sentence and the DNS answer's age
+
+| Case | Name cell | Second line | Tooltip |
+|---|---|---|---|
+| `sni` | name, normal style | Seen in connection | Seen in connection |
+| `dns` | name, secondary italic | From DNS, may differ | From DNS (may be another service on the same server). The DNS answer came N.N s before the connection |
+| `sameAddress` | name, secondary italic | Same server as another connection, may differ | Same server as another connection of this app (may be another service) |
+| `startedBeforeCapture` | none | Connection started before capture | same |
+| `echHidden` | none | Name hidden by the app (ECH) | same |
+| `noHandshakeUDP`, `noDNSMatch` | none | No name found | same |
+
+- The text lives in `HostnameSource.label`, `.shortLabel` and `UnnamedReason.label` (`Attribution/Hostnames.swift`)
+
 ### Tests (`WatchAppTests`, no UI)
 
 - `groupByProcess` from hand-built flows: an app with two pids collapses to one row; `.none`-only tally → "Unattributed" row; system process → "System:" row; sorted by bytes; `deviceLink` and `localNetwork` flows go to `setAside` and stay out of the phone total; set-aside labels equal `TrafficCategory.label`; display names replace raw names
+- `topFlows`: `sni` flow says "Seen in connection", a `dns` flow carries the may-differ caveat and its age, unnamed flows show their reason; the index is built once for 100 flows
 - `PrototypeCaptureLauncher.renderScript(udid:, runDirectory:)` contains the rvictl, tcpdump `-P -w -` and `rvictl -x` lines, the stop loop, and exits non-zero without `[SUCCEEDED]`
 - Run directory and script are created `0700`/`0600` and removed by `stop()` even if `start` failed
 - `DeviceLookup` decodes a saved devicectl JSON sample (wired and absent cases)

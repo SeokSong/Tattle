@@ -177,7 +177,7 @@ Updated 2026-11-17.
 | Company and tracker classification | Domain → company list (bundled, offline) |
 | Destination map | Geolocation of remote IPs, with the CDN caveat |
 | Mac app polish | App filter, per-flow view, history across sessions |
-| iOS app skeleton | App Privacy Report import; public APIs only (App Store priority) |
+| iOS app skeleton | App Privacy Report import; public APIs only (App Store priority). Committed scope: the report export (Settings → Privacy & Security → App Privacy Report → Save App Activity) covers the last 7 days while the phone is unplugged, which the Mac capture cannot. It lists app, domain and time, no bytes. Shown next to Mac captures, each labelled with its source |
 | Signed helper (`SMAppService`) | Needs the $99 Developer Program; deferred by decision |
 
 ### Not started on purpose

@@ -14,6 +14,9 @@ public struct DomainExtractor: Sendable {
 
     public var tlsGaveUp: Int { buffer.tlsGaveUp }
     public var quicGaveUp: Int { buffer.quicGaveUp }
+    public var handshakeStatesDropped: Int { buffer.statesDropped }
+    public var handshakeStatesPeak: Int { buffer.peakStates }
+    public var gaveUpReasons: [GaveUpReason: Int] { buffer.gaveUpReasons }
 
     public mutating func observe(_ packet: DecodedPacket) -> [DomainObservation] {
         let transport = packet.headers.transport
@@ -45,6 +48,9 @@ public struct DomainExtractor: Sendable {
             ]
         }
     }
+
+    /// see `HandshakeBuffer.drainShortHeaderFirst`
+    public mutating func drainMidstreamUDP() -> [FlowKey] { buffer.drainShortHeaderFirst() }
 
     public mutating func flowClosed(_ key: FlowKey) {
         buffer.forget(key)

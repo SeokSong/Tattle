@@ -12,13 +12,13 @@ From a 3-minute capture of a phone running YouTube:
 
 ```
 Top flows by IP bytes:
-  en0  udp  ...:443  in 2371918 out 23871  rr1---sn-....googlevideo.com  -> YouTube (1 pid)
-  en0  udp  ...:443  in  158329 out 115451  youtubei.googleapis.com     -> YouTube (1 pid)
-  en0  udp  ...:443  in   22026 out  11184  gateway.icloud.com          -> system nsurlsessiond
-  en0  udp  ...:443  in   10137 out   7528  ad.doubleclick.net          -> YouTube (1 pid)
+  app           ..:..  en0  udp  ...:443  in 2371918 out 23871  rr1---sn-....googlevideo.com [sni]  -> YouTube (1 pid)
+  app           ..:..  en0  udp  ...:443  in  158329 out 115451  youtubei.googleapis.com [sni]     -> YouTube (1 pid)
+  system        ..:..  en0  udp  ...:443  in   22026 out  11184  gateway.icloud.com [sni]          -> system nsurlsessiond
+  app           ..:..  en0  udp  ...:443  in   10137 out   7528  ad.doubleclick.net [sni]          -> YouTube (1 pid)
 ```
 
-The Mac app shows the same data live while a capture runs, with a Stop button, a per-app table and past sessions. Traffic is sorted into categories: the USB link to the Mac and local-network-only chatter are shown in their own "Not counted as phone traffic" section, outside the phone total, and never hidden.
+Each hostname carries its source. `[sni]` means the name was read from that connection. `[dns, may be another service]` means it came from a DNS answer for the same server address, which on shared servers often names a different service than the connection asked for. A connection with no name shows the reason instead, for example `(Connection started before capture)`. The Mac app shows the same data live while a capture runs, with a Stop button, a per-app table and past sessions. Traffic is sorted into categories: the USB link to the Mac and local-network-only chatter are shown in their own "Not counted as phone traffic" section, outside the phone total, and never hidden.
 
 ![Live capture mockup](img/03-live-capture.png)
 
@@ -56,7 +56,7 @@ These are deliberate limits, or limits of the platform. They are not bugs.
 | Never sees content | TLS and QUIC payloads stay encrypted. Watch reads only hostnames and packet sizes |
 | About 1% of packets have no process tag | Shown as "Unattributed". Watch never guesses an app from an IP address |
 | DNS can disappear | With iCloud Private Relay or encrypted DNS, DNS answers are invisible. Hostnames from SNI still work |
-| Connections that started before the capture have no hostname | Their handshake happened before recording began |
+| Connections that started before the capture have no hostname | Their handshake happened before recording began. They are reported as "Connection started before capture", for TCP and for QUIC. A name is offered only as a hint when another connection of the same app to the same server has one |
 | Process names are cut to 16 characters by iOS | For example, `appstorecomponen` |
 | Untested with a VPN active | Traffic may be counted twice across the tunnel and the physical interface. Private Relay was tested and is not a tunnel |
 
@@ -118,7 +118,7 @@ Share of bytes by category on the same captures (Milestone 2, after validation o
 
 In the browser capture most bytes are "Helper for an app" because Safari does its networking through a separate WebKit process that works on Safari's behalf; it still counts as the browser's traffic. The idle capture was not quiet: link + local + system is 73.5% of its bytes, not the 95% first guessed. One app opened about 185 connections after a notification arrived (26% of bytes). The rules never move app-tagged traffic, so the idle check is set to 71.4% (measured minus 2 points).
 
-These captures start every app fresh, so nearly every connection's handshake is seen. In a long real session it is different: on one earlier session only 5.4% of HTTPS bytes had a hostname, because the largest connections were already open when capture began. Closing that gap is part of Milestone 2.
+These captures start every app fresh, so nearly every connection's handshake is seen. In a long real session it is different: on one earlier session only 5.4% of HTTPS bytes had a hostname, because the largest connections were already open when capture began. A capture started while a video was already playing shows it: 98.9% of app HTTPS bytes were in QUIC connections that began before recording, and only 1.1% had a hostname. Those bytes are counted as "connection started before capture" and cannot be named from the traffic. DNS names and same-server names are shown only as labelled hints, because on shared servers they often name another service (DNS agreed with the connection's own name on 7% of bytes in the two-app capture and 99.9% in the video capture).
 
 ## Running it
 

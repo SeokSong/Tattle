@@ -23,11 +23,12 @@ private struct Pkt {
     var flags: UInt8 = 0x18
     var payload: [UInt8] = []
     var process: UInt32? = 0
+    var localPort = 50000
 }
 
 private func frame(_ p: Pkt) -> [UInt8] {
     let (src, dst) = p.out ? (phone, p.remote) : (p.remote, phone)
-    let (sp, dp) = p.out ? (50000, p.remotePort) : (p.remotePort, 50000)
+    let (sp, dp) = p.out ? (p.localPort, p.remotePort) : (p.remotePort, p.localPort)
     var l4: [UInt8]
     switch p.proto {
     case 6: l4 = be16(sp) + be16(dp) + [0, 0, 0, 0, 0, 0, 0, 0, 0x50, p.flags, 0, 0, 0, 0, 0, 0]
@@ -363,4 +364,149 @@ private func resetFlows() -> [UInt8] {
     _ = try await plain.run(DataPacketSource(bytes))
     await plain.stop(reason: .captureStopped)
     #expect(await plain.domainsSnapshot().isEmpty)
+}
+
+@Test func recentDnsRingKeepsNewest() async throws {
+    // 6,000 answers for distinct names and addresses, one per millisecond
+    let pkts = (1...6_000).map { i in
+        Pkt(
+            out: false, at: Double(i) / 1000, proto: 17, remote: [8, 8, 8, 8], remotePort: 53,
+            payload: dnsAnswer("h\(i).example.com", address: [192, 0, UInt8(i >> 8 & 0xFF), UInt8(i & 0xFF)]))
+    }
+    let pipeline = CapturePipeline(store: nil, session: session())
+    // fewer than the capacity: nothing dropped, oldest first
+    _ = try await pipeline.run(DataPacketSource(capture(Array(pkts.prefix(10)))))
+    let few = await pipeline.dnsSnapshot()
+    #expect(few.count == 10 && few.first?.hostname == "h1.example.com")
+
+    let full = CapturePipeline(store: nil, session: session())
+    let stats = try await full.run(DataPacketSource(capture(pkts)))
+    await full.stop(reason: .captureStopped)
+    let snapshot = await full.dnsSnapshot()
+    #expect(stats.dnsObservations == 6_000)
+    #expect(snapshot.count == CapturePipeline.recentDNSCapacity)
+    #expect(snapshot.first?.hostname == "h1001.example.com")
+    #expect(snapshot.last?.hostname == "h6000.example.com")
+    #expect(snapshot.map(\.time) == snapshot.map(\.time).sorted())
+    #expect(await full.stats.recentDNSCount == CapturePipeline.recentDNSCapacity)
+    // dns only, and the sni path is not affected
+    #expect(snapshot.allSatisfy { $0.source == .dns })
+}
+
+// MARK: caps
+
+/// feeds packets one by one, so `run`'s periodic flush does not hide the pipeline's own caps
+private func feed(_ pipeline: CapturePipeline, _ bytes: [UInt8], flushEvery: Int? = nil) async throws {
+    for (i, packet) in try PCAPNGReader.parse(Data(bytes)).packets.enumerated() {
+        await pipeline.process(packet)
+        if let flushEvery, (i + 1) % flushEvery == 0 { try await pipeline.flushNow() }
+    }
+}
+
+private final class RecordingStore: FlowStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var flowsSaved = 0
+    private(set) var domainsSaved = 0
+    private(set) var saves = 0
+    /// the last saved state of every flow
+    private(set) var latest: [UUID: Flow] = [:]
+    func beginSession(_ s: CaptureSession) throws {}
+    func recordSessionStats(id: UUID, _ stats: SessionStats) throws {}
+    func endSession(id: UUID, at: Date, reason: String) throws {}
+    func save(flows: [Flow], domains: [DomainObservation], session: UUID) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        flowsSaved += flows.count
+        domainsSaved += domains.count
+        saves += 1
+        for f in flows { latest[f.id] = f }
+    }
+}
+
+private func dnsAnswers(_ count: Int) -> [UInt8] {
+    let answer = dnsAnswer("example.com", address: [93, 184, 216, 34])
+    return capture((0..<count).map { i in
+        Pkt(out: false, at: Double(i) / 100_000, proto: 17, remote: [8, 8, 8, 8], remotePort: 53, payload: answer)
+    })
+}
+
+@Test func pendingDomainsFlushEarly() async throws {
+    let store = RecordingStore()
+    let pipeline = CapturePipeline(store: store, session: session())
+    try await feed(pipeline, dnsAnswers(25_000))
+    // no timer and no replay flush ran: the saves came from the cap
+    #expect(store.saves >= 1)
+    #expect(store.domainsSaved >= CapturePipeline.maxPendingDomains)
+    await pipeline.stop(reason: .captureStopped)
+    let s = await pipeline.stats
+    #expect(store.domainsSaved == 25_000)
+    #expect(s.droppedDomains == 0 && s.dnsObservations == 25_000)
+    #expect(s.peakPendingDomains == CapturePipeline.maxPendingDomains)
+}
+
+@Test func pendingDomainsDropWhenSaveFails() async throws {
+    let store = AlwaysFailingStore()
+    let pipeline = CapturePipeline(store: store, session: session())
+    try await feed(pipeline, dnsAnswers(45_000))
+    var s = await pipeline.stats
+    // the queue grew to 40,000, lost its oldest 20,000, and the capture went on
+    #expect(s.droppedDomains == 20_000)
+    #expect(s.peakPendingDomains == CapturePipeline.hardPendingDomains)
+    #expect(s.packets == 45_000 && s.dnsObservations == 45_000)
+    // a failed early flush is retried every 5,000 observations, not on every packet
+    #expect(s.saveFailures <= 10)
+    await pipeline.stop(reason: .interrupted)
+    s = await pipeline.stats
+    #expect(s.droppedDomains == 20_000)
+}
+
+@Test func retainedIsCapped() async throws {
+    // 60,000 flows, each closed by a reset; 1,024 + i stays below 65,536
+    let bytes = capture((0..<60_000).map { i in
+        Pkt(at: Double(i) / 100_000, flags: 0x04, localPort: 1_024 + i)
+    })
+    let pipeline = CapturePipeline(store: nil, session: session(), retainFlows: true)
+    try await feed(pipeline, bytes)
+    try await pipeline.flushNow()
+    let flows = await pipeline.flowsSnapshot()
+    let s = await pipeline.stats
+    #expect(flows.count == CapturePipeline.maxRetainedFlows)
+    #expect(s.retainedDropped == 10_000)
+    // the oldest went: every kept flow is newer than every dropped one
+    #expect(flows.map(\.firstSeen).min()! >= Date(timeIntervalSince1970: Double(base) + 10_000 / 100_000))
+    #expect(s.flowsOpened == 60_000 && s.anyCapHit)
+}
+
+@Test func churnKeepsCountsBounded() async throws {
+    // 100,000 udp packets, each a fresh source port and remote address, and 20,000 dns answers
+    var pkts: [Pkt] = (0..<100_000).map { i in
+        Pkt(
+            at: Double(i) / 100_000, proto: 17, remote: [100, UInt8(i >> 16 & 0xFF), UInt8(i >> 8 & 0xFF), UInt8(i & 0xFF)],
+            remotePort: 9999, payload: [1], localPort: 1_024 + i % 60_000)
+    }
+    let answer = dnsAnswer("example.com", address: [93, 184, 216, 34])
+    pkts += (0..<20_000).map { i in
+        Pkt(out: false, at: Double(i) / 20_000, proto: 17, remote: [8, 8, 8, 8], remotePort: 53, payload: answer)
+    }
+    let bytes = capture(pkts)
+    let store = RecordingStore()
+    let pipeline = CapturePipeline(store: store, session: session())
+    let clock = ContinuousClock()
+    let start = clock.now
+    // flush like a replay does, every 5,000 packets
+    try await feed(pipeline, bytes, flushEvery: CapturePipeline.replayFlushPackets)
+    await pipeline.stop(reason: .captureStopped)
+    #expect(clock.now - start < .seconds(30))
+    let s = await pipeline.stats
+    #expect(s.peakOpenFlows <= FlowTable.defaultMaxOpenFlows)
+    #expect(s.peakPendingDomains <= CapturePipeline.maxPendingDomains)
+    #expect(s.evictedFlows > 0)
+    #expect(s.openFlows == 0 && s.flowsClosed == s.flowsOpened)
+    // every flow, evicted or not, reached the store with an end reason
+    let flows = Array(store.latest.values)
+    #expect(flows.count == s.flowsOpened)
+    #expect(flows.filter { $0.endReason == .evicted }.count == s.evictedFlows)
+    #expect(flows.allSatisfy { $0.endReason != nil })
+    #expect(s.droppedClosedFlows == 0)
+    #expect(s.peakHandshakeStates <= HandshakeBuffer.defaultMaxStates)
 }
