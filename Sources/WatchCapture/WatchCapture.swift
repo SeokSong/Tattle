@@ -227,7 +227,20 @@ func appNames(_ flow: Flow) -> [String] {
     return names.sorted()
 }
 
-func flowLine(_ flow: Flow) -> String {
+/// name with its source, or the reason there is none. the index is built once by the caller
+func hostnameText(_ flow: Flow, index: HostnameIndex) -> String {
+    switch index.outcome(for: flow) {
+    case .named(let resolved):
+        switch resolved.source {
+        case .sni: return "\(resolved.name) [sni]"
+        case .dns: return "\(resolved.name) [dns, may be another service]"
+        case .sameAddress: return "\(resolved.name) [same server as another connection, may be another service]"
+        }
+    case .unnamed(let reason): return "(\(reason.label))"
+    }
+}
+
+func flowLine(_ flow: Flow, index: HostnameIndex) -> String {
     let timeFormatter = ISO8601DateFormatter()
     timeFormatter.formatOptions = [.withTime, .withColonSeparatorInTime]
     let key = flow.key
@@ -236,9 +249,25 @@ func flowLine(_ flow: Flow) -> String {
     let padded = category.padding(toLength: 12, withPad: " ", startingAt: 0)
     var line = "  \(padded)  \(timeFormatter.string(from: flow.firstSeen))  \(flow.interface)  \(transport)  "
     line += "\(key.remoteAddress.description):\(key.remotePort)  in \(flow.ipBytesIn) out \(flow.ipBytesOut)"
-    if let name = flow.serverName { line += "  \(name)" }
+    line += "  \(hostnameText(flow, index: index))"
     line += "  -> \(describe(Attributor.attribute(flow.tally)))"
     return line
+}
+
+/// the non-zero give-up reasons, in enum order. numbers only
+func gaveUpSummary(_ stats: PipelineStats) -> String {
+    let parts = GaveUpReason.allCases.compactMap { r in stats.handshakeGaveUp[r.rawValue].map { "\(r.rawValue) \($0)" } }
+    return "Handshake gave up: " + (parts.isEmpty ? "none" : parts.joined(separator: ", "))
+}
+
+/// every cap counter and peak on one line, numbers only. all counters are 0 unless a cap was hit
+func capsSummary(_ s: PipelineStats) -> String {
+    "Caps: peakOpenFlows \(s.peakOpenFlows)  evictedFlows \(s.evictedFlows)  droppedClosedFlows \(s.droppedClosedFlows)"
+        + "  tallyRowsFolded \(s.tallyRowsFolded)  peakPendingDomains \(s.peakPendingDomains)  droppedDomains \(s.droppedDomains)"
+        + "  peakHandshakeStates \(s.peakHandshakeStates)  handshakeStatesDropped \(s.handshakeStatesDropped)"
+        + "  retainedDropped \(s.retainedDropped)  retainedDomainsDropped \(s.retainedDomainsDropped)"
+        + "  interfacesFolded \(s.interfacesFolded)"
+        + (s.anyCapHit ? "\nWarning: a cap was hit; totals built from memory may be lower than the saved session" : "")
 }
 
 func printFlows(path: String, dbPath: String?) async {
@@ -250,7 +279,7 @@ func printFlows(path: String, dbPath: String?) async {
             exit(1)
         }
     }
-    let pipeline = CapturePipeline(store: store, session: newSession(), retainFlows: true)
+    let pipeline = CapturePipeline(store: store, session: newSession(), retainFlows: true, retainDomains: true)
     let stats: PipelineStats
     do {
         stats = try await pipeline.run(FilePacketSource(url: url))
@@ -272,9 +301,10 @@ func printSummary(pipeline: CapturePipeline, stats: PipelineStats, final: Pipeli
     if dbPath != nil { print("Saved to \(dbPath ?? "")") }
 
     let flows = await pipeline.flowsSnapshot()
+    let index = HostnameIndex(await pipeline.domainsSnapshot(), flows: flows)
     print("\nTop flows by IP bytes:")
     for flow in flows.sorted(by: { $0.ipBytesIn + $0.ipBytesOut > $1.ipBytesIn + $1.ipBytesOut }).prefix(20) {
-        print(flowLine(flow))
+        print(flowLine(flow, index: index))
     }
 
     print("\nBytes by category (IP bytes, whole flows):")
@@ -295,12 +325,14 @@ func printSummary(pipeline: CapturePipeline, stats: PipelineStats, final: Pipeli
 
     print("\nDomains: DNS answers \(stats.dnsObservations)  SNI found \(stats.sniFound)")
     print("Handshake buffers gave up: TLS \(await pipeline.tlsGaveUp)  QUIC \(await pipeline.quicGaveUp)")
+    print(gaveUpSummary(stats))
+    print(capsSummary(final))
 
     let multi = flows.filter { appNames($0).count > 1 }
         .sorted { $0.ipBytesIn + $0.ipBytesOut > $1.ipBytesIn + $1.ipBytesOut }
     print("\nFlows with more than one app name: \(multi.count)")
     for flow in multi {
-        print(flowLine(flow))
+        print(flowLine(flow, index: index))
         print("      names: \(appNames(flow).joined(separator: ", "))")
     }
 }
@@ -651,6 +683,7 @@ func runReport(_ args: [String]) async -> Int32 {
     let options = ReportOptions(detail: detail)
     let report: QualityReport
     var flows: [Flow] = [], domains: [DomainObservation] = []
+    var gaveUpLine: String?
     do {
         switch (file, db) {
         case (let path?, nil):
@@ -661,6 +694,7 @@ func runReport(_ args: [String]) async -> Int32 {
             let snapshot = PipelineSnapshot(
                 packets: stats.packets, decoded: stats.decoded, skipped: stats.skipped,
                 malformed: stats.malformed, droppedNoPort: stats.droppedNoPort)
+            gaveUpLine = gaveUpSummary(stats) + "\n" + capsSummary(await pipeline.stats)
             flows = await pipeline.flowsSnapshot()
             domains = await pipeline.domainsSnapshot()
             report = ReportBuilder.build(flows: flows, domains: domains, pipeline: snapshot, options: options)
@@ -717,6 +751,7 @@ func runReport(_ args: [String]) async -> Int32 {
             print(try report.json())
         } else {
             print(ReportRendering.text(report), terminator: "")
+            if let gaveUpLine { print("\n" + gaveUpLine) }
             if let score { print("\n" + score.text(), terminator: "") }
             if let regressions {
                 print("\nBands: " + (regressions.isEmpty ? "no regressions" : "REGRESSION"))

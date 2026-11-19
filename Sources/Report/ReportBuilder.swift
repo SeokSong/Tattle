@@ -25,6 +25,12 @@ public enum ReportBuilder {
         var ruleBytes: [String: Int] = [:]
         var moved: [TrafficCategory: Int] = [.deviceLink: 0, .localNetwork: 0]
         var systemProcesses: [String: (flows: Int, bytes: Int)] = [:]
+        // 5.1: app traffic to port 443 (tcp or udp), by how it was named
+        let index = HostnameIndex(domains, flows: flows)
+        var hostDenominator = 0, sniBytes = 0, dnsBytes = 0, sameAddressBytes = 0, midstreamBytes = 0, echBytes = 0
+        var unnamedBytes: [UnnamedReason: Int] = [:]
+        var precisionDenominator = 0, precisionAgree = 0, sameDenominator = 0, sameAgree = 0
+        var unnamedFlows: [(bytes: Int, id: String, line: QualityReport.UnnamedFlowLine)] = []
         var deviceLinkProcesses: [String: (flows: Int, bytes: Int)] = [:]
         for f in flows {
             let b = bytes(f)
@@ -62,6 +68,42 @@ public enum ReportBuilder {
                 deviceLinkProcesses[name] = line
             }
 
+            if c.category.isAppTraffic, f.key.remotePort == 443 {
+                hostDenominator += b
+                if f.echSeen { echBytes += b }
+                if f.startedMidstream { midstreamBytes += b }
+                switch index.outcome(for: f) {
+                case .named(let n):
+                    switch n.source {
+                    case .sni: sniBytes += b
+                    case .dns: dnsBytes += b
+                    case .sameAddress: sameAddressBytes += b
+                    }
+                case .unnamed(let reason):
+                    unnamedBytes[reason, default: 0] += b
+                    if options.detail {
+                        unnamedFlows.append((b, f.id.uuidString, .init(
+                            reason: reason.rawValue, port: Int(f.key.remotePort),
+                            transport: f.key.transport == .tcp ? "tcp" : "udp", category: c.category.rawValue,
+                            process: processName(result.primary), ipBytes: b)))
+                    }
+                }
+                // precision: sni name (not ech) against what dns alone would have said
+                if !f.echSeen, let viaSNI = index.resolve(f), viaSNI.source == .sni,
+                    let viaDNS = index.resolveWithoutSNI(f)
+                {
+                    precisionDenominator += b
+                    if viaDNS.name == viaSNI.name { precisionAgree += b }
+                }
+                // the same for the same-address hint: another flow's sni name against this flow's own
+                if !f.echSeen, let viaSNI = index.resolve(f), viaSNI.source == .sni,
+                    let viaSame = index.resolveSameAddress(f)
+                {
+                    sameDenominator += b
+                    if viaSame.name == viaSNI.name { sameAgree += b }
+                }
+            }
+
             if options.detail {
                 var line = processes[processName(result.primary), default: (0, 0)]
                 line.flows += 1
@@ -81,6 +123,8 @@ public enum ReportBuilder {
         check("categoryBytes", totalBytes, categoryTotals.values.reduce(0) { $0 + $1.bytes })
         check("interfaceBytes", totalBytes, byInterface.values.reduce(0, +))
         // expected = flow count, actual = flows whose lastSeen is not before firstSeen
+        // expected = the denominator; actual = named bytes plus bytes of every reason (shares add up to 1)
+        check("hostnameReasons", hostDenominator, sniBytes + dnsBytes + sameAddressBytes + unnamedBytes.values.reduce(0, +))
         check("flowTimes", flows.count, flows.filter { $0.lastSeen >= $0.firstSeen }.count)
 
         func sortedLines(_ m: [String: (flows: Int, bytes: Int)]) -> [QualityReport.ProcessLine] {
@@ -95,7 +139,10 @@ public enum ReportBuilder {
                 topProcesses: Array(sortedLines(processes).prefix(20)),
                 systemProcesses: Array(systemLines.prefix(20)),
                 deviceLinkProcesses: Array(sortedLines(deviceLinkProcesses).prefix(20)),
-                systemTopProcess: systemLines.first?.name)
+                systemTopProcess: systemLines.first?.name,
+                topUnnamed: unnamedFlows
+                    .sorted { $0.bytes != $1.bytes ? $0.bytes > $1.bytes : $0.id < $1.id }
+                    .prefix(10).map(\.line))
         }
 
         var byCategory: [String: QualityReport.CategoryLine] = [:]
@@ -123,7 +170,20 @@ public enum ReportBuilder {
                 attributedShare: Ratio(numerator: attributed, denominator: totalBytes),
                 noProcessShare: Ratio(numerator: noProcess, denominator: totalBytes),
                 mixedFlowShare: Ratio(numerator: mixed, denominator: totalBytes)),
-            hostnames: .init(hostnameCoverageSniOnly: Ratio(numerator: sni443, denominator: port443)),
+            hostnames: .init(
+                hostnameCoverageSniOnly: Ratio(numerator: sni443, denominator: port443),
+                hostnameCoverage: Ratio(numerator: sniBytes, denominator: hostDenominator),
+                sniShare: Ratio(numerator: sniBytes, denominator: hostDenominator),
+                dnsShare: Ratio(numerator: dnsBytes, denominator: hostDenominator),
+                sameAddressShare: Ratio(numerator: sameAddressBytes, denominator: hostDenominator),
+                hintShare: Ratio(numerator: dnsBytes + sameAddressBytes, denominator: hostDenominator),
+                unnamedShare: Dictionary(uniqueKeysWithValues: UnnamedReason.allCases.map {
+                    ($0.rawValue, Ratio(numerator: unnamedBytes[$0] ?? 0, denominator: hostDenominator))
+                }),
+                midstreamShare: Ratio(numerator: midstreamBytes, denominator: hostDenominator),
+                echShare: Ratio(numerator: echBytes, denominator: hostDenominator),
+                dnsPrecision: Ratio(numerator: precisionAgree, denominator: precisionDenominator),
+                sameAddressPrecision: Ratio(numerator: sameAgree, denominator: sameDenominator)),
             reconciliation: .init(ok: checks.allSatisfy(\.ok), checks: checks),
             detail: detail, categories: categories)
     }

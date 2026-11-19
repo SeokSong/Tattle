@@ -30,7 +30,7 @@
   "notes" : [
     {
       "metric" : "hostnameCoverageSniOnly",
-      "reason" : "M1 view: denominator is all flows with remote port 443; 5.1 narrows it to app traffic"
+      "reason" : "M1 view, unchanged: denominator is all flows with remote port 443. the narrowed app-traffic figures (hostnameCoverage, sniShare) are separate keys added in 5.1 and are informational until reviewed"
     },
     {
       "metric" : "unknownShare",

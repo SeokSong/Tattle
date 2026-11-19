@@ -54,6 +54,18 @@ public enum SyntheticCorpus {
         public var ruleBytes: [String: Int]
         public var movedOutOfAppBytes: [String: Int]
         public var phoneTrafficBytes: Int
+        // hostnames (5.1): appTraffic flows with remote port 443
+        /// flow label -> "sni", "dns" or the unnamed reason
+        public var hostnameOutcome: [String: String]
+        public var hostnameDenominatorBytes: Int
+        public var sniBytes: Int
+        public var dnsBytes: Int
+        /// bytes per unnamed reason; all four keys present
+        public var unnamedBytes: [String: Int]
+        public var midstreamBytes: Int
+        public var echBytes: Int
+        public var dnsPrecisionAgreeBytes: Int
+        public var dnsPrecisionBytes: Int
 
         public func flow(_ label: String) -> ExpectedFlow {
             flows.first { $0.label == label }!
@@ -337,6 +349,30 @@ public enum SyntheticCorpus {
             // F4 was `.app(heartbeatd)` in M1 -> deviceLink 180. F5 was `.unknown` in M1, so it is not "moved": 0
             movedOutOfAppBytes: ["deviceLink": 180, "localNetwork": 0],
             // app + helper + system + unknown = 10189 + 185 + 0 + 0 = 10374 (10710 - 180 - 156)
-            phoneTrafficBytes: 10374)
+            phoneTrafficBytes: 10374,
+            // F1 sni, F3 sni (quic), F6 dns (answer 30 s before, Safari matches), F7 echHidden (outer name not used),
+            // F2 startedBeforeCapture (first packet is an ack), F9 noDNSMatch. F9 is `app` here, not `system`
+            // (appstorecomponen is not in the system list), so it is in the denominator. no udp 443 flow is
+            // unnamed (F3 has its name), so noHandshakeUDP is 0; a unit test covers that reason
+            hostnameOutcome: [
+                "F1": "sni", "F3": "sni", "F6": "dns", "F7": "echHidden", "F2": "startedBeforeCapture", "F9": "noDNSMatch",
+            ],
+            // all six 443 flows are app traffic: 3559 + 1420 + 2684 + 1240 + 842 + 320 = 10065 (= port443Bytes)
+            hostnameDenominatorBytes: 10065,
+            // sni: F1 3559 + F3 2684 = 6243
+            sniBytes: 6243,
+            // dns: F6 1240
+            dnsBytes: 1240,
+            // echHidden F7 842, startedBeforeCapture F2 1420, noHandshakeUDP 0, noDNSMatch F9 320
+            // 6243 + 1240 + 842 + 1420 + 0 + 320 = 10065
+            unnamedBytes: ["echHidden": 842, "startedBeforeCapture": 1420, "noHandshakeUDP": 0, "noDNSMatch": 320],
+            // tcp 443 midstream: F2 1420
+            midstreamBytes: 1420,
+            // echSeen: F7 842
+            echBytes: 842,
+            // sni name and a dns match: only F1 (D1 answers video.tiktok.test for 192.0.2.10, 1 s before F1, TikTok
+            // matches). the names are equal: 3559 of 3559. F3 has no dns answer; F7 is ech and excluded
+            dnsPrecisionAgreeBytes: 3559,
+            dnsPrecisionBytes: 3559)
     }
 }

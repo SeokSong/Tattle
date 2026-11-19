@@ -55,3 +55,9 @@ private func report(detail: Bool = false, failing: Bool = false) -> QualityRepor
         #expect(line.hasSuffix("(\(n) / \(d))"))
     }
 }
+
+@Test func textLabelsObservedAndHintFigures() {
+    let text = ReportRendering.text(report())
+    #expect(text.contains("hostnameCoverage (observed names)  "))
+    #expect(text.contains("hintShare (dns + same server, may be another service)  "))
+}

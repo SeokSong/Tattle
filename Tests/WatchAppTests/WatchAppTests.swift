@@ -1,5 +1,6 @@
 import Attribution
 import Flows
+import Domains
 import Foundation
 import PacketDecoder
 import Testing
@@ -155,4 +156,79 @@ private func mixedFlows() -> [Flow] {
     #expect(rows[0].rawNameNote?.contains("appstorecomponen") == true)
     let line = topFlows([flow([ProcessPair("appstorecomponen", 5, nil, nil): 2], bytes: 100)])[0]
     #expect(line.attribution.contains(ProcessNames.displayName("appstorecomponen")))
+}
+
+// MARK: - hostname labels
+
+private let t0 = Date(timeIntervalSince1970: 1_763_000_000)
+
+private func dnsAnswer(_ host: String, _ address: IPAddress, ago: TimeInterval = 5) -> DomainObservation {
+    DomainObservation(time: t0.addingTimeInterval(-ago), source: .dns, hostname: host, addresses: [address], ttl: 300)
+}
+
+@Test func flowLineShowsSourceLabel() {
+    let sni = flow([ProcessPair("TikTok", 1, nil, nil): 1], bytes: 500, port: 1, name: "a.example.com")
+    let viaDNS = flow([ProcessPair("TikTok", 1, nil, nil): 1], bytes: 400, port: 2, remote: .v4(0xC000_0201))
+    var midstream = flow([ProcessPair("TikTok", 1, nil, nil): 1], bytes: 300, port: 3, remote: .v4(0xC000_0202))
+    midstream.startedMidstream = true
+    var ech = flow([ProcessPair("TikTok", 1, nil, nil): 1], bytes: 200, port: 4, remote: .v4(0xC000_0203))
+    ech.echSeen = true
+    let plain = flow([ProcessPair("TikTok", 1, nil, nil): 1], bytes: 100, port: 5, remote: .v4(0xC000_0204))
+
+    let lines = topFlows(
+        [sni, viaDNS, midstream, ech, plain],
+        observations: [dnsAnswer("b.example.net", .v4(0xC000_0201), ago: 2.5)])
+    #expect(lines.map(\.ipBytes) == [500, 400, 300, 200, 100])
+
+    #expect(lines[0].hostname == "a.example.com" && lines[0].hostnameSource == .sni)
+    #expect(lines[0].hostnameNote == "Seen in connection")
+
+    // a dns name never reads as an observed one, and says so
+    #expect(lines[1].hostname == "b.example.net" && lines[1].hostnameSource == .dns)
+    #expect(lines[1].hostnameNote != lines[0].hostnameNote)
+    #expect(lines[1].hostnameNote.contains("DNS") && lines[1].hostnameNote.contains("may differ"))
+    #expect(lines[1].hostnameDetail == "From DNS (may be another service on the same server). The DNS answer came 2.5 s before the connection")
+    #expect(lines[1].dnsAgeSeconds == 2.5)
+
+    #expect(lines[2].hostname == nil && lines[2].hostnameNote == "Connection started before capture")
+    #expect(lines[3].hostnameNote == "Name hidden by the app (ECH)")
+    #expect(lines[4].hostnameNote == "No name found")
+}
+
+@Test func flowLineLabelsSameAddressHint() {
+    let remote = IPAddress.v4(0xC000_0210)
+    let named = flow([ProcessPair("TikTok", 1, nil, nil): 1], bytes: 500, port: 1, name: "a.example.com", remote: remote)
+    let unnamed = flow([ProcessPair("TikTok", 1, nil, nil): 1], bytes: 400, port: 2, remote: remote)
+    let lines = topFlows([named, unnamed])
+    #expect(lines[0].hostnameSource == .sni)
+    #expect(lines[1].hostname == "a.example.com" && lines[1].hostnameSource == .sameAddress)
+    // it never reads as an observed name
+    #expect(lines[1].hostnameNote == "Same server as another connection, may differ")
+    #expect(lines[1].hostnameDetail.contains("may be another service"))
+}
+
+@Test func indexBuiltOncePerRefresh() {
+    let flows = (0..<100).map { flow([ProcessPair("A", 1, nil, nil): 1], bytes: $0, port: UInt16($0 + 1)) }
+    var builds = 0
+    let lines = topFlows(flows, observations: [], limit: 100) { observations, flows in
+        builds += 1
+        return HostnameIndex(observations, flows: flows)
+    }
+    #expect(lines.count == 100)
+    #expect(builds == 1)
+}
+
+// MARK: - caps
+
+@Test func liveFoldLine() {
+    let flows = (0..<600).map { flow([ProcessPair("A", 1, nil, nil): 1], bytes: $0, port: UInt16($0 + 1)) }
+    let rows = flowRows(flows)
+    #expect(rows.lines.count == 500)
+    #expect(rows.moreFlows == 100)
+    #expect(rows.foldLine == "100 more flows")
+    // the biggest flows are the ones shown
+    #expect(rows.lines.first?.ipBytes == 599 && rows.lines.last?.ipBytes == 100)
+    // nothing left out, no fold line; one left out is singular
+    #expect(flowRows(Array(flows.prefix(500))).foldLine == nil)
+    #expect(flowRows(Array(flows.prefix(11)), limit: 10).foldLine == "1 more flow")
 }

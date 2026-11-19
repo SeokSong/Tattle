@@ -40,11 +40,9 @@ Other fields:
 
 Baseline note:
 
-- `hostnameCoverageSniOnly` here has no categories yet: its denominator is all flows with remote port 443
-- Problem 5.1 narrows it to `appTraffic` flows and records the change in the band file note
-- The baseline records both versions: the M1 view, and the narrowed view recomputed on the same captures
-
-Not here yet: the other hostname metrics (5.1), added later as new fields.
+- `hostnames.hostnameCoverageSniOnly` is the M1 figure and did not change: its denominator is all flows with remote port 443, any category
+- The app-traffic figures are new keys (below). The narrowed SNI-only figure is `sniShare`: the same bytes minus `echHidden` flows, over the `appTraffic` denominator
+- Deviation from the plan text: the plan said to narrow `hostnameCoverageSniOnly` and keep the old one as `hostnameCoverageSniOnlyAll443`. The band files already hold the M1 value under the M1 name, so the old key was kept and the narrowed figure got its own name
 
 ## Categories
 
@@ -67,6 +65,38 @@ Example on the synthetic corpus (10710 bytes): `app` 10189, `helper` 185, `devic
 
 Detail mode adds, by display name: `detail.systemProcesses`, `detail.deviceLinkProcesses` (`{name, flows, ipBytes}`, up to 20 each) and `detail.systemTopProcess`.
 
+## Hostnames (5.1)
+
+Added in 5.1, under `hostnames`. Every ratio shares one denominator: bytes of `appTraffic` (`app` + `helper`) flows with remote port 443, TCP or UDP. `system`, `unknown`, `deviceLink` and `localNetwork` flows and other ports are not in it. Each flow is counted whole.
+
+Per flow, first match wins ([DOMAINS.md](DOMAINS.md#hostname-coverage-and-reasons-51)):
+
+1. `echSeen`: reason `echHidden`
+2. `HostnameIndex.resolve(flow)` returns source `sni`: `sniShare`. Returns `dns`: `dnsShare`. Returns `sameAddress`: `sameAddressShare`
+3. Unnamed: `startedMidstream` (TCP without a SYN, or QUIC starting with a short header) is `startedBeforeCapture`; else UDP is `noHandshakeUDP`; else `noDNSMatch`
+
+| JSON key | Numerator | Denominator |
+|---|---|---|
+| `hostnames.hostnameCoverage` | Bytes with source `sni` (observed names only; equals `sniShare`) | 443 app bytes |
+| `hostnames.sniShare` | Bytes named by the flow's server name (not `echHidden`) | same |
+| `hostnames.dnsShare` | Bytes named only by a DNS answer | same |
+| `hostnames.sameAddressShare` | Bytes named only by another flow's SNI name (same address, same app). A hint | same |
+| `hostnames.hintShare` | `dnsShare` + `sameAddressShare` bytes: names that are hints, not observed | same |
+| `hostnames.unnamedShare.<reason>` | Bytes of unnamed flows with that reason. All four reasons always present | same |
+| `hostnames.midstreamShare` | Bytes of flows with `startedMidstream` (TCP or QUIC), named or not | same |
+| `hostnames.echShare` | Bytes of flows with `echSeen` | same |
+| `hostnames.dnsPrecision` | Bytes where the DNS name equals the SNI name | Bytes of flows with an `sni` name and a DNS match |
+| `hostnames.sameAddressPrecision` | Bytes where the other flow's name equals the SNI name | Bytes of flows with an `sni` name and a same-address match |
+
+- `hostnameCoverage` counts only names observed in the connection itself (source `sni`), so it equals `sniShare`. Hints (`dns`, `sameAddress`) never count toward it; they are reported as `hintShare` and shown labelled
+- Why: on real captures DNS-derived names agree with the connection's own name only 0.07 to 0.999 of the time (by bytes, `dnsPrecision`) and same-address hints 0.20 to 0.999 (`sameAddressPrecision`), so they are hints, not observations
+- `sniShare` + `dnsShare` + `sameAddressShare` + the four `unnamedShare` values add up to 1. Check `hostnameReasons` compares the bytes
+- `midstreamShare` and `echShare` are not reasons: a midstream flow named by DNS counts in `dnsShare` and in `midstreamShare`
+- `dnsPrecision` leaves out `echHidden` flows (their SNI is the outer name) and flows with no SNI or no DNS match. See [DOMAINS.md](DOMAINS.md#dnsprecision)
+- These keys are in `QualityReport.metrics` and are written to band files as `informational` until reviewed
+
+Example on the synthetic corpus (denominator 10065): `sni` 6243 (F1, F3), `dns` 1240 (F6), `echHidden` 842 (F7), `startedBeforeCapture` 1420 (F2), `noDNSMatch` 320 (F9, an `app` flow), `noHandshakeUDP` 0. `midstreamShare` 1420, `echShare` 842, `dnsPrecision` 3559 of 3559. A second generated capture (`HintCorpus`, denominator 2763) covers the same-address hint and QUIC flows that began before the capture: `sni` 2151, `sameAddress` 356, `startedBeforeCapture` 128, `noHandshakeUDP` 128, `midstreamShare` 484, `sameAddressPrecision` 396 of 2151.
+
 ## Reconciliation checks
 
 Each check prints `name`, `expected`, `actual`, `ok`. `reconciliation.ok` is the AND of the checks that could be evaluated.
@@ -77,12 +107,14 @@ Each check prints `name`, `expected`, `actual`, `ok`. `reconciliation.ok` is the
 | `decodedAccounted` | `decoded` | sum of flow packets + `droppedNoPort` | Yes |
 | `categoryBytes` | `totals.ipBytes` | Sum of `categories.byCategory.*.ipBytes` | No |
 | `interfaceBytes` | `totals.ipBytes` | sum of `byInterface` | No |
+| `hostnameReasons` | 443 app bytes | `sni` + `dns` + all unnamed reason bytes | No |
 | `flowTimes` | flow count | flows with `lastSeen >= firstSeen` | No |
 
 ## Detail mode
 
 - Off by default. With `options.detail`, the report adds `detail.topProcesses`: up to 20 lines of `{name, flows, ipBytes}`, grouped by display name of the winning process, sorted by bytes then name
-- Process names appear only there. Hostnames and addresses never appear in any mode
+- Detail also adds `detail.topUnnamed`: the 10 largest unnamed 443 app flows, as `{reason, port, transport, category, process, ipBytes}`, sorted by bytes then flow id. No address, no hostname, so gaps can be inspected locally
+- Process names appear only in `detail`. Hostnames and addresses never appear in any mode
 
 ## Scenario files
 
@@ -142,7 +174,7 @@ Scoring rules:
 }
 ```
 
-Metric keys: `attributedShare`, `noProcessShare`, `mixedFlowShare`, `hostnameCoverageSniOnly`.
+Metric keys (`hintShare` is among the 5.1 keys below): `attributedShare`, `noProcessShare`, `mixedFlowShare`, `hostnameCoverageSniOnly`, plus `unknownShare` and `quietShare` (4.x) and the 5.1 keys `hostnameCoverage`, `sniShare`, `dnsShare`, `sameAddressShare`, `hintShare`, `midstreamShare`, `echShare`, `dnsPrecision`, `sameAddressPrecision`, `unnamedShare.<reason>`. The 5.1 keys are written as informational and enforced only after review.
 
 Ratchet rules (`Ratchet.check(report:bands:)`):
 
@@ -170,7 +202,7 @@ WatchCapture report --db <path> --session <id|latest> [options]
 
 | Option | Effect |
 |---|---|
-| `--detail` | Add process names |
+| `--detail` | Add process names and the largest unnamed flows |
 | `--json` | JSON instead of text. With `--scenario` or `--bands` the output is `{"report", "score", "regressions"}` |
 | `--scenario <file>` | Print the scenario score (numbers only) |
 | `--bands <file>` | Run the ratchet; print each regression. The scenario ids of the two files must agree when both are given |

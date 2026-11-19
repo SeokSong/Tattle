@@ -92,6 +92,7 @@ extension Scenario {
     ///   working for an app); bytes are IP bytes in plus out
     public func score(flows: [Flow], domains: [DomainObservation]) -> ScenarioScore {
         let zero = flows.map(\.firstSeen).min() ?? Date(timeIntervalSince1970: 0)
+        // no flows: host recall counts sni and dns names, never the same-address hint
         let index = HostnameIndex(domains)
 
         var windowScores: [WindowScore] = []

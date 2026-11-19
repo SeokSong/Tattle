@@ -39,9 +39,11 @@
 | TCP | FIN from both sides, or RST | 2 min idle |
 | UDP / QUIC | — | 2 min idle |
 | Any | Capture stops | Closed with end reason `captureStopped` |
+| Any | The table is full (`maxOpenFlows`, 20,000) and a new key arrives | The 1,000 least recently seen flows close with end reason `evicted` |
 
 - A packet for a closed key starts a new flow
 - 2 min is a starting value. Test it against the fixtures once flows exist
+- An evicted flow is closed like any other: it goes to the next `drainDirty` once, with all its counters, and is saved. A later packet for its key opens a new flow (new id)
 - Long history is a retention question ([STORAGE.md](STORAGE.md)), not a timeout question
 
 ## Started midstream
@@ -49,7 +51,7 @@
 - `startedMidstream` is set once, when a TCP flow is created: true if the first packet seen has no SYN flag
 - A SYN-ACK first counts as a handshake (the SYN was missed, but the ClientHello still follows), so it is not midstream
 - An RST first packet is midstream (no SYN); the flow closes at once and carries the flag
-- UDP is never midstream: no handshake concept at this layer (UDP/QUIC gaps are the `noHandshakeUDP` reason)
+- A UDP flow is created with the flag false. The pipeline sets it (`FlowTable.markMidstream`) when the handshake buffer sees that the first outbound payload of a UDP 443 flow was a QUIC short header: the connection began before the capture. Other UDP flows without a name are the `noHandshakeUDP` reason
 - A flow expired as idle that reappears under the same key is a new flow, midstream if its first packet is not a SYN
 - Cost: one flag check per new flow, none per packet
 
@@ -94,7 +96,7 @@ public struct ProcessPair: Hashable, Sendable {      // one tally row
     public static let none = ProcessPair(nil, nil, nil, nil)
 }
 
-public enum FlowEndReason: String, Sendable { case fin, rst, idle, captureStopped, interrupted }
+public enum FlowEndReason: String, Sendable { case fin, rst, idle, captureStopped, interrupted, evicted }
 
 public struct Flow: Sendable, Identifiable {
     public let id: UUID
@@ -116,7 +118,8 @@ public struct Flow: Sendable, Identifiable {
 public enum FlowEvent: Sendable { case opened(Flow), closed(Flow) }
 
 public struct FlowTable {
-    public init(idleTimeout: TimeInterval = 120, closingGrace: TimeInterval = 5)
+    public init(idleTimeout: TimeInterval = 120, closingGrace: TimeInterval = 5,
+                maxOpenFlows: Int = 20_000, evictionBatch: Int = 1_000)
     public mutating func add(_ packet: DecodedPacket) -> FlowEvent?   // .opened on a new key
     public mutating func expire(at now: Date) -> [Flow]                // closes idle and finished flows
     public mutating func closeAll(reason: FlowEndReason) -> [Flow]
@@ -125,6 +128,17 @@ public struct FlowTable {
     public var openCount: Int
 }
 ```
+
+### Caps (6.1)
+
+| Structure | Cap | Eviction rule | Counter |
+|---|---|---|---|
+| `entries` (open flows) | `maxOpenFlows`, default 20,000 | A new key at the cap closes the `evictionBatch` (1,000) flows with the oldest `lastSeen`, end reason `evicted`; they are saved, never dropped | `evictedFlows`, `peakOpenFlows` |
+| `closedPending` (closed, not yet drained) | `maxClosedPending`, 100,000 | Only reached when saves keep failing: the oldest 10,000 are dropped | `droppedClosedFlows` |
+| `Flow.tally` (rows per flow) | `maxTallyRows`, 64 process rows | A new process pair on a full tally counts under `ProcessPair.none` (so at most 65 rows) | `tallyRowsFolded` |
+
+- `takeEvictedKeys()` returns the keys evicted since the last call so the pipeline can release the handshake state of each
+- The evicted flow's end time stays its `lastSeen`; the end reason is the only mark that it was closed early
 
 ### Requeue
 

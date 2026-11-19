@@ -54,6 +54,39 @@ public struct PipelineStats: Sendable {
 - The pipeline takes any `FlowStore` (protocol in `Sources/Storage/FlowStore.swift`), so tests can inject a store that fails
 - `store == nil` → run without saving (used by the CLI for a quick summary and by tests)
 - `retainDomains: true` keeps every flushed `DomainObservation` for `domainsSnapshot()`, as `retainFlows` does for flows. CLI and tests only: unbounded, never set in the app
+- `dnsSnapshot() -> [DomainObservation]` returns the recent DNS ring: the last `CapturePipeline.recentDNSCapacity` (5,000) DNS answers, oldest first. Always on, DNS only, fixed size (the oldest is overwritten), so it is safe in the app. The live screen builds its `HostnameIndex` from it; SNI names come from each flow's `serverName`. `PipelineStats.recentDNSCount` is its current size
+- Caps (6.1): see [Caps and counters](#caps-and-counters). `retainFlows` is used by the app (live list) and the CLI, so it is capped; `retainDomains` is CLI and tests only and is capped too
+- `PipelineStats.handshakeGaveUp: [String: Int]` counts handshake buffers that ended without a name, by `GaveUpReason` raw value (see [DOMAINS.md](DOMAINS.md)). Numbers only. `WatchCapture report` prints it as `Handshake gave up: ...`; a QUIC flow's Initial is decrypted at most 3 times
+
+### Caps and counters
+
+Every structure that grows with traffic has a cap, an eviction rule and a counter. Numbers come from the owner's own sessions (a few thousand flows an hour), so the caps sit far above normal use. On the five real captures every drop and eviction counter is 0 (largest peaks: 210 open flows, 135 pending domains, 198 handshake entries).
+
+| Structure | Where | Cap | Eviction rule | Counter | Reported in |
+|---|---|---|---|---|---|
+| Open flows (`FlowTable.entries`) | Flows | 20,000 | New key at the cap: close the 1,000 least recently seen flows with end reason `evicted`; saved, never dropped | `evictedFlows`, `peakOpenFlows`, `openFlows` | `PipelineStats`, `Caps:` line |
+| Closed flows waiting for a drain (`closedPending`) | Flows | 100,000 | Only when saves keep failing: drop the oldest 10,000 | `droppedClosedFlows` | `PipelineStats`, `Caps:` line |
+| Process rows per flow (`Flow.tally`) | Flows | 64 rows (+ the no-process row) | New pair on a full tally counts under no-process | `tallyRowsFolded` | `PipelineStats`, `Caps:` line |
+| Pending domains (`pendingDomains`) | Pipeline | 20,000 flush early; 40,000 hard | At 20,000 flush now; a failed flush retries every 5,000 more; at 40,000 drop the oldest 20,000 | `peakPendingDomains`, `droppedDomains` | `PipelineStats`, `Caps:` line |
+| Handshake states (`HandshakeBuffer.states`) | Domains | 4,096 | Drop all done entries; if still full finish the oldest quarter of pending as `capReached` | `handshakeStatesDropped`, `peakHandshakeStates` | `PipelineStats`, `Caps:` line, `Handshake gave up` |
+| Short-header keys (`shortHeaderKeys`) | Domains | 1 per packet | Drained after every packet | none | n/a |
+| Retained flows (`retained`, for `flowsSnapshot()`) | Pipeline | 50,000 | Drop the oldest closed flows (by last packet) at each flush; they stay in the database | `retainedDropped` | `PipelineStats`, `Caps:` line, live screen note |
+| Retained domains (`retainedDomains`, CLI and tests) | Pipeline | 200,000 | Drop the oldest | `retainedDomainsDropped` | `PipelineStats`, `Caps:` line |
+| Recent DNS ring (`recentDNS`) | Pipeline | 5,000 | Overwrite the oldest | `recentDNSCount` | `PipelineStats` |
+| Interface counts (`interfaces`) | Pipeline | 64 names | Later names count as `(other)` | `interfacesFolded` | `PipelineStats`, `Caps:` line |
+| Local addresses (`PacketDecoder.localAddresses`) | PacketDecoder | 64 (existing) | New addresses are not learned | none | n/a |
+| Process table and skipped types (`PCAPNGStreamParser`) | PCAPNG | 100,000 processes; 64 skipped types; 16 MB per block | See [PCAPNG.md](PCAPNG.md) | `processBlocksDropped`, `unresolvedProcessReferences` | Parser properties |
+| Tcpdump stderr tail (`StderrTail`) | Capture | 20 lines (existing) | Drop the oldest | none | n/a |
+| Live flow table rows | App | 10 shown (500 by default in `flowRows`) | Fold the rest into "N more flows" | `moreFlows` | Live screen |
+| Live flows and DNS (`liveFlows`, `liveDNS`) | App | copies of the retained list (50,000) and the DNS ring (5,000) | Replaced every 2 s | `retainedDropped` | Live screen note |
+| Session count cache (`countCache`) | App | 1,000 sessions | Cleared when full | none | n/a |
+
+- Evictions never lose saved data: an evicted open flow is closed with end reason `evicted` and goes to the store like any closed flow
+- `retainedDropped > 0` means in-memory totals are lower than the saved session. The CLI `report` and `flows` print a warning after the `Caps:` line; the reconciliation check `decodedAccounted` also fails in that case
+- Not capped on purpose, because they are batch inputs: `PCAPNGReader.parse` (the whole file, CLI `read` only) and the report and session screens, which read one stored session
+- `PipelineStats.anyCapHit` is true when any drop, eviction or fold counter is above 0
+- `WatchCapture report` and `flows` print one `Caps:` line with every counter and peak, after `Handshake gave up`
+- Early flush runs inside `process`, so a slow store slows packet handling; the live timer flush still runs every 2 s and normally keeps the queue far below 20,000
 
 ### Errors
 
@@ -70,7 +103,7 @@ public struct PipelineStats: Sendable {
 | Command | Does |
 |---|---|
 | `read <file>` | Existing summary (packets, interfaces, by process) |
-| `flows <file> [--db path]` | Runs the pipeline on a file; prints stats, top flows by bytes (each line starts with the category code name, e.g. `app`, `deviceLink`; names are display names), bytes and flows per category with the phone traffic total, DNS and SNI counts; saves when `--db` is given |
+| `flows <file> [--db path]` | Runs the pipeline on a file; prints stats, top flows by bytes (each line starts with the category code name, e.g. `app`, `deviceLink`; names are display names), bytes and flows per category with the phone traffic total, DNS and SNI counts; each line ends the name with its source (`name [sni]`, `name [dns, may be another service]`) or the reason it has none (`(Connection started before capture)`); saves when `--db` is given |
 | `report <file> [--detail] [--json]`, `report --db <path> --session <id\|latest> [...]` | Quality report (see [REPORT.md](REPORT.md)). Exit 0 all checks pass, 2 a check failed, 1 other error |
 | `bench <file>` | Runs the pipeline with no store 3 times; prints packets/s. Target ≥ 1,500 (N1); expected far higher |
 

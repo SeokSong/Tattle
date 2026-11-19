@@ -29,6 +29,10 @@ struct LiveView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Live · this session").font(.headline).foregroundStyle(.secondary)
+                if model.liveStats.retainedDropped > 0 {
+                    Text("Older flows are in the saved session. The totals below cover the newest flows only.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 HStack(spacing: 12) {
                     Tile(title: "Packets", value: "\(model.liveStats.packets)")
                     Tile(title: "Flows", value: "\(model.liveStats.flowsOpened)")
@@ -47,7 +51,9 @@ struct LiveView: View {
                     ? groupByProcess(from: [] as [TallyInput]).setAside : model.grouping.setAside)
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Top 10 flows by bytes").font(.headline)
-                    FlowTable(flows: model.topFlowLines)
+                    FlowTable(flows: model.topFlowLines, moreFlows: model.moreFlows)
+                    Text("A name seen in the connection was read from that connection. A name from DNS is a lookup answer for the same server address and may be another service on that server.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
             .padding(24)

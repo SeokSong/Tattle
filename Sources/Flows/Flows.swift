@@ -41,7 +41,11 @@ public struct ProcessPair: Hashable, Sendable {
     public static let none = ProcessPair(nil, nil, nil, nil)
 }
 
-public enum FlowEndReason: String, Sendable { case fin, rst, idle, captureStopped, interrupted }
+public enum FlowEndReason: String, Sendable {
+    case fin, rst, idle, captureStopped, interrupted
+    /// closed early because the table was full (see `FlowTable.maxOpenFlows`); the flow is saved as it was
+    case evicted
+}
 
 public struct Flow: Sendable, Identifiable {
     public let id: UUID
@@ -58,7 +62,8 @@ public struct Flow: Sendable, Identifiable {
     public var serverName: String?
     /// nil while open
     public var endReason: FlowEndReason?
-    /// TCP flow whose first packet seen had no SYN (first packet seen had no SYN or SYN-ACK)
+    /// the connection began before the capture. tcp: the first packet seen had no SYN (or SYN-ACK). udp: the first
+    /// outbound payload was a quic short header, set by the pipeline through `markMidstream`
     public var startedMidstream = false
     /// ClientHello carried the encrypted_client_hello extension (set in problem 2.3)
     public var echSeen = false
@@ -82,19 +87,76 @@ public struct FlowTable: Sendable {
         var closingSince: Date?
     }
 
+    /// open flows kept at most; a new key past this closes the least recently seen flows as `.evicted`
+    public static let defaultMaxOpenFlows = 20_000
+    /// how many flows one eviction closes (a batch, so the sort is paid once per 1,000 new flows)
+    public static let defaultEvictionBatch = 1_000
+    /// closed flows waiting for a drain, at most. only reached when saves keep failing
+    public static let maxClosedPending = 100_000
+    /// process rows kept per flow; a new pair past this is counted under `ProcessPair.none`
+    public static let maxTallyRows = 64
+
     public let idleTimeout: TimeInterval
     public let closingGrace: TimeInterval
+    public let maxOpenFlows: Int
+    public let evictionBatch: Int
 
     private var entries: [FlowKey: Entry] = [:]
     private var dirty = Set<FlowKey>()
     private var closedPending: [Flow] = []
+    private var evictedKeys: [FlowKey] = []
 
-    public init(idleTimeout: TimeInterval = 120, closingGrace: TimeInterval = 5) {
+    /// flows closed with `.evicted`
+    public private(set) var evictedFlows = 0
+    /// most flows open at once
+    public private(set) var peakOpenFlows = 0
+    /// closed flows dropped because `maxClosedPending` was reached (they were never saved)
+    public private(set) var droppedClosedFlows = 0
+    /// packets whose process pair was folded into `.none` because the flow's tally was full
+    public private(set) var tallyRowsFolded = 0
+
+    public init(
+        idleTimeout: TimeInterval = 120, closingGrace: TimeInterval = 5,
+        maxOpenFlows: Int = FlowTable.defaultMaxOpenFlows, evictionBatch: Int = FlowTable.defaultEvictionBatch
+    ) {
         self.idleTimeout = idleTimeout
         self.closingGrace = closingGrace
+        self.maxOpenFlows = max(1, maxOpenFlows)
+        self.evictionBatch = max(1, evictionBatch)
     }
 
     public var openCount: Int { entries.count }
+
+    /// keys of flows evicted since the last call, so the caller can release per-flow state. returns each key once
+    public var hasEvictedKeys: Bool { !evictedKeys.isEmpty }
+
+    public mutating func takeEvictedKeys() -> [FlowKey] {
+        defer { evictedKeys.removeAll(keepingCapacity: true) }
+        return evictedKeys
+    }
+
+    private mutating func queueClosed(_ flow: Flow) {
+        closedPending.append(flow)
+        if closedPending.count > Self.maxClosedPending {
+            let drop = Self.maxClosedPending / 10
+            closedPending.removeFirst(drop)
+            droppedClosedFlows += drop
+        }
+    }
+
+    /// closes the `evictionBatch` least recently seen flows (fewer if the table is smaller)
+    private mutating func evict() {
+        let victims = entries.sorted { $0.value.flow.lastSeen < $1.value.flow.lastSeen }.prefix(evictionBatch)
+        for (key, entry) in victims {
+            var flow = entry.flow
+            flow.endReason = .evicted
+            entries[key] = nil
+            dirty.remove(key)
+            queueClosed(flow)
+            evictedKeys.append(key)
+            evictedFlows += 1
+        }
+    }
 
     /// .opened on a new key. an RST closes the flow at once: on an existing flow that returns .closed;
     /// on a brand new key it returns .opened and the closed flow shows up in the next drainDirty.
@@ -116,7 +178,7 @@ public struct FlowTable: Sendable {
         } else {
             entry = Entry(flow: Flow(key: key, interface: packet.interface, at: packet.timestamp))
             // one check per new tcp flow: no syn on the first packet seen means the handshake was missed.
-            // a syn-ack counts as a handshake. udp is never midstream
+            // a syn-ack counts as a handshake. udp is marked later by the pipeline, from the quic header
             if transport == .tcp { entry.flow.startedMidstream = !(packet.headers.tcpFlags?.contains(.syn) ?? false) }
             event = .opened(entry.flow)
         }
@@ -153,7 +215,12 @@ public struct FlowTable: Sendable {
                 packet.process?.name, packet.process?.pid,
                 packet.effectiveProcess?.name, packet.effectiveProcess?.pid)
         }
-        entry.flow.tally[pair, default: 0] += 1
+        if entry.flow.tally.count >= Self.maxTallyRows, entry.flow.tally[pair] == nil {
+            entry.flow.tally[.none, default: 0] += 1
+            tallyRowsFolded += 1
+        } else {
+            entry.flow.tally[pair, default: 0] += 1
+        }
 
         var reset = false
         if transport == .tcp, let flags = packet.headers.tcpFlags {
@@ -171,10 +238,12 @@ public struct FlowTable: Sendable {
             entry.flow.endReason = .rst
             entries[key] = nil
             dirty.remove(key)
-            closedPending.append(entry.flow)
+            queueClosed(entry.flow)
             return isNew ? event : .closed(entry.flow)
         }
+        if isNew, entries.count >= maxOpenFlows { evict() }
         entries[key] = entry
+        if entries.count > peakOpenFlows { peakOpenFlows = entries.count }
         dirty.insert(key)
         return event
     }
@@ -195,7 +264,7 @@ public struct FlowTable: Sendable {
                 closed.append(flow)
                 entries[key] = nil
                 dirty.remove(key)
-                closedPending.append(flow)
+                queueClosed(flow)
             }
         }
         return closed
@@ -208,7 +277,7 @@ public struct FlowTable: Sendable {
             var flow = entry.flow
             flow.endReason = reason
             closed.append(flow)
-            closedPending.append(flow)
+            queueClosed(flow)
         }
         entries.removeAll()
         dirty.removeAll()
@@ -218,6 +287,12 @@ public struct FlowTable: Sendable {
     public mutating func setServerName(_ name: String, for key: FlowKey) {
         guard entries[key] != nil else { return }
         entries[key]?.flow.serverName = name
+        dirty.insert(key)
+    }
+
+    public mutating func markMidstream(for key: FlowKey) {
+        guard entries[key] != nil else { return }
+        entries[key]?.flow.startedMidstream = true
         dirty.insert(key)
     }
 
@@ -245,7 +320,7 @@ public struct FlowTable: Sendable {
     public mutating func requeue(_ flows: [Flow]) {
         for flow in flows {
             if flow.endReason != nil {
-                closedPending.append(flow)
+                queueClosed(flow)
             } else if entries[flow.key] != nil {
                 dirty.insert(flow.key)
             }

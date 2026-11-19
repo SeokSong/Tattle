@@ -1,4 +1,5 @@
 import Attribution
+import Domains
 import Flows
 import Foundation
 
@@ -167,12 +168,34 @@ func unattributedShare(_ rows: [ProcessRow]) -> Double? {
 
 struct FlowLine: Identifiable {
     var id: UUID
-    var serverName: String?
+    /// the resolved name, nil when the flow has none
+    var hostname: String?
+    var hostnameSource: HostnameSource?
+    /// seconds from the dns answer to the flow's first packet; dns names only
+    var dnsAgeSeconds: Double?
+    /// no name: the reason it has none (shared with the report)
+    var unnamedReason: UnnamedReason?
     var address: String
     var ipBytes: Int
     var attribution: String
     /// the category label, set only for flows that are not phone traffic
     var setAsideLabel: String?
+
+    /// the text under or instead of the name in a table cell: the source, or the reason
+    var hostnameNote: String {
+        if let hostnameSource { return hostnameSource.shortLabel }
+        return (unnamedReason ?? .noDNSMatch).label
+    }
+
+    /// the full sentence for help text and details, with the dns answer's age
+    var hostnameDetail: String {
+        guard let hostnameSource else { return (unnamedReason ?? .noDNSMatch).label }
+        var text = hostnameSource.label
+        if hostnameSource == .dns, let age = dnsAgeSeconds {
+            text += ". The DNS answer came \(String(format: "%.1f", age)) s before the connection"
+        }
+        return text
+    }
 }
 
 func describeAttribution(_ result: AttributionResult) -> String {
@@ -187,18 +210,58 @@ func describeAttribution(_ result: AttributionResult) -> String {
     return text
 }
 
-func topFlows(_ flows: [Flow], limit: Int = 10) -> [FlowLine] {
-    flows.sorted { $0.ipBytesIn + $0.ipBytesOut > $1.ipBytesIn + $1.ipBytesOut }
+/// builds the hostname index once, then looks up each of the shown flows. `makeIndex` is a seam for tests
+func topFlows(
+    _ flows: [Flow], observations: [DomainObservation] = [], limit: Int = 10,
+    makeIndex: ([DomainObservation], [Flow]) -> HostnameIndex = { HostnameIndex($0, flows: $1) }
+) -> [FlowLine] {
+    let index = makeIndex(observations, flows)
+    return flows.sorted { $0.ipBytesIn + $0.ipBytesOut > $1.ipBytesIn + $1.ipBytesOut }
         .prefix(limit)
         .map { flow in
             let category = Classifier.classify(flow).category
-            return FlowLine(
-                id: flow.id, serverName: flow.serverName,
+            var line = FlowLine(
+                id: flow.id,
                 address: "\(flow.key.remoteAddress.description):\(flow.key.remotePort)",
                 ipBytes: flow.ipBytesIn + flow.ipBytesOut,
                 attribution: describeAttribution(Attributor.attribute(flow.tally)),
                 setAsideLabel: category.isPhoneTraffic ? nil : category.label)
+            switch index.outcome(for: flow) {
+            case .named(let resolved):
+                line.hostname = resolved.name
+                line.hostnameSource = resolved.source
+                line.dnsAgeSeconds = resolved.dnsAgeSeconds
+            case .unnamed(let reason):
+                line.unnamedReason = reason
+            }
+            return line
         }
+}
+
+/// the flows shown in a list plus how many were left out. a fold line says "N more flows" so a long
+/// session never builds an unbounded list
+struct FlowRows {
+    /// the biggest flows by bytes, at most `limit`
+    var lines: [FlowLine]
+    /// flows not shown; the fold line stands for them
+    var moreFlows: Int
+
+    /// "N more flows", nil when everything is shown
+    var foldLine: String? {
+        moreFlows > 0 ? "\(moreFlows) more flow\(moreFlows == 1 ? "" : "s")" : nil
+    }
+}
+
+/// at most `liveRowLimit` rows by default; the live screen passes its own smaller limit
+let liveRowLimit = 500
+
+func flowRows(
+    _ flows: [Flow], observations: [DomainObservation] = [], limit: Int = liveRowLimit,
+    makeIndex: ([DomainObservation], [Flow]) -> HostnameIndex = { HostnameIndex($0, flows: $1) }
+) -> FlowRows {
+    FlowRows(
+        lines: topFlows(flows, observations: observations, limit: limit, makeIndex: makeIndex),
+        moreFlows: max(0, flows.count - limit))
 }
 
 func formatBytes(_ count: Int) -> String {

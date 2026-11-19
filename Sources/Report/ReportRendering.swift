@@ -19,6 +19,23 @@ public enum ReportRendering {
         lines.append("  (unknownShare can be lower because rules reclassify)")
         lines.append(metric("mixedFlowShare", report.attribution.mixedFlowShare))
         lines.append(metric("hostnameCoverageSniOnly", report.hostnames.hostnameCoverageSniOnly))
+        lines.append("  (all flows to port 443; the app-traffic figures are under Hostnames)")
+        lines.append("")
+        lines.append("Hostnames (app traffic to port 443)")
+        let h = report.hostnames
+        lines.append(metric("hostnameCoverage (observed names)", h.hostnameCoverage))
+        lines.append(metric("sniShare", h.sniShare))
+        lines.append(metric("dnsShare", h.dnsShare))
+        lines.append(metric("sameAddressShare", h.sameAddressShare))
+        lines.append(metric("hintShare (dns + same server, may be another service)", h.hintShare))
+        for reason in UnnamedReason.allCases {
+            if let r = h.unnamedShare[reason.rawValue] { lines.append(metric("unnamedShare.\(reason.rawValue)", r)) }
+        }
+        lines.append(metric("midstreamShare", h.midstreamShare))
+        lines.append(metric("echShare", h.echShare))
+        lines.append(metric("dnsPrecision", h.dnsPrecision))
+        lines.append(metric("sameAddressPrecision", h.sameAddressPrecision))
+        lines.append("  (dns and same-address names are hints: they are not observed in the connection)")
         lines.append("")
         lines.append("Categories")
         for cat in TrafficCategory.allCases {
@@ -50,6 +67,13 @@ public enum ReportRendering {
                 lines.append("")
                 lines.append(title)
                 for p in group { lines.append("\(p.name)  \(p.ipBytes) bytes  \(p.flows) flows") }
+            }
+        }
+        if let top = report.detail?.topUnnamed, !top.isEmpty {
+            lines.append("")
+            lines.append("Largest unnamed flows")
+            for u in top {
+                lines.append("\(u.reason)  port \(u.port)  \(u.transport)  \(u.category)  \(u.process)  \(u.ipBytes) bytes")
             }
         }
         return lines.joined(separator: "\n") + "\n"

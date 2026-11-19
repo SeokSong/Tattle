@@ -56,6 +56,14 @@ private func isPcapHeaderMagic(_ value: UInt32) -> Bool {
 // MARK: - Parser
 
 public struct PCAPNGStreamParser: Sendable {
+    /// a block longer than this is treated as corrupt (`badBlockLength`) instead of waiting for its bytes
+    public static let maxBlockLength = 16 * 1024 * 1024
+    /// process blocks remembered per section; later ones are still returned as events but cannot be
+    /// referenced by packets (those count in `unresolvedProcessReferences`)
+    public static let maxSectionProcesses = 100_000
+    /// distinct skipped block types counted separately in `skippedBlocks`
+    public static let maxSkippedBlockTypes = 64
+
     // unparsed bytes start at `offset`; consumed bytes stay until the prefix passes 1 MB
     private var buffer: [UInt8] = []
     private var offset = 0
@@ -75,6 +83,8 @@ public struct PCAPNGStreamParser: Sendable {
     public private(set) var skippedBlocks: [UInt32: Int] = [:]
     /// packets whose process index pointed at a process block not seen yet
     public private(set) var unresolvedProcessReferences = 0
+    /// process blocks not remembered because the section already had `maxSectionProcesses`
+    public private(set) var processBlocksDropped = 0
 
     public init() {}
 
@@ -113,7 +123,7 @@ public struct PCAPNGStreamParser: Sendable {
             let rawLength = u32(at: offset + 4)
             let length = Int(rawLength)
 
-            guard length >= 12, length % 4 == 0 else {
+            guard length >= 12, length % 4 == 0, length <= Self.maxBlockLength else {
                 throw PCAPNGError.badBlockLength(offset: droppedBytes + offset, length: rawLength)
             }
             // hold the block back until it is complete
@@ -138,7 +148,9 @@ public struct PCAPNGStreamParser: Sendable {
             case BlockType.processInformation:
                 events.append(.process(try readProcess(body: body, blockOffset: offset)))
             default:
-                skippedBlocks[type, default: 0] += 1
+                // distinct skipped types are capped; the rest count under UInt32.max
+                let slot = skippedBlocks[type] != nil || skippedBlocks.count < Self.maxSkippedBlockTypes ? type : UInt32.max
+                skippedBlocks[slot, default: 0] += 1
             }
 
             offset += length
@@ -231,7 +243,11 @@ public struct PCAPNGStreamParser: Sendable {
 
         let process = PCAPNGProcess(pid: u32(at: body.lowerBound), name: name)
 
-        sectionProcesses.append(process)
+        if sectionProcesses.count < Self.maxSectionProcesses {
+            sectionProcesses.append(process)
+        } else {
+            processBlocksDropped += 1
+        }
         return process
     }
 

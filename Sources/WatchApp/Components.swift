@@ -94,6 +94,8 @@ struct SetAsideSection: View {
 
 struct FlowTable: View {
     var flows: [FlowLine]
+    /// flows left out of the table, shown as one "N more flows" line
+    var moreFlows = 0
 
     var body: some View {
         if flows.isEmpty {
@@ -101,7 +103,7 @@ struct FlowTable: View {
         } else {
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
                 GridRow {
-                    Text("Server").bold()
+                    Text("Name").bold()
                     Text("Address").bold()
                     Text("App").bold()
                     Text("IP bytes").bold().gridColumnAlignment(.trailing)
@@ -111,10 +113,19 @@ struct FlowTable: View {
                 Divider()
                 ForEach(flows) { flow in
                     GridRow {
-                        // a name here comes from the TLS handshake of this flow, never a guess
-                        Text(flow.serverName ?? "name not seen")
-                            .foregroundStyle(flow.serverName == nil ? Color.secondary : Color.primary)
-                            .lineLimit(1)
+                        // an sni name is observed; dns and same-address names are secondary and says it may differ
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let name = flow.hostname {
+                                Text(name)
+                                    .foregroundStyle(flow.hostnameSource == .sni ? Color.primary : Color.secondary)
+                                    .italic(flow.hostnameSource != .sni)
+                                    .lineLimit(1)
+                                Text(flow.hostnameNote).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            } else {
+                                Text(flow.hostnameNote).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        }
+                        .help(flow.hostnameDetail)
                         Text(flow.address).foregroundStyle(.secondary).lineLimit(1).textSelection(.enabled)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(flow.attribution).lineLimit(1)
@@ -124,6 +135,9 @@ struct FlowTable: View {
                         }
                         Text(formatBytes(flow.ipBytes)).monospacedDigit()
                     }
+                }
+                if let fold = FlowRows(lines: [], moreFlows: moreFlows).foldLine {
+                    GridRow { Text(fold).foregroundStyle(.secondary).gridCellColumns(4) }
                 }
             }
         }

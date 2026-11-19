@@ -24,9 +24,10 @@ private struct Spec {
 }
 
 // builds a one-interface capture with two TikTok processes (index 0 pid 1, index 1 pid 2), decodes it for real
-private func decode(_ specs: [Spec]) async throws -> [DecodedPacket] {
+private func decode(_ specs: [Spec], extraProcesses: Int = 0) async throws -> [DecodedPacket] {
     var bytes = PCAPNGBuilder.sectionHeader() + PCAPNGBuilder.interface("en0")
     bytes += PCAPNGBuilder.process(pid: 1, name: "TikTok") + PCAPNGBuilder.process(pid: 2, name: "TikTok")
+    for i in 0..<extraProcesses { bytes += PCAPNGBuilder.process(pid: UInt32(100 + i), name: "Proc\(i)") }
     for s in specs {
         let remote: [UInt8] = [93, 184, 216, s.remote]
         let out = s.dir != .inbound
@@ -349,9 +350,19 @@ private func firstFlow(_ spec: Spec) async throws -> Flow {
     #expect(drained.count == 1 && drained[0].endReason == .rst && drained[0].startedMidstream)
 }
 
-@Test func udpIsNeverMidstream() async throws {
+@Test func udpStartsNotMidstreamUntilMarked() async throws {
     #expect(try await firstFlow(Spec(proto: 17)).startedMidstream == false)
     #expect(try await firstFlow(Spec(proto: 17, flags: 0x10)).startedMidstream == false)
+    // the pipeline marks a quic flow that began with a short header
+    let p = try await decode([Spec(proto: 17)])
+    var table = FlowTable()
+    guard case .opened(let opened) = table.add(p[0]) else { Issue.record("expected opened"); return }
+    table.markMidstream(for: opened.key)
+    #expect(table.drainDirty().first?.startedMidstream == true)
+    // an unknown key changes nothing
+    table.markMidstream(for: FlowKey(
+        transport: .udp, localAddress: .v4(1), localPort: 1, remoteAddress: .v4(2), remotePort: 2))
+    #expect(table.drainDirty().isEmpty)
 }
 
 @Test func reappearAfterIdleIsMidstream() async throws {
@@ -371,4 +382,70 @@ private func firstFlow(_ spec: Spec) async throws -> Flow {
     _ = table.add(p[1])
     let drained = table.drainDirty()
     #expect(drained.count == 1 && drained[0].startedMidstream)
+}
+
+// MARK: caps
+
+@Test func flowTableEvictsLeastRecentlySeen() async throws {
+    // 12 flows opened at increasing times; the table holds 10 and evicts 3 at a time
+    let p = try await decode((0..<12).map { Spec(at: Double($0), remote: UInt8($0 + 1)) })
+    var table = FlowTable(maxOpenFlows: 10, evictionBatch: 3)
+    var peak = 0
+    for x in p {
+        _ = table.add(x)
+        peak = max(peak, table.openCount)
+    }
+    // the 11th flow found 10 open and evicted flows 1-3 (7 left, 8 with it); the 12th makes 9
+    #expect(peak <= 10)
+    #expect(table.openCount == 9)
+    #expect(table.evictedFlows == 3)
+    #expect(table.peakOpenFlows == 10)
+    let evictedKeys = table.takeEvictedKeys()
+    #expect(evictedKeys.map(\.remoteAddress) == (1...3).map { .v4(0x5DB8_D800 | UInt32($0)) })
+    #expect(table.takeEvictedKeys().isEmpty)
+
+    let drained = table.drainDirty()
+    let evicted = drained.filter { $0.endReason == .evicted }
+    #expect(evicted.count == 3)
+    #expect(Set(evicted.map(\.key.remoteAddress)) == Set(evictedKeys.map(\.remoteAddress)))
+    // the evicted flows keep their counters, so saving them loses nothing
+    #expect(evicted.allSatisfy { $0.packetsOut == 1 && $0.ipBytesOut > 0 })
+    // each closed flow appears in exactly one drain
+    #expect(table.drainDirty().isEmpty)
+    // flows 4-12 are still open
+    #expect(drained.filter { $0.endReason == nil }.count == 9)
+}
+
+@Test func evictedFlowCanReopen() async throws {
+    let p = try await decode((0..<4).map { Spec(at: Double($0), remote: UInt8($0 + 1)) } + [Spec(at: 10, remote: 1)])
+    var table = FlowTable(maxOpenFlows: 3, evictionBatch: 1)
+    for x in p.prefix(4) { _ = table.add(x) }
+    #expect(table.evictedFlows == 1)
+    let first = table.drainDirty().first { $0.endReason == .evicted }
+    // the oldest flow was evicted; a new packet for its key opens a new flow with a new id
+    guard case .opened(let reopened)? = table.add(p[4]) else { Issue.record("expected opened"); return }
+    #expect(reopened.key == first?.key)
+    #expect(reopened.id != first?.id)
+    #expect(table.openCount <= 3)
+}
+
+@Test func closedQueueIsBounded() async throws {
+    // closed flows nobody drains: the queue never passes its cap, and the loss is counted
+    let p = try await decode([Spec(flags: 0x04)])
+    var table = FlowTable()
+    for _ in 0..<(FlowTable.maxClosedPending + 5) { _ = table.add(p[0]) }
+    #expect(table.drainDirty().count <= FlowTable.maxClosedPending)
+    #expect(table.droppedClosedFlows == FlowTable.maxClosedPending / 10)
+}
+
+@Test func tallyRowsAreCapped() async throws {
+    let p = try await decode((0..<70).map { Spec(at: Double($0) / 10, process: UInt32(2 + $0)) }, extraProcesses: 70)
+    var table = FlowTable()
+    for x in p { _ = table.add(x) }
+    let flow = closeAll(&table)[0]
+    // 64 process rows, then the 6 later pairs count under the no-process row
+    #expect(flow.tally.count == FlowTable.maxTallyRows + 1)
+    #expect(flow.tally[.none] == 6)
+    #expect(flow.tally.values.reduce(0, +) == 70)
+    #expect(table.tallyRowsFolded == 6)
 }

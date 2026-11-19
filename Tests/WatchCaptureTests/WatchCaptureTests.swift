@@ -233,3 +233,28 @@ private func describe(_ event: PCAPNGEvent) -> String {
         #expect(threw == !tolerate)
     }
 }
+
+// MARK: - Caps
+
+@Test func streamRejectsOversizeBlockInsteadOfWaiting() throws {
+    var parser = PCAPNGStreamParser()
+    let huge = UInt32(PCAPNGStreamParser.maxBlockLength + 4)
+    // a header that claims a 16 MB block: the parser fails at once, it does not buffer toward it
+    #expect(throws: PCAPNGError.self) {
+        try parser.append(B.sectionHeader() + B.le32(6) + B.le32(huge) + B.le32(0))
+    }
+}
+
+@Test func streamCapsSkippedTypesAndProcessTable() throws {
+    var bytes = B.sectionHeader()
+    for i in 0..<70 { bytes += B.block(0x100 + UInt32(i), [0, 0, 0, 0]) }
+    for i in 0..<(PCAPNGStreamParser.maxSectionProcesses + 5) { bytes += B.process(pid: UInt32(i), name: "p") }
+    var parser = PCAPNGStreamParser()
+    let events = try parser.append(bytes)
+    #expect(parser.skippedBlocks.count == PCAPNGStreamParser.maxSkippedBlockTypes + 1)
+    #expect(parser.skippedBlocks[UInt32.max] == 6)
+    #expect(parser.skippedBlocks.values.reduce(0, +) == 70)
+    // every process block is still an event; only the lookup table stops growing
+    #expect(events.filter { if case .process = $0 { true } else { false } }.count == PCAPNGStreamParser.maxSectionProcesses + 5)
+    #expect(parser.processBlocksDropped == 5)
+}

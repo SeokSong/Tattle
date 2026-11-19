@@ -1,0 +1,80 @@
+{
+  "baselineLabel" : "M2 5.4 2026-11-18 (midstream capture)",
+  "metrics" : {
+    "attributedShare" : {
+      "baseline" : 1,
+      "ceiling" : 1,
+      "floor" : 0.995
+    },
+    "dnsShare" : {
+      "baseline" : 0,
+      "informational" : true
+    },
+    "echShare" : {
+      "baseline" : 0,
+      "informational" : true
+    },
+    "hostnameCoverage" : {
+      "baseline" : 0.011,
+      "informational" : true
+    },
+    "hostnameCoverageSniOnly" : {
+      "baseline" : 0.012,
+      "ceiling" : 1,
+      "floor" : 0.007
+    },
+    "midstreamShare" : {
+      "baseline" : 0.989,
+      "informational" : true
+    },
+    "mixedFlowShare" : {
+      "baseline" : 0,
+      "ceiling" : 0.005,
+      "floor" : 0
+    },
+    "noProcessShare" : {
+      "baseline" : 0,
+      "ceiling" : 0.005,
+      "floor" : 0
+    },
+    "sameAddressShare" : {
+      "baseline" : 0,
+      "informational" : true
+    },
+    "sniShare" : {
+      "baseline" : 0.011,
+      "informational" : true
+    },
+    "unknownShare" : {
+      "baseline" : 0,
+      "ceiling" : 0.005,
+      "floor" : 0
+    },
+    "unnamedShare.echHidden" : {
+      "baseline" : 0,
+      "informational" : true
+    },
+    "unnamedShare.noDNSMatch" : {
+      "baseline" : 0,
+      "informational" : true
+    },
+    "unnamedShare.noHandshakeUDP" : {
+      "baseline" : 0,
+      "informational" : true
+    },
+    "unnamedShare.startedBeforeCapture" : {
+      "baseline" : 0.989,
+      "informational" : true
+    }
+  },
+  "notes" : [
+    {
+      "metric" : "hostnameCoverage",
+      "reason" : "a video was already playing when the capture started, so its quic flows begin with a short header and carry no name. low coverage is the true result, not a regression: the band is informational and unnamedShare.startedBeforeCapture explains the bytes"
+    }
+  ],
+  "scenario" : "s5-midstream",
+  "totalsBand" : {
+    "ipBytes" : "39-40 MB"
+  }
+}
