@@ -357,10 +357,42 @@ func runBench(path: String) async {
 }
 
 
+// MARK: - metrics command
+
+let metricsUsage = """
+    usage: WatchCapture metrics <file.csv>
+
+    reads a file written by capture --metrics and prints duration, rows, resident memory (min, max, last),
+    the memory slope over the last two thirds of the run, peak open flows, gaps and a verdict.
+    "memory flat" means a slope under 1 MB per 10 minutes. exit 0 unless the file is unreadable
+    """
+
+func runMetrics(_ args: [String]) -> Int32 {
+    guard args.count == 1, args[0] != "--help", args[0] != "-h" else {
+        print(metricsUsage)
+        return args.first == "--help" || args.first == "-h" ? 0 : 64
+    }
+    guard let data = FileManager.default.contents(atPath: args[0]), let text = String(data: data, encoding: .utf8) else {
+        print("Unable to read metrics file \(args[0])")
+        return 1
+    }
+    do {
+        print(MetricsAnalysis.render(try MetricsAnalysis.summarize(csv: text)))
+        return 0
+    } catch MetricsAnalysis.ParseError.header {
+        print("Not a metrics file: the header row does not match")
+        return 1
+    } catch {
+        print("The metrics file has no data rows")
+        return 1
+    }
+}
+
 // MARK: - capture command
 
 let captureUsage = """
     usage: sudo WatchCapture capture (--udid <udid> | --device <name>) [--db <path>] [--duration <seconds>] [--diagnostic <file.pcapng>]
+                                  [--metrics <file.csv>]
 
       --udid <udid>          device to capture, skips the devicectl lookup
       --device <name>        wired device with this name from devicectl: exact match (case and apostrophe style ignored),
@@ -368,6 +400,7 @@ let captureUsage = """
       --db <path>            save flows and domains to this database
       --duration <seconds>   stop automatically after this many seconds
       --diagnostic <file>    also write the raw pcapng stream to this file (raw packets on disk)
+      --metrics <file>       append a numbers-only csv row every 2 seconds (packets, flows, caps, gaps, memory); new file only
 
     exit codes: 0 stopped, 1 rvi failed, 2 tcpdump failed, 3 device not found, 64 bad arguments
     """
@@ -378,6 +411,7 @@ struct CaptureOptions {
     var dbPath: String?
     var duration: Double?
     var diagnostic: String?
+    var metrics: String?
 }
 
 func parseCaptureOptions(_ args: [String]) -> CaptureOptions? {
@@ -392,6 +426,7 @@ func parseCaptureOptions(_ args: [String]) -> CaptureOptions? {
         case "--device": options.device = value
         case "--db": options.dbPath = value
         case "--diagnostic": options.diagnostic = value
+        case "--metrics": options.metrics = value
         case "--duration":
             guard let seconds = Double(value), seconds > 0 else { return nil }
             options.duration = seconds
@@ -464,6 +499,7 @@ func runCapture(_ args: [String]) async -> Int32 {
     }
     let dbPath = resolved(options.dbPath)
     let diagnosticPath = resolved(options.diagnostic)
+    let metricsPath = resolved(options.metrics)
     var ownedPaths: [String] = []
     var failedHandBack = 0
     func handBack() {
@@ -521,6 +557,20 @@ func runCapture(_ args: [String]) async -> Int32 {
         print("The file is not deleted automatically")
     }
 
+    // metrics file: always a new file, never through a symlink, owned by the user, mode 0600
+    var metricsHandle: FileHandle?
+    if let path = metricsPath {
+        let newDirectories = FileOwnership.missingDirectories(of: path)
+        do {
+            metricsHandle = try FileOwnership.openForWriting(path: path)
+        } catch {
+            print("Unable to create metrics file \(path)")
+            return 1
+        }
+        ownedPaths += newDirectories + [path]
+        handBack()
+    }
+
     // before anything is started, so Ctrl-C during start cannot skip the rvictl -x cleanup
     installCaptureSignalHandlers()
     let tools = CaptureTools()
@@ -545,6 +595,8 @@ func runCapture(_ args: [String]) async -> Int32 {
         id: UUID(), startedAt: Date(), source: "rvi", deviceHash: deviceHash, deviceName: name, watchVersion: "dev")
     let pipeline = CapturePipeline(store: store, session: session, retainFlows: true)
     let stopRequest = StopRequest()
+    // run stops the pipeline itself when tcpdump exits on its own; the drop count must be read by then
+    await pipeline.setKernelDroppedProvider { await controller.kernelDropped() }
 
     print("Capturing on \(interface) ... Ctrl-C to stop")
 
@@ -576,6 +628,43 @@ func runCapture(_ args: [String]) async -> Int32 {
         }
     }
 
+    // metrics rows come from this task, not from the packet path. it sleeps until the writer's next
+    // fixed slot (no drift, see MetricsWriter). the final row is written after the pipeline stops
+    let metricsTask: Task<MetricsWriter?, Never>? = metricsHandle.map { handle in
+        let started = ContinuousClock.now
+        let clock: @Sendable () -> TimeInterval = {
+            let d = ContinuousClock.now - started
+            return Double(d.components.seconds) + Double(d.components.attoseconds) / 1e18
+        }
+        return Task {
+            var writer = MetricsWriter(handle: handle, clock: clock)
+            while !Task.isCancelled {
+                if writer.isDue() {
+                    // nil until tcpdump has ended and its stderr is read: unknown is empty, never 0
+                    writer.write(stats: await pipeline.stats, kernelDropped: await controller.kernelDropped(timeout: 0))
+                }
+                try? await Task.sleep(nanoseconds: UInt64(max(writer.secondsUntilDue(), 0.01) * 1e9))
+            }
+            return writer
+        }
+    }
+
+    // a dead link ends the session as interrupted (6.3): stop the capture, then the pipeline
+    let linkLost = StopRequest()
+    let watchdogTask = Task {
+        _ = await runStallWatchdog(
+            StallWatchdog(),
+            lastByteAt: { source.lastByteAt },
+            processRunning: { source.terminationStatus == nil },
+            linkUp: { await LinkProbe.isUp(interface: interface, tools: tools) },
+            onLinkDown: {
+                linkLost.request()
+                await controller.stop()
+                await pipeline.setKernelDropped(await controller.kernelDropped())
+                await pipeline.stop(reason: .interrupted)
+            })
+    }
+
     var exitCode: Int32 = 0
     var failure: Error?
     do {
@@ -585,11 +674,29 @@ func runCapture(_ args: [String]) async -> Int32 {
     }
     statsTask.cancel()
     signalTask.cancel()
-    await pipeline.stop(reason: stopRequest.isRequested || failure == nil ? .captureStopped : .interrupted)
+    watchdogTask.cancel()
+    await watchdogTask.value
+    // tcpdump must be gone and its stderr read before the stats are written, so the drop count is in them
     await controller.stop()
+    let kernelDropped = await controller.kernelDropped()
+    await pipeline.setKernelDropped(kernelDropped)
+    await pipeline.stop(reason: stopRequest.isRequested || failure == nil ? .captureStopped : .interrupted)
+    if let metricsTask {
+        metricsTask.cancel()
+        if var writer = await metricsTask.value {
+            writer.write(stats: await pipeline.stats, kernelDropped: kernelDropped)
+        }
+    }
     handBack()  // WAL files can appear after the store was opened
 
-    if let failure, !stopRequest.isRequested {
+    // tcpdump noticed the cable pull itself (PH-5: 2-3 s, "The interface disappeared", exit 1)
+    if failure != nil, !stopRequest.isRequested, !linkLost.isRequested, await controller.linkLostByTcpdump() {
+        linkLost.request()
+    }
+    if linkLost.isRequested {
+        exitCode = 2
+        print("Capture ended: \(StallWatchdog.linkLostMessage). Everything received so far was saved")
+    } else if let failure, !stopRequest.isRequested {
         exitCode = 2
         print("Capture failed: \(redactUDIDs("\(failure)", udid: udid))")
         for line in await controller.stderrLines { print("  tcpdump: \(line)") }
@@ -606,7 +713,15 @@ func runCapture(_ args: [String]) async -> Int32 {
     case nil: print("\nStream ended: no end marker")
     }
     print("tcpdump exit status: \(source.terminationStatus.map(String.init) ?? "unknown")")
+    if let line = kernelDroppedLine(kernelDropped) { print(line) }
     return exitCode
+}
+
+/// "Kernel dropped: 12 packets  WARNING: ..." for a known count; nil when unknown (tcpdump was killed)
+func kernelDroppedLine(_ count: Int?) -> String? {
+    guard let count else { return nil }
+    if count == 0 { return "Kernel dropped: 0 packets" }
+    return "Kernel dropped: \(count) packets  WARNING: the Mac dropped packets, so these totals are too low"
 }
 
 func redactUDIDs(_ text: String, udid: String) -> String {
@@ -697,7 +812,12 @@ func runReport(_ args: [String]) async -> Int32 {
             gaveUpLine = gaveUpSummary(stats) + "\n" + capsSummary(await pipeline.stats)
             flows = await pipeline.flowsSnapshot()
             domains = await pipeline.domainsSnapshot()
-            report = ReportBuilder.build(flows: flows, domains: domains, pipeline: snapshot, options: options)
+            let final = await pipeline.stats
+            let sessionStats = SessionStats(
+                gapCount: final.gapCount, maxGapMs: Int((final.maxGap * 1000).rounded()),
+                saveFailures: final.saveFailures, unsavedFlows: final.unsavedFlows)
+            report = ReportBuilder.build(
+                flows: flows, domains: domains, pipeline: snapshot, session: sessionStats, options: options)
         case (nil, let dbPath?):
             guard let session else { return fail("--db needs --session <id|latest>") }
             let store = try Store(path: URL(fileURLWithPath: dbPath))
@@ -716,7 +836,9 @@ func runReport(_ args: [String]) async -> Int32 {
             // no pipeline stats are stored: packetsRead and decodedAccounted are skipped
             flows = try store.flows(session: chosen.id)
             domains = try store.domains(session: chosen.id)
-            report = ReportBuilder.build(flows: flows, domains: domains, pipeline: nil, options: options)
+            report = ReportBuilder.build(
+                flows: flows, domains: domains, pipeline: nil, session: try store.sessionStats(id: chosen.id),
+                options: options)
         default:
             return fail("give either a capture file or --db")
         }
@@ -773,6 +895,10 @@ let arguments = CommandLine.arguments
 
 if arguments.count >= 2 && arguments[1] == "capture" {
     exit(await runCapture(Array(arguments.dropFirst(2))))
+}
+
+if arguments.count >= 2 && arguments[1] == "metrics" {
+    exit(runMetrics(Array(arguments.dropFirst(2))))
 }
 
 if arguments.count >= 2 && arguments[1] == "report" {

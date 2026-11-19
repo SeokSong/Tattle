@@ -13,7 +13,7 @@ The `Report` target turns flows and domains into a `QualityReport`: totals, reco
 
 ## API
 
-- `ReportBuilder.build(flows:domains:pipeline:options:) -> QualityReport`
+- `ReportBuilder.build(flows:domains:pipeline:session:options:) -> QualityReport` (`session: SessionStats?`, default nil)
 - `QualityReport.json()` returns the sorted, pretty-printed JSON
 - `PipelineSnapshot`: `packets, decoded, skipped, malformed, droppedNoPort`. Pass nil when reporting a stored session
 - `ReportOptions`: `detail` (default false), `watchVersion` (default `dev`)
@@ -109,6 +109,13 @@ Each check prints `name`, `expected`, `actual`, `ok`. `reconciliation.ok` is the
 | `interfaceBytes` | `totals.ipBytes` | sum of `byInterface` | No |
 | `hostnameReasons` | 443 app bytes | `sni` + `dns` + all unnamed reason bytes | No |
 | `flowTimes` | flow count | flows with `lastSeen >= firstSeen` | No |
+
+## Session section (6.2)
+
+- Present only when the report was given `SessionStats`; without them the key is absent. `WatchCapture report <file>` builds them from the replay; `--db` reads the stored row (an old session shows zeros)
+- `session { gapCount, maxGapSeconds, saveFailures, unsavedFlows, kernelDropped }`. `kernelDropped` is absent in JSON when unknown (tcpdump was killed before printing its summary) and prints as `unknown` in the text. A nonzero count adds a `WARNING` line to the text report. Numbers only
+- A gap is a silence over 5 s in packet time (see [PIPELINE.md](PIPELINE.md#gaps-62)). A locked phone makes a gap; the session is not ended
+- The text report prints a `Session` block with the same numbers. It is not a reconciliation check and not in band files
 
 ## Detail mode
 

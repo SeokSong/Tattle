@@ -1,6 +1,6 @@
 # Testing
 
-**Status:** 340 tests, green with and without fixtures (2026-11-18). Four scripted captures are the fixture set; the baseline is frozen in `Tests/Expected/`.
+**Status:** 389 tests, green with and without fixtures (2026-11-18; Milestone 2 done). By target: Attribution 57, Capture 79, Domains 43, Flows 28, PacketDecoder 21, Pipeline 23, Report 76, Storage 20, WatchApp 19, WatchCapture (includes the PCAPNG reader) 23. Four scripted captures are the fixture set; the baseline is frozen in `Tests/Expected/`.
 
 ## Approach
 
@@ -30,6 +30,41 @@ Scripted captures, recorded 2026-11-18 with `capture --diagnostic` (scenario scr
 - Scenario windows follow what was actually done, not the script: the timing was not exact. Each scenario file says why in `notes`
 - The five Milestone 1 captures (`watch-test`, `watch-safari-test`, `watch-youtube-test`, `multi-app-test`, `watch-clean-test`) were lost from the Desktop on 2026-11-16 and are not part of the set
 - They contain real traffic metadata: keep them out of git
+
+## Long run: metrics log (plan 6.6)
+
+One optional 30-minute capture shows whether memory is flat. Needs the phone; the owner runs it.
+
+- Capture: `sudo .build/release/WatchCapture capture --device "<name>" --db ~/dev/watch-fixtures/db/s5-long.sqlite --metrics ~/dev/watch-fixtures/reports/s5-metrics.csv --duration 1800` (no `--diagnostic`: raw packets are not needed). Use the phone normally: browse, a video for 10 minutes, then locked for 10 minutes. Note the time of each step
+- Read: `.build/release/WatchCapture metrics ~/dev/watch-fixtures/reports/s5-metrics.csv`
+
+| Output line | Meaning |
+|---|---|
+| Duration, rows | length of the run; one row per 2 s, so about 900 for 30 minutes |
+| Resident memory | min, max and last process resident size (mach `resident_size`) |
+| Slope | least-squares fit of resident bytes against time over the last two thirds of the run, so the warm-up is left out; bytes per minute and MB per hour |
+| Peak open flows, Gaps | most flows open at once; gap count and longest gap (the locked phone shows as a gap) |
+| Verdict | "memory flat" when the slope is under 1 MB per 10 minutes (100,000 bytes per minute). That threshold is ours; the plan gives none. Information, not a test |
+
+- Resident size includes freed pages the allocator keeps, so a small upward drift early on is normal; judge the slope, not the max
+- Also check the cap columns: all zero means no cap was hit. A non-zero one explains why memory stopped growing
+- Record the slope, peak open flows and caps reached here, and in the README results. Until then the result is "not measured"
+- Tests: `MetricsLogTests` (csv format and cadence with a fake clock, resident size is positive, file safety, slope on synthetic flat and growing runs)
+
+
+### Result (2026-11-18, 30 minutes on the phone)
+
+| Measure | Value |
+|---|---|
+| Duration | 1,800 s, ended by `--duration` (session end reason `captureStopped`) |
+| Packets / connections | 551,475 / 1,286, all saved, 0 save failures |
+| Kernel drops | 0 |
+| Resident memory | min 8.5 MB, max 13.3 MB; slope over the last two thirds 602 bytes/min (0.03 MB/hour): flat |
+| Peak open flows | 241 (cap 20,000) |
+| Gaps | 1, longest 5.6 s (phone locked) |
+| Metrics rows | 873 of an expected 900. Cause: timer drift, not lost samples. The old writer waited 2 s after each actual write, and the wake-up was about 1.03 s late each tick, so the period was 2.06 s (1,800 / 873). Fixed with fixed time slots (see [CAPTURE.md](CAPTURE.md)); tests `writerKeepsItsSlotsWhenWakeUpsAreLate` and `writerCountsASlotMissedCompletely`. The memory result is unaffected |
+
+Use: browsing, social apps, about 10 minutes of video, then the phone locked; the phone was used again near the end
 
 ## Synthetic corpus
 

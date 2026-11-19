@@ -58,6 +58,16 @@ public struct PipelineStats: Sendable {
 - Caps (6.1): see [Caps and counters](#caps-and-counters). `retainFlows` is used by the app (live list) and the CLI, so it is capped; `retainDomains` is CLI and tests only and is capped too
 - `PipelineStats.handshakeGaveUp: [String: Int]` counts handshake buffers that ended without a name, by `GaveUpReason` raw value (see [DOMAINS.md](DOMAINS.md)). Numbers only. `WatchCapture report` prints it as `Handshake gave up: ...`; a QUIC flow's Initial is decrypted at most 3 times
 
+### Gaps (6.2)
+
+- Every packet read counts for gap time, decoded or not (an ARP frame or an unknown packet closes a silence)
+- A gap is a silence strictly greater than 5 s between a packet and the latest earlier packet, in packet time. Exactly 5.000 s is not a gap
+- A backwards timestamp is ignored: it is not a gap and does not become the previous time
+- The check is one integer compare in interface ticks per packet (no division, no allocation); the length in seconds is only computed when a gap is found
+- `PipelineStats.gapCount` and `PipelineStats.maxGap` (seconds). A locked phone is a gap, not an interruption: the session keeps running until `stop`
+- `stop` writes `SessionStats(gapCount, maxGapMs, saveFailures, unsavedFlows)` once with `store.recordSessionStats`, after the final flush and `endSession` so their failures are counted. `kernelDropped` is set with `setKernelDropped` after tcpdump has ended (6.4); it stays nil when unknown. A session that never began (nothing was ever saved) has no row to update
+- Not covered: wall-clock stalls where the capture stops delivering packets (6.3)
+
 ### Caps and counters
 
 Every structure that grows with traffic has a cap, an eviction rule and a counter. Numbers come from the owner's own sessions (a few thousand flows an hour), so the caps sit far above normal use. On the five real captures every drop and eviction counter is 0 (largest peaks: 210 open flows, 135 pending domains, 198 handshake entries).

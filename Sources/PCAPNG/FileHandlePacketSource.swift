@@ -11,12 +11,19 @@ public final class FileHandlePacketSource: PacketSource, @unchecked Sendable {
     private let lock = NSLock()
     private var streamEnd: PCAPNGEnd?
     private var finished = false
+    private var lastRead: Date
+    private let clock: @Sendable () -> Date
     private let cancelFlag = CancelFlag()
 
     /// tee receives every raw byte read (diagnostic capture) and is closed at the end.
     /// tolerateTruncation: a last block cut short by the writer being stopped ends the stream cleanly
     /// instead of throwing
-    public init(handle: FileHandle, tee: FileHandle? = nil, tolerateTruncation: Bool = false) {
+    public init(
+        handle: FileHandle, tee: FileHandle? = nil, tolerateTruncation: Bool = false,
+        clock: @escaping @Sendable () -> Date = { Date() }
+    ) {
+        self.clock = clock
+        self.lastRead = clock()
         self.handle = handle
         self.tee = tee
         self.tolerateTruncation = tolerateTruncation
@@ -27,6 +34,13 @@ public final class FileHandlePacketSource: PacketSource, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return streamEnd
+    }
+
+    /// when bytes were last read (the time of init until the first read), for the stall watchdog
+    public var lastByteAt: Date {
+        lock.lock()
+        defer { lock.unlock() }
+        return lastRead
     }
 
     /// true once the stream has ended (EOF, error or close())
@@ -63,23 +77,28 @@ public final class FileHandlePacketSource: PacketSource, @unchecked Sendable {
         let fd = handle.fileDescriptor
         var parser = PCAPNGStreamParser()
         var buffer = [UInt8](repeating: 0, count: Self.chunkSize)
+        // reads never block: macOS poll() does not report end of file on a FIFO once its last writer has
+        // closed (it returns 0 forever, see md/CAPTURE.md), so the loop reads after every wake-up, ready or
+        // not. a quiet writer gives EAGAIN, a gone one gives 0
+        let flags = fcntl(fd, F_GETFL)
+        if flags >= 0 { _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK) }
 
         do {
             while !cancelled.isSet {
                 // wake regularly so close() works while the writer is silent
                 var pfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
                 let ready = poll(&pfd, 1, 100)
-                if ready == 0 { continue }
-                if ready < 0 {
-                    if errno == EINTR { continue }
-                    break
-                }
+                if ready < 0 && errno != EINTR { break }
                 let n = buffer.withUnsafeMutableBytes { read(fd, $0.baseAddress, $0.count) }
                 if n < 0 {
-                    if errno == EINTR { continue }
+                    if errno == EINTR || errno == EAGAIN { continue }
                     break
                 }
                 if n == 0 { break }
+                let readAt = clock()
+                lock.lock()
+                lastRead = readAt
+                lock.unlock()
                 if let tee { try? tee.write(contentsOf: buffer[0..<n]) }
                 for event in try parser.append(buffer[0..<n]) { continuation.yield(event) }
             }

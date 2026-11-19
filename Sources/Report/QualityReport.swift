@@ -166,6 +166,16 @@ public struct QualityReport: Codable, Sendable, Equatable {
         }
     }
 
+    /// session statistics (6.2): numbers only. present when the report was given `SessionStats`
+    public struct Session: Codable, Sendable, Equatable {
+        public var gapCount: Int
+        public var maxGapSeconds: Double
+        public var saveFailures: Int
+        public var unsavedFlows: Int
+        /// nil (key absent) when unknown
+        public var kernelDropped: Int?
+    }
+
     public var reportVersion: Int
     public var watchVersion: String
     public var totals: Totals
@@ -176,6 +186,8 @@ public struct QualityReport: Codable, Sendable, Equatable {
     public var detail: Detail?
     /// added in 4.2; reportVersion stays 1 because every earlier key is unchanged
     public var categories: Categories = .empty
+    /// added in 6.2; absent when no session statistics were given
+    public var session: Session?
 
     /// sorted keys, pretty printed: the same report always gives the same bytes
     public func json() throws -> String {

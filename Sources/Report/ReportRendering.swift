@@ -51,6 +51,16 @@ public enum ReportRendering {
         for (cat, bytes) in report.categories.movedOutOfAppBytes.sorted(by: { $0.key < $1.key }) {
             lines.append("movedOutOfAppBytes \(cat)  \(bytes) bytes")
         }
+        if let s = report.session {
+            lines.append("")
+            lines.append("Session")
+            lines.append("gaps \(s.gapCount)  longest \(String(format: "%.1f", s.maxGapSeconds)) s")
+            lines.append("saveFailures \(s.saveFailures)  unsavedFlows \(s.unsavedFlows)  kernelDropped \(s.kernelDropped.map(String.init) ?? "unknown")")
+            if let dropped = s.kernelDropped, dropped > 0 {
+                lines.append("WARNING: the Mac dropped \(dropped) packets while capturing, so these totals are too low")
+            }
+            lines.append("  (a gap is a silence over 5 s in packet time, such as a locked phone; the session continues)")
+        }
         lines.append("")
         lines.append("Checks: \(report.reconciliation.ok ? "all passed" : "FAILED")")
         for c in report.reconciliation.checks {

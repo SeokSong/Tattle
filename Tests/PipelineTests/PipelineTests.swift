@@ -510,3 +510,91 @@ private func dnsAnswers(_ count: Int) -> [UInt8] {
     #expect(s.droppedClosedFlows == 0)
     #expect(s.peakHandshakeStates <= HandshakeBuffer.defaultMaxStates)
 }
+
+// MARK: gaps
+
+/// frames written in the given order (capture() sorts), one udp packet each; `skipped` times carry an arp frame
+private func timed(_ times: [Double], skipped: Set<Double> = []) -> [UInt8] {
+    var bytes = PCAPNGBuilder.sectionHeader() + PCAPNGBuilder.interface("en0")
+    bytes += PCAPNGBuilder.process(pid: 7, name: "TikTok")
+    for at in times {
+        let f = skipped.contains(at)
+            ? [UInt8](repeating: 0, count: 12) + [8, 6] + [UInt8](repeating: 0, count: 28)
+            : frame(Pkt(at: at, proto: 17, remote: [1, 1, 1, 1], remotePort: 9999, payload: [1]))
+        bytes += PCAPNGBuilder.packet(
+            interface: 0, microseconds: UInt64((Double(base) + at) * 1_000_000), process: 0, flags: 2, payload: f)
+    }
+    return bytes
+}
+
+private func gaps(_ times: [Double], skipped: Set<Double> = []) async throws -> PipelineStats {
+    let pipeline = CapturePipeline(store: nil, session: session())
+    _ = try await pipeline.run(DataPacketSource(timed(times, skipped: skipped)))
+    return await pipeline.stats
+}
+
+private final class StatsStore: FlowStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var recorded: [SessionStats] = []
+    private(set) var endSessionCalls = 0
+    func beginSession(_ s: CaptureSession) throws {}
+    func save(flows: [Flow], domains: [DomainObservation], session: UUID) throws {}
+    func endSession(id: UUID, at: Date, reason: String) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        endSessionCalls += 1
+    }
+    func recordSessionStats(id: UUID, _ stats: SessionStats) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        recorded.append(stats)
+    }
+}
+
+@Test func gapIsStrictlyGreaterThanFive() async throws {
+    let over = try await gaps([0, 5, 10.001])
+    #expect(over.gapCount == 1)
+    #expect(abs(over.maxGap - 5.001) < 0.0001)
+    let exact = try await gaps([0, 5, 10])
+    #expect(exact.gapCount == 0 && exact.maxGap == 0)
+}
+
+@Test func backwardsTimestampIsNotAGap() async throws {
+    // 0 -> 10 is a gap; 4 is behind and ignored (it does not become the previous time); 10 -> 12 is 2 s
+    let s = try await gaps([0, 10, 4, 12])
+    #expect(s.gapCount == 1)
+    #expect(abs(s.maxGap - 10) < 0.0001)
+    // a backwards packet must not hide a real gap that follows it: 10 -> 4 -> 16 is 6 s from 10
+    #expect(try await gaps([0, 10, 4, 16]).gapCount == 2)
+}
+
+@Test func unknownPacketsCountForGapTime() async throws {
+    // the arp frame at 7 is skipped by the decoder but closes the 0 -> 7 gap, leaving 7 -> 9 quiet
+    let s = try await gaps([0, 7, 9], skipped: [7])
+    #expect(s.skipped == 1)
+    #expect(s.gapCount == 1)
+    #expect(abs(s.maxGap - 7) < 0.0001)
+}
+
+@Test func statsPersistedAtStop() async throws {
+    let store = StatsStore()
+    let pipeline = CapturePipeline(store: store, session: session())
+    _ = try await pipeline.run(DataPacketSource(timed([0, 10, 12, 30])))
+    #expect(store.recorded.isEmpty)
+    await pipeline.stop(reason: .captureStopped)
+    await pipeline.stop(reason: .captureStopped)
+    #expect(store.recorded == [SessionStats(gapCount: 2, maxGapMs: 18_000, kernelDropped: nil, saveFailures: 0, unsavedFlows: 0)])
+}
+
+@Test func lockedPhoneDoesNotEndSession() async throws {
+    let store = StatsStore()
+    let pipeline = CapturePipeline(store: store, session: session())
+    _ = try await pipeline.run(DataPacketSource(timed([0, 1, 2, 3, 40, 43])))
+    let s = await pipeline.stats
+    #expect(s.packets == 6 && s.gapCount == 1 && abs(s.maxGap - 37) < 0.0001)
+    #expect(s.openFlows == 1)
+    #expect(store.endSessionCalls == 0 && store.recorded.isEmpty)
+    await pipeline.stop(reason: .captureStopped)
+    #expect(store.endSessionCalls == 1)
+    #expect(store.recorded.first?.gapCount == 1 && store.recorded.first?.maxGapMs == 37_000)
+}

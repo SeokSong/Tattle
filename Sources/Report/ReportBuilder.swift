@@ -2,12 +2,13 @@ import Attribution
 import Domains
 import Flows
 import Foundation
+import Storage
 
 // pure logic: no clock, no files, no processes. results do not depend on input order.
 public enum ReportBuilder {
     public static func build(
         flows: [Flow], domains: [DomainObservation], pipeline: PipelineSnapshot?,
-        options: ReportOptions = ReportOptions()
+        session: SessionStats? = nil, options: ReportOptions = ReportOptions()
     ) -> QualityReport {
         func bytes(_ f: Flow) -> Int { f.ipBytesIn + f.ipBytesOut }
         func packets(_ f: Flow) -> Int { f.packetsIn + f.packetsOut }
@@ -185,7 +186,12 @@ public enum ReportBuilder {
                 dnsPrecision: Ratio(numerator: precisionAgree, denominator: precisionDenominator),
                 sameAddressPrecision: Ratio(numerator: sameAgree, denominator: sameDenominator)),
             reconciliation: .init(ok: checks.allSatisfy(\.ok), checks: checks),
-            detail: detail, categories: categories)
+            detail: detail, categories: categories,
+            session: session.map { s in
+                QualityReport.Session(
+                    gapCount: s.gapCount, maxGapSeconds: Double(s.maxGapMs) / 1000, saveFailures: s.saveFailures,
+                    unsavedFlows: s.unsavedFlows, kernelDropped: s.kernelDropped)
+            })
     }
 
     private static func processName(_ a: AppAttribution) -> String {

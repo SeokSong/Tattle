@@ -92,7 +92,7 @@ IDs are used across the design docs.
 
 ## Out of scope for now
 
-- iPhone app and dashboard, App Privacy Report import
+- iPhone app and dashboard (the App Privacy Report import is a committed Milestone 3 item, see below)
 - Windows and Linux
 - Company and tracker classification, IP geolocation, destination map
 - Website-level filtering (V3)
@@ -110,9 +110,9 @@ IDs are used across the design docs.
 | Attribution | Turns process evidence into an app identity, or leaves it unknown | Done (9 tests) | [ATTRIBUTION.md](ATTRIBUTION.md) |
 | Storage | Local database, retention, delete | Done, SQLite3 (9 tests) | [STORAGE.md](STORAGE.md) |
 | Pipeline | Wires it all; `flows` and `bench` CLI | Done (6 tests, ~620k packets/s) | [PIPELINE.md](PIPELINE.md) |
-| App | Mac screens: connect, access, live capture, settings | Mockup done | [APP.md](APP.md) |
+| App | Mac screens: connect, access, live capture, settings | Prototype done and live-tested | [APP.md](APP.md) |
 | Capture | Runs rvictl + tcpdump, streams into the pipeline | Done, live-tested (`capture` command, sudo mode) | [CAPTURE.md](CAPTURE.md) |
-| Testing | Fixture captures, count checks, benchmarks | 111 tests, 5 fixture captures, live run | [TESTING.md](TESTING.md) |
+| Testing | Fixture captures, count checks, benchmarks | 389 tests, six scripted captures, live runs | [TESTING.md](TESTING.md) |
 
 ## What we have proven
 
@@ -135,12 +135,12 @@ IDs are used across the design docs.
 
 - Every app exposes process metadata (about 1% of packets have none)
 - Every process can be mapped to an installed app
-- RVI is reliable for long sessions
+- RVI is reliable for sessions longer than 30 minutes (one 30-minute run was clean; a cable pull is detected in 2 to 3 s)
 - VPN or tunnel traffic is not counted twice
 
 ## Current status
 
-Updated 2026-11-17.
+Updated 2026-11-18.
 
 ### Milestone 1: capture and analyse on the Mac (done)
 
@@ -156,21 +156,33 @@ Updated 2026-11-17.
 | Pipeline + CLI (`read`, `flows`, `bench`, `capture`) | Done, ~620k packets/s |
 | Mac app prototype (Connect, Live, Sessions, Settings) | Done, live-tested |
 
-### Milestone 2: make the Mac results trustworthy (next)
+### Milestone 2: make the Mac results trustworthy (done 2026-11-18)
 
-| Item | Why | Needs the phone? |
-|---|---|---|
-| Restore fixture captures to `~/dev/watch-fixtures` | Regression checks currently skip | Yes, if the originals are lost |
-| Classify Mac–phone link traffic (`heartbeatd`, `lockdownd`, `169.254.x`) | Keeps the USB plumbing out of app totals | No |
-| Handle 16-character process names | `appstorecomponen` etc. must map to their app | No |
-| Fill hostnames for connections older than the capture from earlier DNS, labelled as inferred | Biggest flows often have no name | No |
-| Explain QUIC flows with no handshake | Two Google flows had no SNI | Yes, one `--diagnostic` capture |
-| "On behalf of" label fix, `--device <name>` filter | Small correctness fixes | No |
-| Quality report (`Report` target, `md/REPORT.md`): totals, reconciliation checks, M1-comparable metrics | Every later change must show up as a number | No |
-| 30-minute stability capture | RVI long-session reliability unproven | Yes |
-| VPN double counting | Untested; Private Relay is not a tunnel | Yes, needs a VPN |
+| Item | Status |
+|---|---|
+| Fixture captures restored to `~/dev/watch-fixtures` (six scripted captures plus scenario files) | Done |
+| Classify Mac–phone link traffic (`heartbeatd`, `lockdownd`, `169.254.x`) | Done: six categories, app-tagged flows never moved |
+| Handle 16-character process names | Done |
+| Hostnames for connections older than the capture | Done as reasons and labelled hints (`startedBeforeCapture`, DNS and same-address hints outside the headline). Names for such flows cannot be recovered from the traffic (98.9% of app HTTPS bytes in the midstream capture) |
+| Explain QUIC flows with no handshake | Done: they were connections that started before recording |
+| "Lookups for" label fix, `--device <name>` filter | Done |
+| Quality report (`Report` target, [REPORT.md](REPORT.md)) with committed bands and scenarios | Done |
+| Failure handling: caps, gap events, stall watchdog, drop summary, stale run cleanup | Done; cable pull and lock validated on a phone (CLI). A FIFO end-of-file bug in the app path was found and fixed in 7.1 |
+| 30-minute stability capture | Done: memory flat, 0 packets dropped |
+| Results table | See [milestone 2 results in the README](../README.md#milestone-2-results) |
 
-### Milestone 3: user-facing product
+Deferred from Milestone 2:
+
+| Item | Reason |
+|---|---|
+| VPN double-counting rule and real-VPN validation | Needs a VPN capture |
+| Retransmission counting | Not needed for any Milestone 2 metric |
+| Hostnames from earlier sessions' DNS (`dnsEarlier`) | Highest chance of wrong names; needs the `dnsPrecision` result, which was poor on shared servers |
+| 2-hour capture and simulated-hour soak | Caps and the churn test bound memory; the 30-minute run was flat |
+| Cross-session "same app" rows | No screen shows several sessions together |
+| Automatic reconnect after link loss | Needs more real failure evidence |
+
+### Milestone 3: user-facing product (next)
 
 | Item | Notes |
 |---|---|

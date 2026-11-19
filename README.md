@@ -74,11 +74,15 @@ These are deliberate limits, or limits of the platform. They are not bugs.
 
 | What | Where | Kept | Removed by "Delete all" |
 |---|---|---|---|
-| Sessions, flows, per-app tallies, DNS answers, server names | `watch.sqlite` (0600, in a 0700 folder) | 7 days after a session ends | Yes, and the file is vacuumed so no deleted names remain |
+| Sessions, flows, per-app tallies, DNS answers, server names, per-session gap and save counts (numbers only) | `watch.sqlite` and its `-wal` and `-shm` files (0600, in a 0700 folder) | 7 days after a session ends | Yes, and the file is vacuumed so no deleted names remain |
 | Salted device hash, device name | Same database | Same as sessions | Sessions yes; the install salt is kept so that device hashes stay stable |
-| Raw-packet diagnostic files (opt-in) | `diagnostics` folder next to the database | 24 hours | Yes |
-| Capture script log and run folder | The root script's run folder | Until the next run or reboot | No; no packets or hostnames in it |
+| Raw-packet diagnostic files (opt-in) | App: `diagnostics` folder next to the database. Command line: the file you name with `--diagnostic` | App: 24 hours. Command line: user-managed | App files yes; command-line files no |
+| Retention setting (a number of days) | The app's preferences (UserDefaults) | Until changed | No |
+| Short-lived temporary files: device list from `devicectl` (holds the device name and id), output of `rvictl` and `ifconfig` | The per-user temporary folder (0700; the tool-output file is also 0600) | Deleted when the command finishes; a crash can leave one until the system clears the temporary folder | No |
+| Band files (`report --write-bands`): counts and ratios per test capture, numbers only | The file you name | User-managed | No |
+| Capture script log and run folder | The root script's run folder | Removed by `stop()`; a directory a crashed app left is stopped and removed at the next launch. The script log moves to `logs/` (newest 10 kept) | No; no packets or hostnames in it |
 | Quality report JSON | Printed by `WatchCapture report`; where the user saves it | User-managed | No |
+| Metrics file (opt-in `--metrics` on the command line): packet and flow counts, cap counters, gap counts, memory size; numbers only | The file you name, created new with mode 0600 | User-managed | No |
 | Fixture captures (developers only) | `~/dev/watch-fixtures` | User-managed | No |
 
 Full list: [md/STORAGE.md](md/STORAGE.md#data-inventory).
@@ -88,9 +92,28 @@ Full list: [md/STORAGE.md](md/STORAGE.md#data-inventory).
 | Check | Result |
 |---|---|
 | Our PCAPNG reader vs tcpdump | Same packet and per-process counts on all test captures |
-| Throughput (full pipeline, release build) | About 620,000 packets/s. A busy phone produces about 1,500 packets/s |
+| Throughput (full pipeline, release build) | About 610,000 to 635,000 packets/s (Milestone 1: about 620,000 to 660,000 on the same machine, within 10%). A busy phone produces about 1,500 packets/s |
 | Live captures on a phone | Streams, attributes and stops cleanly. In one 3-minute run: 26,916 packets, 0 malformed |
-| Tests | 286 (Swift Testing). They use hand-built captures, fake `rvictl`/`tcpdump` scripts and real fixture captures kept outside the repo |
+| 30-minute capture of normal use (browsing, video, phone locked) | 551,475 packets, 1,286 connections, 0 packets dropped. Memory stayed between 8.5 and 13.3 MB and was flat over the last 20 minutes (about 0.03 MB per hour). Stopped cleanly at 30 minutes |
+| Tests | 389 (Swift Testing). They use hand-built captures, fake `rvictl`/`tcpdump` scripts and real fixture captures kept outside the repo |
+
+### Milestone 2 results
+
+Measured 2026-11-18 on five scripted captures, a 30-minute run and a real cable pull. Numbers only.
+
+| Measure | Milestone 1 | Milestone 2 | How |
+|---|---|---|---|
+| Every byte in a category, counts reconcile | not checked | all checks pass on 6 captures and the synthetic corpus | `report` exit code |
+| Bytes with no process tag | 0.02% to 1.2% | unchanged (0.02% to 1.2%); never above the baseline by 0.5 points | band check |
+| Idle phone: share of bytes that is USB link, local network or iOS system | no categories | 73.5% (the goal of 95% was not met: the idle capture was not quiet) | idle capture |
+| Expected apps wrongly counted as USB link | not checked | 0 of 4 captures | scenario score |
+| HTTPS bytes with a hostname read from the handshake | 99.1% to 100% | 99.7% to 100% on fresh-start captures; 1.1% on a capture started during playback (reason shown for all the rest) | report |
+| DNS names that match the connection's own name | not measured | 94% (idle), 7% (two apps), 99.9% (video): shown as hints only | `dnsPrecision` |
+| Memory over 30 minutes | not measured | 8.5 to 13.3 MB, flat (0.03 MB per hour), 241 open connections at most, 0 packets dropped | `--metrics` |
+| Cable pulled | session left open | noticed in 2 to 3 s, session saved as interrupted, 164 of 164 connections kept | real phone |
+| Throughput | 620,000 packets/s | 610,000 to 634,000 packets/s (3.5% to 6.2% below the Milestone 1 build) | `bench` |
+
+Not done in Milestone 2: VPN double-counting rule (needs a VPN capture), TCP retransmission counting, naming connections from earlier sessions' DNS, a 2-hour soak, automatic reconnect.
 
 ### Baseline for Milestone 2
 
@@ -159,4 +182,4 @@ Design notes for each part are in [md/](md/). Start with [OVERVIEW.md](md/OVERVI
 
 ## Status
 
-Capture and analysis on the Mac work end to end. The USB link's own traffic is now kept out of the phone total and shown separately. Next: fill in hostnames for connections that started before the capture, run a long-session stability test, and later add company/tracker classification and a destination map. See the roadmap in [OVERVIEW.md](md/OVERVIEW.md#current-status).
+Milestone 2 is done: capture and analysis on the Mac work end to end, every byte is put in a stated category, hostnames carry their source, and a quality report with committed bands catches regressions. Next (Milestone 3): company and tracker classification, a destination map, an App Privacy Report import (the phone's own 7-day log, shown next to Mac captures), and a signed helper. See the roadmap in [OVERVIEW.md](md/OVERVIEW.md#current-status).

@@ -158,7 +158,7 @@ Detail and field types: [FLOWS.md](FLOWS.md), [DOMAINS.md](DOMAINS.md), [STORAGE
 
 | Failure | Behaviour |
 |---|---|
-| Cable unplugged mid-capture | tcpdump ends or stalls. Close open flows, end the session as "interrupted", stop RVI |
+| Cable unplugged mid-capture | Measured on a phone: tcpdump exits in 2 to 3 s with "The interface disappeared". Close open flows, end the session as "interrupted" with the link-lost message, stop RVI. A stall with no exit is caught by the 15 s watchdog and an `ifconfig` check. The app reads tcpdump through a FIFO, whose end of file must be read explicitly (see [CAPTURE.md](CAPTURE.md)) |
 | tcpdump exits unexpectedly | Same as above, and show its exit code |
 | Watch crashes during capture | On next launch: stop any RVI device Watch started, close the unfinished session as "interrupted" |
 | Parse error mid-stream | Stop the capture, keep what was saved, report the byte offset. Never skip silently (F11) |

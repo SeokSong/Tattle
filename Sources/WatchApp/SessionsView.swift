@@ -29,6 +29,13 @@ struct SessionsView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 20) {
                             Text("Phone traffic: \(formatBytes(detail.grouping.phoneBytes))").font(.headline)
+                            if let gaps = gapText(count: detail.gapCount, maxGapMs: detail.maxGapMs) {
+                                Text(gaps).font(.callout).foregroundStyle(.secondary)
+                            }
+                            if let dropped = detail.kernelDropped {
+                                Text(kernelDroppedText(dropped) ?? "Packets dropped by the Mac: 0")
+                                    .font(.callout).foregroundStyle(dropped > 0 ? .red : .secondary)
+                            }
                             Text("Phone traffic by process").font(.headline)
                             ProcessTable(rows: detail.grouping.rows)
                             SetAsideSection(rows: detail.grouping.setAside)
