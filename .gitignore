@@ -17,3 +17,8 @@ DerivedData/
 
 # local curation output (tattle companies coverage --unmatched-out) holds real domain names
 *.unmatched-domains.txt
+
+# an App Privacy Report export lists the apps and domains of a real phone: never commit one
+*.ndjson
+*.jsonl
+App_Privacy_Report*

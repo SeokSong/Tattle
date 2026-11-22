@@ -15,6 +15,8 @@ let package = Package(
         .target(name: "PCAPNG"),
         // no dependencies, Foundation only; ships its datasets in Resources
         .target(name: "Companies", resources: [.copy("Resources")]),
+        // no dependencies, Foundation only; parses the App Privacy Report export and touches no storage
+        .target(name: "PrivacyReport"),
         .target(name: "PacketDecoder", dependencies: ["PCAPNG"]),
         .target(name: "Flows", dependencies: ["PacketDecoder"]),
         .target(name: "Domains", dependencies: ["PacketDecoder", "Flows"]),
@@ -43,6 +45,7 @@ let package = Package(
 
         .testTarget(name: "TattleCLITests", dependencies: ["PCAPNG", "TestSupport"]),
         .testTarget(name: "CompaniesTests", dependencies: ["Companies"]),
+        .testTarget(name: "PrivacyReportTests", dependencies: ["PrivacyReport", "TestSupport"]),
         .testTarget(name: "SummaryTests", dependencies: ["Summary", "Companies", "Attribution", "Flows", "Domains", "PacketDecoder", "TestSupport"]),
         .testTarget(name: "PacketDecoderTests", dependencies: ["PacketDecoder", "TestSupport"]),
         .testTarget(name: "FlowsTests", dependencies: ["Flows", "TestSupport"]),

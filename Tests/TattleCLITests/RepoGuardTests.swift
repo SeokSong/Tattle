@@ -73,6 +73,31 @@ private func makeTree(_ files: [String: String]) throws -> URL {
     #expect(violations.first?.hasPrefix("Sources/Elsewhere/manifest.json:") == true)
 }
 
+@Test func guardRejectsPrivacyReportFile() throws {
+    // keys are joined from pieces so this source file holds no line that looks like an export
+    let keys = ["bundleID", "domainOwner", "hits", "firstTimeStamp"].map { "\"\($0)\":1" }
+    let record = "{" + keys.joined(separator: ",") + "}"
+    let root = try makeTree([
+        "reports/App_Privacy_Report_v4_2026-01-01T00_00_00.ndjson": "x\n",
+        "notes/renamed.txt": record + "\n",
+        "notes/pretty.json": "[\n" + record + "\n]\n",
+        "data/lines.jsonl": "x\n",
+        "docs/fields.md": "the export has bundleID, domainOwner, firstTimeStamp and hits fields\n",
+        "docs/two.json": "{\"bundleID\":1,\"domainOwner\":2}\n",
+    ])
+    defer { try? FileManager.default.removeItem(at: root) }
+    let violations = RepoGuard.scan(root: root)
+    #expect(violations.count == 4)
+    for needle in [
+        "reports/App_Privacy_Report_v4_2026-01-01T00_00_00.ndjson", "notes/renamed.txt", "notes/pretty.json",
+        "data/lines.jsonl",
+    ] {
+        #expect(violations.contains { $0.hasPrefix(needle + ":") })
+    }
+    // the committed tree passes
+    #expect(RepoGuard.scan(root: try #require(RepoGuard.repoRoot())) == [])
+}
+
 @Test func repoIsClean() throws {
     let root = try #require(RepoGuard.repoRoot())
     #expect(RepoGuard.scan(root: root) == [])
