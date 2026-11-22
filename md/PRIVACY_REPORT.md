@@ -111,3 +111,7 @@ The `domain` field is not always a hostname. It can be an IPv4 or IPv6 address l
 - any text file (up to 8 MB) holding a line that is a JSON object with at least three of the export's quoted key names, so a renamed copy is caught too
 
 Docs may name the fields in backticks. `.gitignore` lists the same patterns, so a real export is not staged by accident. Tests build synthetic exports in memory with fake ids (`com.example.app1`) and reserved example domains; the local-only test on the real export (skipped without `TATTLE_FIXTURES`) checks counts and invariants and prints numbers only.
+
+## Import command
+
+`tattle import-report <file> [--db <path>]` runs the parser and stores the result in one transaction. It prints counts, dates and plain-language outcome lines only (already imported, older than a stored import, replaced older imports, newer format version, refused by the limits with the counts), never an app id, a domain or the file path.

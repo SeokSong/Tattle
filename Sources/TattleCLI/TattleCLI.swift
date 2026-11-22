@@ -1062,12 +1062,79 @@ func runCompanies(_ args: [String]) async -> Int32 {
     return 0
 }
 
+// MARK: - Import report
+
+let importReportUsage = """
+    usage: tattle import-report <file> [--db <path>]
+    """
+
+func runImportReport(_ args: [String]) -> Int32 {
+    func fail(_ message: String) -> Int32 {
+        FileHandle.standardError.write(Data((message + "\n" + importReportUsage + "\n").utf8))
+        return 2
+    }
+    var file: String?
+    var db: String?
+    var i = 0
+    while i < args.count {
+        if args[i] == "--db" {
+            i += 1
+            guard i < args.count else { return fail("--db needs a path") }
+            db = args[i]
+        } else if args[i].hasPrefix("--") {
+            return fail("unknown option")
+        } else if file == nil {
+            file = args[i]
+        } else {
+            return fail("give one file")
+        }
+        i += 1
+    }
+    guard let file else { return fail("give the report file") }
+
+    // under sudo, new database files must still belong to the invoking user
+    let sudoUser = FileOwnership.sudoUser(environment: ProcessInfo.processInfo.environment)
+    func resolved(_ path: String) -> String {
+        guard let sudoUser else { return (path as NSString).expandingTildeInPath }
+        return FileOwnership.expandTilde(path, home: sudoUser.home)
+    }
+    let dbPath = db.map(resolved) ?? Store.defaultPath().path
+    let newDirectories = FileOwnership.missingDirectories(of: dbPath)
+    var failedHandBack = 0
+    defer {
+        if let sudoUser {
+            failedHandBack = FileOwnership.giveBack(newDirectories + [dbPath, dbPath + "-wal", dbPath + "-shm"], to: sudoUser).count
+            if failedHandBack > 0 { print("Could not give \(failedHandBack) file(s) back to the user") }
+        }
+    }
+    let store: Store
+    do { store = try Store(path: URL(fileURLWithPath: dbPath)) } catch {
+        print("Unable to open database.")
+        return 1
+    }
+    do {
+        let summary = try ReportImporter.run(file: URL(fileURLWithPath: resolved(file)), store: store)
+        for line in summary.lines { print(line) }
+        switch summary.outcome {
+        case .stored, .duplicate: return 0
+        case .empty, .olderThanStored: return 1
+        }
+    } catch {
+        print("\(error)")
+        return 1
+    }
+}
+
 // MARK: - Main
 
 let arguments = CommandLine.arguments
 
 if arguments.count >= 2 && arguments[1] == "capture" {
     exit(await runCapture(Array(arguments.dropFirst(2))))
+}
+
+if arguments.count >= 2 && arguments[1] == "import-report" {
+    exit(runImportReport(Array(arguments.dropFirst(2))))
 }
 
 if arguments.count >= 2 && arguments[1] == "metrics" {
