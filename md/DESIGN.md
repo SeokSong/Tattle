@@ -28,6 +28,7 @@ Requirement IDs (F, I, N) are defined in [OVERVIEW.md](OVERVIEW.md#requirements)
 | Flows | [FLOWS.md](FLOWS.md) | Flow key, timeouts, process tally |
 | Domains | [DOMAINS.md](DOMAINS.md) | DNS answers, SNI, the handshake buffer |
 | Attribution | [ATTRIBUTION.md](ATTRIBUTION.md) | Process evidence to app identity |
+| Companies | [COMPANIES.md](COMPANIES.md) | Registrable domain from the Public Suffix List, bundled company data |
 | Storage | [STORAGE.md](STORAGE.md) | Database, schema, retention |
 | Pipeline | [PIPELINE.md](PIPELINE.md) | Wiring, flushing, the CLI |
 | App | [APP.md](APP.md) | Mac screens and capture controls |
@@ -121,6 +122,7 @@ Detail and field types: [FLOWS.md](FLOWS.md), [DOMAINS.md](DOMAINS.md), [STORAGE
 | Target | Depends on | Doc | Order |
 |---|---|---|---|
 | `PCAPNG` | — | [PCAPNG.md](PCAPNG.md) | 1 |
+| `Companies` | — (Foundation only; ships resources) | [COMPANIES.md](COMPANIES.md) | 1 |
 | `PacketDecoder` | PCAPNG | [DECODER.md](DECODER.md) | 2 |
 | `Flows` | PacketDecoder | [FLOWS.md](FLOWS.md) | 3 |
 | `Domains` | PacketDecoder, Flows | [DOMAINS.md](DOMAINS.md) | 4 |
