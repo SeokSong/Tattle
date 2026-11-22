@@ -47,6 +47,14 @@ private func makeTree(_ files: [String: String]) throws -> URL {
     #expect(RepoGuard.scan(root: root).isEmpty)
 }
 
+@Test func guardAllowsOnlyLabelledDatasetCommits() {
+    let hash = String(repeating: "ab12", count: 10)
+    #expect(!RepoGuard.hasDeviceIdentifier("// COMMIT: \(hash)"))
+    #expect(!RepoGuard.hasDeviceIdentifier("      \"commit\": \"\(hash)\","))
+    #expect(RepoGuard.hasDeviceIdentifier("note \(hash) unlabelled"))
+    #expect(RepoGuard.hasDeviceIdentifier("// commit of nothing \(hash)"))
+}
+
 @Test func repoIsClean() throws {
     let root = try #require(RepoGuard.repoRoot())
     #expect(RepoGuard.scan(root: root) == [])

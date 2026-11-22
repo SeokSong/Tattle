@@ -25,17 +25,21 @@ public enum RepoGuard {
         regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
-    // two documented exceptions, so docs can quote public values: a 40-hex value on a line
-    // that mentions a salt (the public quic initial salts), and the placeholder udid used
-    // as an example in the plan (built from pieces so this file stays clean)
+    // three documented exceptions, so docs and data can quote public values: a 40-hex value on a
+    // line that mentions a salt (the public quic initial salts), the placeholder udid used
+    // as an example in the plan (built from pieces so this file stays clean), and the git
+    // commit of a bundled dataset, only on a line that starts with its label ("// COMMIT:" in
+    // the public suffix list header, a "commit" key in Sources/Companies/Resources/manifest.json)
     static let placeholderUDID = "00008110" + "-" + "001A2B3C4D5E601E"
 
-    static func hasDeviceIdentifier(_ text: String) -> Bool {
+    public static func hasDeviceIdentifier(_ text: String) -> Bool {
         for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
             let line = String(line)
             let lower = line.lowercased()
             if matches(udid, line), !lower.contains(placeholderUDID.lowercased()) { return true }
-            if matches(hex40, line), !lower.contains("salt") { return true }
+            let trimmed = lower.trimmingCharacters(in: .whitespaces)
+            let isCommitLabel = trimmed.hasPrefix("// commit:") || trimmed.hasPrefix("\"commit\":")
+            if matches(hex40, line), !lower.contains("salt"), !isCommitLabel { return true }
         }
         return false
     }

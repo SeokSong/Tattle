@@ -13,6 +13,8 @@ let package = Package(
     ],
     targets: [
         .target(name: "PCAPNG"),
+        // no dependencies, Foundation only; ships its datasets in Resources
+        .target(name: "Companies", resources: [.copy("Resources")]),
         .target(name: "PacketDecoder", dependencies: ["PCAPNG"]),
         .target(name: "Flows", dependencies: ["PacketDecoder"]),
         .target(name: "Domains", dependencies: ["PacketDecoder", "Flows"]),
@@ -38,6 +40,7 @@ let package = Package(
         .target(name: "TestSupport", dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains"], path: "Tests/TestSupport"),
 
         .testTarget(name: "TattleCLITests", dependencies: ["PCAPNG", "TestSupport"]),
+        .testTarget(name: "CompaniesTests", dependencies: ["Companies"]),
         .testTarget(name: "PacketDecoderTests", dependencies: ["PacketDecoder", "TestSupport"]),
         .testTarget(name: "FlowsTests", dependencies: ["Flows", "TestSupport"]),
         .testTarget(name: "DomainsTests", dependencies: ["Domains", "TestSupport"]),
