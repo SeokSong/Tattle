@@ -30,10 +30,13 @@ public struct LabelCache: Sendable {
     }
 
     public mutating func label(for hostname: String) -> CompanyLabel {
-        if let hit = byHostname[hostname] { return hit }
+        // one entry per name: case and one trailing dot do not make a different host
+        var key = hostname.lowercased()
+        if key.hasSuffix(".") { key.removeLast() }
+        if let hit = byHostname[key] { return hit }
         classifications += 1
         let label = classify(hostname)
-        byHostname[hostname] = label
+        byHostname[key] = label
         return label
     }
 }

@@ -122,11 +122,44 @@ private func ratio(_ result: CoverageResult, _ key: String) -> CoverageRatio? { 
         #expect(r.denominator == 0 && r.value == nil)
     }
     #expect(!(try empty.report.json()).contains("\"value\""))
-    // no value, no band and no regression
+    // no value, no band
     let bands = CoverageBands.make(from: empty.report, scenario: "x", baselineLabel: "y")
     #expect(bands.metrics.isEmpty)
+}
+
+@Test func ratchetFailsWhenAFlooredMetricHasNoValue() throws {
     let full = CoverageBands.make(from: try build().report, scenario: "x", baselineLabel: "y")
-    #expect(CoverageRatchet.check(report: empty.report, bands: full).isEmpty)
+    let enforced = Set(full.metrics.filter { $0.value.floor != nil && !$0.value.informational }.keys)
+    #expect(enforced == ["companyCoverage", "companyCoverageOfNamedBytes", "domainCoverage"])
+    // a run that lost all its flows: every denominator is 0
+    let empty = try build(flows: [], observations: [])
+    let zero = CoverageRatchet.check(report: empty.report, bands: full)
+    #expect(Set(zero.map(\.metric)) == enforced)
+    #expect(zero.allSatisfy { $0.value == nil && $0.points > 0 && $0.description.contains("no value") })
+    // a metric missing from the report altogether
+    var missing = try build().report
+    missing.metrics["domainCoverage"] = nil
+    let found = CoverageRatchet.check(report: missing, bands: full)
+    #expect(found.map(\.metric) == ["domainCoverage"])
+    // informational bands and a floor of 0 are not enforced
+    var loose = full
+    loose.metrics["domainCoverage"] = CoverageBand(baseline: 0.5, floor: 0, ceiling: 1)
+    loose.metrics["companyCoverage"] = CoverageBand(baseline: 0.5, informational: true)
+    #expect(CoverageRatchet.check(report: empty.report, bands: loose).map(\.metric) == ["companyCoverageOfNamedBytes"])
+}
+
+@Test func floorIsTheExactBaseline() throws {
+    let report = try build().report
+    let bands = CoverageBands.make(from: report, scenario: "x", baselineLabel: "y")
+    for key in ["companyCoverage", "companyCoverageOfNamedBytes", "domainCoverage"] {
+        let value = try #require(report.metrics[key]?.value)
+        #expect(bands.metrics[key]?.floor == value, "\(key)")
+    }
+    // a value one byte lower fails, however small the loss
+    var worse = report
+    let r = try #require(worse.metrics["companyCoverage"])
+    worse.metrics["companyCoverage"] = CoverageRatio(numerator: r.numerator - 1, denominator: r.denominator)
+    #expect(CoverageRatchet.check(report: worse, bands: bands).map(\.metric) == ["companyCoverage"])
 }
 
 @Test func syntheticBandFileMatchesTheCorpus() throws {

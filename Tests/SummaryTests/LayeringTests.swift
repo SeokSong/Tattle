@@ -10,12 +10,45 @@ private func swiftFiles(in folder: String) -> [URL] {
     return walker.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
 }
 
-private func imports(_ file: URL, _ module: String) -> Bool {
-    guard let text = try? String(contentsOf: file, encoding: .utf8) else { return false }
-    return text.split(separator: "\n").contains {
-        let line = $0.trimmingCharacters(in: .whitespaces)
-        return line == "import " + module || line.hasPrefix("@testable import " + module)
+// every spelling of an import line: attributes (@testable, @_exported, @preconcurrency), an access level
+// (public, internal, package, private, fileprivate) and an import kind (import struct Foo.Bar)
+nonisolated(unsafe) private let importLine = try! NSRegularExpression(
+    pattern: #"^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|internal|package|private|fileprivate)\s+)?import\s+(?:(?:typealias|struct|class|enum|protocol|let|var|func)\s+)?([A-Za-z_][A-Za-z0-9_]*)"#)
+
+/// the top-level modules a source text imports
+func importedModules(in text: String) -> Set<String> {
+    var found = Set<String>()
+    for line in text.split(separator: "\n") {
+        let line = String(line)
+        let range = NSRange(line.startIndex..., in: line)
+        if let match = importLine.firstMatch(in: line, range: range), let r = Range(match.range(at: 1), in: line) {
+            found.insert(String(line[r]))
+        }
     }
+    return found
+}
+
+private func imports(_ file: URL) -> Set<String> {
+    guard let text = try? String(contentsOf: file, encoding: .utf8) else { return [] }
+    return importedModules(in: text)
+}
+
+@Test func importScannerSeesEveryForm() {
+    let text = """
+        import Foundation
+        @testable import A
+        public import B
+        internal import C
+        package import D
+        private import E
+        fileprivate import F
+        @_exported import G
+        @_exported public import H
+        import struct I.Thing
+        // import NotThis
+        let import_ = 1
+        """
+    #expect(importedModules(in: text) == ["Foundation", "A", "B", "C", "D", "E", "F", "G", "H", "I"])
 }
 
 @Test func layeringHolds() {
@@ -24,16 +57,25 @@ private func imports(_ file: URL, _ module: String) -> Bool {
         let files = swiftFiles(in: folder)
         #expect(!files.isEmpty, "no files found in \(folder)")
         for file in files {
-            #expect(!imports(file, "Companies"), "\(file.lastPathComponent) imports Companies")
-            #expect(!imports(file, "Summary"), "\(file.lastPathComponent) imports Summary")
+            let modules = imports(file)
+            #expect(!modules.contains("Companies"), "\(file.lastPathComponent) imports Companies")
+            #expect(!modules.contains("Summary"), "\(file.lastPathComponent) imports Summary")
         }
     }
     // the summary side reads flows and names, never storage or the capture path
     let summary = swiftFiles(in: "Summary")
     #expect(!summary.isEmpty)
     for file in summary {
+        let modules = imports(file)
         for module in ["Report", "Storage", "TattleApp", "Capture", "Pipeline"] {
-            #expect(!imports(file, module), "\(file.lastPathComponent) imports \(module)")
+            #expect(!modules.contains(module), "\(file.lastPathComponent) imports \(module)")
         }
+    }
+    // Companies has no dependencies: Foundation only
+    let companies = swiftFiles(in: "Companies")
+    #expect(!companies.isEmpty)
+    for file in companies {
+        let extra = imports(file).subtracting(["Foundation"])
+        #expect(extra.isEmpty, "\(file.lastPathComponent) imports more than Foundation")
     }
 }

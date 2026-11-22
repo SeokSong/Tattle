@@ -129,3 +129,20 @@ private func classifier(_ rows: String...) throws -> CompanyClassifier {
     #expect(matched > 0)
     #expect(perLookup < 200_000, "sanity floor 200 us per hostname")
 }
+
+@Test func hostedSiteIsNotIdentifiedButNamesPlatform() {
+    let c = CompanyClassifier()
+    for host in ["someone.pages.dev", "www.someone.pages.dev", "x.github.io"] {
+        let label = c.classify(hostname: host)
+        #expect(!label.isMatched, "\(host)")
+        #expect(label.company == nil && label.parent == nil && label.category == .unclassified)
+        #expect(label.source == .none)
+        #expect(label.hostingPlatform?.isEmpty == false)
+        #expect(label.unidentifiedText == "Website we couldn't identify")
+        #expect(label.hostedDetail == "Unknown website, hosted on \(label.hostingPlatform ?? "") (a service many sites use)")
+    }
+    // the platform is named only for names under its suffix
+    let plain = c.classify(hostname: "no-such-company-here.example")
+    #expect(plain.hostingPlatform == nil && plain.hostedDetail == nil && plain.unidentifiedText == "Not identified")
+    #expect(c.label(hostname: "someone.pages.dev", from: .curated).hostingPlatform != nil)
+}

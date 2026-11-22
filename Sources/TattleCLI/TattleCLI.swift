@@ -247,7 +247,7 @@ func hostnameText(_ flow: Flow, index: HostnameIndex) -> String {
 func companyText(_ label: FlowLabel?) -> String {
     guard let label else { return "" }
     let value = label.label
-    guard value.isMatched, let company = value.company else { return "[Not identified]" }
+    guard value.isMatched, let company = value.company else { return "[" + value.unidentifiedText + "]" }
     var text = company
     if value.category != .unclassified { text += ", " + value.category.label }
     return "[" + (label.isPossible ? "Possible: " : "") + text + "]"
@@ -950,8 +950,8 @@ let companiesUsage = """
                           write a band file from this run (keeps the notes of an existing file)
       --unmatched-out <file>
                           write the most frequent unidentified registrable domains to a local file
-                          (tab separated: flows, bytes, domain; mode 600). names go only to that file,
-                          never to the screen, and the file must never be committed
+                          (tab separated: flows, bytes, domain; mode 600, new file only). names go only to
+                          that file, never to the screen. refused inside a git work tree
     sources: the curated list only (the frozen baseline). exit codes: 0 ok, 3 below the floor, 1 error
     """
 
@@ -990,6 +990,10 @@ func runCompanies(_ args: [String]) async -> Int32 {
     }
     if writeBandsPath != nil && label == nil { return fail("--write-bands needs --label") }
     if writeBandsPath != nil && bandsPath != nil { return fail("use --bands or --write-bands, not both") }
+    // the file holds real domain names: never inside a git work tree, checked before any work is done
+    if let unmatchedOut, FileOwnership.gitWorkTreeRoot(containing: unmatchedOut) != nil {
+        return fail("--unmatched-out must point outside the git work tree: the file holds real domain names")
+    }
     do {
         var flows: [Flow] = [], domains: [DomainObservation] = []
         switch (file, db) {
@@ -1035,10 +1039,14 @@ func runCompanies(_ args: [String]) async -> Int32 {
             FileHandle.standardError.write(Data("wrote bands to \(writeBandsPath)\n".utf8))
         }
         if let unmatchedOut {
-            let url = URL(fileURLWithPath: unmatchedOut)
             let lines = result.unmatched.prefix(200).map { "\($0.flows)\t\($0.bytes)\t\($0.domain)" }
-            try Data((lines.joined(separator: "\n") + "\n").utf8).write(to: url, options: .atomic)
-            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+            // created 0600 from the first byte; refuses an existing file or a symlink
+            let handle: FileHandle
+            do { handle = try FileOwnership.openForWriting(path: unmatchedOut) } catch {
+                return fail("cannot create the --unmatched-out file (it must be a new file): \(error)")
+            }
+            try handle.write(contentsOf: Data((lines.joined(separator: "\n") + "\n").utf8))
+            try handle.close()
             FileHandle.standardError.write(Data("wrote \(lines.count) unidentified domains to a local file\n".utf8))
         }
         print(json ? try result.report.json() : result.report.text(), terminator: "")

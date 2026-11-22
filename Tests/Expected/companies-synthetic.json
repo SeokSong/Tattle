@@ -4,12 +4,12 @@
     "companyCoverage" : {
       "baseline" : 0.571,
       "ceiling" : 1,
-      "floor" : 0.571
+      "floor" : 0.5714285714285714
     },
     "companyCoverageOfNamedBytes" : {
       "baseline" : 0.762,
       "ceiling" : 1,
-      "floor" : 0.761
+      "floor" : 0.7619047619047619
     },
     "domainCoverage" : {
       "baseline" : 0.6,
@@ -24,7 +24,7 @@
   "notes" : [
     {
       "metric" : "companyCoverage",
-      "reason" : "frozen curated-only baseline: 8000 of 14000 bytes, worked out by hand in CompanyCorpus. later sources must not lower it; the floor is the baseline rounded down, with no tolerance, because coverage on a fixed corpus and list is exact"
+      "reason" : "frozen curated-only baseline: 8000 of 14000 bytes, worked out by hand in CompanyCorpus. later sources must not lower it; the floor is the exact baseline value, with no tolerance, because coverage on a fixed corpus and list is exact"
     }
   ],
   "scenario" : "companies-synthetic",

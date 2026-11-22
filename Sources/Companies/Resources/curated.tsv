@@ -14,7 +14,6 @@ googletagmanager.com	Google Tag Manager	Alphabet	analytics	documented analytics 
 app-measurement.com	Google Analytics for Firebase	Alphabet	analytics	documented analytics service
 crashlytics.com	Firebase Crashlytics	Alphabet	analytics	documented analytics service
 google.com	Google	Alphabet	cloudService	company's own domain
-googleapis.com	Google APIs	Alphabet	cloudService	company's own domain
 gstatic.com	Google	Alphabet	contentDelivery	company's own delivery network domain
 googleusercontent.com	Google	Alphabet	contentDelivery	company's own delivery network domain
 googlevideo.com	YouTube	Alphabet	contentDelivery	company's own delivery network domain
@@ -26,13 +25,9 @@ youtube.com	YouTube	Alphabet	onlineService	company's own domain
 youtu.be	YouTube	Alphabet	onlineService	company's own domain
 youtube-nocookie.com	YouTube	Alphabet	onlineService	company's own domain
 android.com	Android	Alphabet	onlineService	company's own domain
-appspot.com	Google App Engine	Alphabet	cloudService	company's own domain
-firebaseapp.com	Firebase	Alphabet	cloudService	company's own domain
 firebaseio.com	Firebase	Alphabet	cloudService	company's own domain
-web.app	Firebase Hosting	Alphabet	cloudService	company's own domain
 recaptcha.net	reCAPTCHA	Alphabet	cloudService	company's own domain
 blogger.com	Blogger	Alphabet	onlineService	company's own domain
-blogspot.com	Blogger	Alphabet	onlineService	company's own domain
 goo.gl	Google	Alphabet	cloudService	company's own domain
 facebook.com	Facebook	Meta Platforms	social	company's own domain
 fb.com	Facebook	Meta Platforms	social	company's own domain
@@ -52,7 +47,6 @@ media-amazon.com	Amazon	Amazon	contentDelivery	company's own delivery network do
 ssl-images-amazon.com	Amazon	Amazon	contentDelivery	company's own delivery network domain
 amazonaws.com	Amazon Web Services	Amazon	cloudService	company's own domain
 awsstatic.com	Amazon Web Services	Amazon	contentDelivery	company's own delivery network domain
-cloudfront.net	Amazon CloudFront	Amazon	contentDelivery	company's own delivery network domain
 primevideo.com	Prime Video	Amazon	onlineService	company's own domain
 aiv-cdn.net	Prime Video	Amazon	contentDelivery	company's own delivery network domain
 amazontrust.com	Amazon Trust Services	Amazon	cloudService	company's own domain
@@ -70,9 +64,6 @@ bing.com	Bing	Microsoft	onlineService	company's own domain
 windows.com	Windows	Microsoft	cloudService	company's own domain
 windows.net	Microsoft Azure	Microsoft	cloudService	company's own domain
 azure.com	Microsoft Azure	Microsoft	cloudService	company's own domain
-azurewebsites.net	Microsoft Azure	Microsoft	cloudService	company's own domain
-trafficmanager.net	Microsoft Azure	Microsoft	cloudService	company's own domain
-azureedge.net	Microsoft Azure CDN	Microsoft	contentDelivery	company's own delivery network domain
 msecnd.net	Microsoft Azure CDN	Microsoft	contentDelivery	company's own delivery network domain
 msauth.net	Microsoft	Microsoft	cloudService	company's own domain
 msftauth.net	Microsoft	Microsoft	cloudService	company's own domain
@@ -86,7 +77,6 @@ linkedin.com	LinkedIn	Microsoft	social	company's own domain
 licdn.com	LinkedIn	Microsoft	contentDelivery	company's own delivery network domain
 ads.linkedin.com	LinkedIn Ads	Microsoft	advertising	hostname of the company's own ad or analytics product
 github.com	GitHub	Microsoft	onlineService	company's own domain
-githubusercontent.com	GitHub	Microsoft	contentDelivery	company's own delivery network domain
 githubassets.com	GitHub	Microsoft	contentDelivery	company's own delivery network domain
 adnxs.com	Xandr	Microsoft	advertising	documented ad network or ad service
 apple.com	Apple	Apple	appleSystem	company's own domain
@@ -273,22 +263,11 @@ hs-scripts.com	HubSpot	HubSpot	analytics	documented analytics service
 hubspot.com	HubSpot	HubSpot	cloudService	company's own domain
 cloudflareinsights.com	Cloudflare Web Analytics	Cloudflare	analytics	documented analytics service
 cloudflare.com	Cloudflare	Cloudflare	cloudService	company's own domain
-cloudflare.net	Cloudflare	Cloudflare	contentDelivery	company's own delivery network domain
 cloudflare-dns.com	Cloudflare	Cloudflare	cloudService	company's own domain
 cloudflarestream.com	Cloudflare	Cloudflare	contentDelivery	company's own delivery network domain
-workers.dev	Cloudflare Workers	Cloudflare	cloudService	company's own domain
-pages.dev	Cloudflare Pages	Cloudflare	cloudService	company's own domain
 akamai.com	Akamai	Akamai	contentDelivery	company's own delivery network domain
-akamai.net	Akamai	Akamai	contentDelivery	company's own delivery network domain
-akamaiedge.net	Akamai	Akamai	contentDelivery	company's own delivery network domain
-akamaihd.net	Akamai	Akamai	contentDelivery	company's own delivery network domain
-akamaized.net	Akamai	Akamai	contentDelivery	company's own delivery network domain
-akadns.net	Akamai	Akamai	contentDelivery	company's own delivery network domain
-edgekey.net	Akamai	Akamai	contentDelivery	company's own delivery network domain
-edgesuite.net	Akamai	Akamai	contentDelivery	company's own delivery network domain
 fastly.net	Fastly	Fastly	contentDelivery	company's own delivery network domain
 fastly.com	Fastly	Fastly	contentDelivery	company's own delivery network domain
-fastlylb.net	Fastly	Fastly	contentDelivery	company's own delivery network domain
 jsdelivr.net	jsDelivr	jsDelivr	contentDelivery	company's own delivery network domain
 b-cdn.net	Bunny.net	Bunny.net	contentDelivery	company's own delivery network domain
 imgix.net	imgix	imgix	contentDelivery	company's own delivery network domain
@@ -388,7 +367,6 @@ wix.com	Wix	Wix	cloudService	company's own domain
 wixstatic.com	Wix	Wix	contentDelivery	company's own delivery network domain
 squarespace.com	Squarespace	Squarespace	cloudService	company's own domain
 shopify.com	Shopify	Shopify	cloudService	company's own domain
-myshopify.com	Shopify	Shopify	cloudService	company's own domain
 godaddy.com	GoDaddy	GoDaddy	cloudService	company's own domain
 ebay.com	eBay	eBay	onlineService	company's own domain
 ebaystatic.com	eBay	eBay	contentDelivery	company's own delivery network domain

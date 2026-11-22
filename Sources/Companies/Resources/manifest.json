@@ -8,21 +8,21 @@
       "sourceURL": "https://publicsuffix.org/list/public_suffix_list.dat",
       "licence": "MPL-2.0",
       "fetched": "2026-11-22",
-      "sha256": "3ad39c4db943bc7d0cb0c30a86e5bae6fe023695dc4a622d9469f090c4e2a4c2",
+      "sha256": "21a18b1ec92ad23d650b4715e0e259db8ae2e875816efea574f18097bfd66c38",
       "sourceSHA256": "017501d3fa7911c60ac7e0f68df4122b07216c585c15dc30e0f0c74b8d13a2b9",
-      "rules": 6950
+      "rules": 10469
     },
     {
       "name": "Tattle curated company list",
       "file": "curated.tsv",
-      "version": "2",
+      "version": "3",
       "commit": "",
       "sourceURL": "",
       "licence": "MIT (own data, public knowledge)",
       "fetched": "2026-11-22",
-      "sha256": "db62066f58259cd56095caecaf71cbbe7a8d01c2ad43482f814ffaf95cfc11f0",
-      "sourceSHA256": "db62066f58259cd56095caecaf71cbbe7a8d01c2ad43482f814ffaf95cfc11f0",
-      "rules": 422
+      "sha256": "cd415fcd4c7dd136337ca97130476e0da82a081ee397e2157edd79709b65f118",
+      "sourceSHA256": "cd415fcd4c7dd136337ca97130476e0da82a081ee397e2157edd79709b65f118",
+      "rules": 400
     }
   ]
 }

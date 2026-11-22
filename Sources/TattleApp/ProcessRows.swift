@@ -191,7 +191,7 @@ struct FlowLine: Identifiable {
     var companyText: String? {
         guard let companyLabel else { return nil }
         let label = companyLabel.label
-        guard label.isMatched, let company = label.company else { return "Not identified" }
+        guard label.isMatched, let company = label.company else { return label.unidentifiedText }
         var text = company
         if label.category != .unclassified { text += " · " + label.category.label }
         return companyLabel.isPossible ? "Possible: " + text : text
@@ -201,7 +201,7 @@ struct FlowLine: Identifiable {
     var companyDetail: String? {
         guard let companyLabel else { return nil }
         let label = companyLabel.label
-        guard label.isMatched else { return "No company is listed for this name" }
+        guard label.isMatched else { return label.hostedDetail ?? "No company is listed for this name" }
         var text = "Company list"
         if let version = label.datasetVersion, !version.isEmpty { text += " version " + version }
         if label.source == .appleOwner { text = "Owner named in the imported report" }

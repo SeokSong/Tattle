@@ -24,7 +24,7 @@ struct AboutView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("About \(AppIdentity.name)").font(.title2.bold())
-            Text("Company names on connections come from the lists below, shipped with the app. A name that no list knows is shown as Not identified.")
+            Text("Company names on connections come from the lists below, shipped with the app. A name that no list knows is shown as Not identified. A site on a shared hosting service is shown as a website we couldn't identify, never as the service's company.")
                 .font(.callout).foregroundStyle(.secondary)
             if datasets.isEmpty {
                 Text("The bundled lists could not be read.").foregroundStyle(.secondary)

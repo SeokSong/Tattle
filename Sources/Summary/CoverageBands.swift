@@ -86,10 +86,9 @@ public struct CoverageBands: Codable, Equatable, Sendable {
     public static let tolerance = 0.0
 
     static func round3(_ x: Double) -> Double { (x * 1000).rounded() / 1000 }
-    /// rounded down, so the stored floor never sits above the true value
-    static func floor3(_ x: Double) -> Double { ((x * 1000) + 1e-9).rounded(.down) / 1000 }
 
-    /// a band per metric that has a value. floor is the value rounded down (minus `tolerance`), ceiling 1.
+    /// a band per metric that has a value. floor is the exact value (minus `tolerance`), ceiling 1;
+    /// the baseline beside it is rounded to 3 decimals for reading.
     /// `enforceSmall` enforces a byte ratio even when its denominator is small. notes of the
     /// previous file are kept
     public static func make(
@@ -105,7 +104,7 @@ public struct CoverageBands: Codable, Equatable, Sendable {
                 metrics[key] = CoverageBand(baseline: round3(value), informational: true)
             } else {
                 metrics[key] = CoverageBand(
-                    baseline: round3(value), floor: max(0, floor3(value - tolerance)), ceiling: 1)
+                    baseline: round3(value), floor: max(0, value - tolerance), ceiling: 1)
             }
         }
         return CoverageBands(
@@ -115,28 +114,36 @@ public struct CoverageBands: Codable, Equatable, Sendable {
 
 public struct CoverageRegression: Equatable, Sendable {
     public var metric: String
-    public var value: Double
+    /// nil when the report has no value for the metric (missing, or a zero denominator)
+    public var value: Double?
     public var floor: Double
 
-    /// percentage points below the floor; always positive
-    public var points: Double { (floor - value) * 100 }
+    /// percentage points below the floor, counting no value as zero; always positive
+    public var points: Double { (floor - (value ?? 0)) * 100 }
 
     /// numbers only
     public var description: String {
-        String(format: "%@  %.1f%% is below floor %.1f%% by %.1f points", metric, value * 100, floor * 100, points)
+        guard let value else {
+            return String(format: "%@  has no value (missing or zero denominator); floor is %.1f%%", metric, floor * 100)
+        }
+        return String(format: "%@  %.1f%% is below floor %.1f%% by %.1f points", metric, value * 100, floor * 100, points)
     }
 }
 
 public enum CoverageRatchet {
-    /// a value equal to its floor passes. informational bands, metrics missing from the report and
-    /// metrics with a zero denominator are not enforced. enforced bands with a floor must be present in
-    /// the report when their denominator is positive
+    /// a value equal to its floor passes. informational bands and bands without a floor, or with a
+    /// floor of 0, are not enforced. an enforced band (floor above 0) fails when the report has no value
+    /// for it: the metric is missing, or its denominator became 0 (a run that lost all its named
+    /// domains must not pass)
     public static func check(report: CoverageReport, bands: CoverageBands) -> [CoverageRegression] {
         var found: [CoverageRegression] = []
         for key in bands.metrics.keys.sorted() {
-            guard let band = bands.metrics[key], !band.informational, let floor = band.floor,
-                let ratio = report.metrics[key], let value = ratio.value else { continue }
-            if value < floor - 1e-9 { found.append(CoverageRegression(metric: key, value: value, floor: floor)) }
+            guard let band = bands.metrics[key], !band.informational, let floor = band.floor, floor > 0 else { continue }
+            guard let value = report.metrics[key]?.value else {
+                found.append(CoverageRegression(metric: key, value: nil, floor: floor))
+                continue
+            }
+            if value < floor - 1e-12 { found.append(CoverageRegression(metric: key, value: value, floor: floor)) }
         }
         return found
     }

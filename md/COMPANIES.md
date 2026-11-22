@@ -1,6 +1,6 @@
 # Companies
 
-**Status:** Problems 1.1, 1.2 and 1.4 done (1.3 labels at view time; the curated-only coverage baseline is frozen): registrable domain from the bundled Public Suffix List, the curated company list and `CompanyClassifier`. Second sources (public tracker list) and the app to company table come later.
+**Status:** Problems 1.1, 1.2 and 1.4 done (1.3 labels at view time; the curated-only coverage baseline is frozen; OD14 applied): registrable domain from the bundled Public Suffix List (both sections), the curated company list and `CompanyClassifier`. Second sources (public tracker list) and the app to company table come later.
 
 ## Purpose
 
@@ -21,7 +21,8 @@
 - API: `registrableDomain(of:) -> String?`, `PublicSuffixList` (lazy `bundled`, immutable, `Sendable`), `DatasetManifest`
 - Returns nil for IP literals, single labels, empty labels, names over 253 bytes and names that are themselves a public suffix. Lowercases and strips one trailing dot
 - Matching order: an exception rule (`!www.ck`) wins, then the longest plain or wildcard rule (`*.ck`), then the default rule (one label)
-- ICANN section only: the shipped `psl.dat` drops the private section, so `x.github.io` gives `github.io` and `a.blogspot.com` gives `blogspot.com`. Hosting platforms are treated as one registrable domain on purpose
+- Full list, ICANN and private sections (owner decision OD14): a private-section rule is a public suffix like any other, so `x.github.io` gives `x.github.io` and `someone.pages.dev` gives `someone.pages.dev`. The platform's own name for the rule is kept: `psl.dat` has a `// PLATFORM: <name>` line above each private block, taken from the list's comment for that block (the text before ` : `). `hostingPlatform(of:)` returns it when the registrable domain came from a private rule, or the suffix itself when the name could not be read. A name that is exactly a suffix (`github.io`) has no registrable domain
+- A hostname whose registrable domain comes from a private rule is an unknown website hosted on that platform. Its label has source `none`, no company and no parent, and `hostingPlatform` set; coverage and the counts treat it as not identified. It is never labelled as the platform's company. The row text says "Website we couldn't identify" (the plain case still says "Not identified"); the tooltip says "Unknown website, hosted on <platform> (a service many sites use)". A curated row can still name one exact registrable site; a row keyed by the platform's own suffix (`cloudfront.net`, `pages.dev`) cannot load, because a suffix is not a registrable domain, so those rows were removed (curated list version 3)
 - Internationalised names: the list stores unicode rules; `xn--` labels are decoded (RFC 3492) for matching and returned as written
 
 ## Datasets
@@ -30,24 +31,24 @@
 |---|---|---|---|
 | Public Suffix List | `Resources/psl.dat` | https://publicsuffix.org/list/public_suffix_list.dat | MPL 2.0 |
 
-- `psl.dat` is the list's licence header plus its ICANN rules, built by the script; never edit it by hand. The manifest holds the SHA-256 of both the shipped file and the downloaded original, and a test checks the shipped hash
+- `psl.dat` is the list's licence header plus the rules of both sections (private blocks carry a `// PLATFORM:` line instead of the list's comments, which hold contact addresses), built by the script; never edit it by hand. The manifest holds the SHA-256 of both the shipped file and the downloaded original, and a test checks the shipped hash
 - `NOTICES.txt` holds the full MPL 2.0 text and the source URL; the licence header stays in the data file
 - Tattle's own code is MIT (`LICENSE`)
 - To update: download the list by hand, run `scripts/build-companies-data.sh path/to/public_suffix_list.dat [YYYY-MM-DD]`, run the tests
-- The repo guard allows a 40-hex value only on a line labelled as a commit (`// COMMIT:` or a `"commit"` key), for this data's provenance
+- The repo guard allows a 40-hex value only on a labelled commit line in the file that carries it: `// COMMIT:` in `Sources/Companies/Resources/psl.dat`, a `"commit"` key in `Sources/Companies/Resources/manifest.json`. Anywhere else it is a violation
 
 ## Resources
 
-- `Bundle.module` finds the files under `swift run`, `swift build -c release` and `swift test -c release` (checked)
-- Risk: a future `.app` bundle must copy `Tattle_Companies.bundle` into `Contents/Resources`, or `resourceURL` returns nil. When the resource is missing, `PublicSuffixList.bundled.isLoaded` is false and every name falls back to the one-label default rule
+- SwiftPM's generated `Bundle.module` traps when `Tattle_Companies.bundle` is absent, so the code never uses it. `DatasetManifest.locateBundle(in:)` searches the executable's folder, the main bundle and its parent, `Bundle.main.resourceURL` and the folder of the bundle this code was linked into, and returns nil when none holds the bundle. It finds the files under `swift run`, `swift build -c release`, `swift test` and `swift test -c release`
+- A missing bundle does not crash: `resourceURL` returns nil, `PublicSuffixList.bundled.isLoaded` is false, every name falls back to the one-label default rule, the curated list is empty, and the About sheet shows "The bundled lists could not be read". A future `.app` bundle must still copy `Tattle_Companies.bundle` into `Contents/Resources` for the lists to load. A test passes a fake search location
 
 ## Budgets
 
 | Budget | Limit | Measured (2026-11-22) |
 |---|---|---|
-| Cold start (first call, parse) | at most 30 ms | about 7 ms release, about 23 ms debug |
-| Added memory | at most 5 MB | about 0.6 to 1.8 MB |
-| Data size | at most 3 MB | 76 KB (6950 rules) |
+| Cold start (first call, parse) | at most 30 ms | about 14 ms release, about 33 ms debug (full list, 10,469 rules) |
+| Added memory | at most 5 MB | about 1.3 MB |
+| Data size | at most 3 MB | 164 KB (10,469 rules) |
 
 - Provisional. `loadCostIsPrinted` prints load time and added memory and asserts the 200 ms sanity floor and the 3 MB data size. Memory is not asserted (parallel tests inflate the process footprint); read it from `swift test -c release --filter Companies`
 
@@ -81,20 +82,22 @@
 - Capture only. Coverage of an imported App Privacy Report is deferred to Part 2 (the report parser does not exist yet)
 - The classifier is run with `sources: [.curated]`, the frozen baseline, so a later source (Apple owner, public list) is measured against it. The report records the curated list version and checksum
 - Whole capture, not per app: the per-app form of these metrics belongs to the app summary (Part 3)
-- `--unmatched-out` writes the most frequent unidentified registrable domains (flows, bytes, name; at most 200; mode 600) to a local file for curation. The names go only to that file, never to the screen. Keep it in `~/dev/tattle-fixtures/reports/`, never in the repo
-- Band files: `Tests/Expected/companies-synthetic.json` (hand-built corpus, `CompanyCorpus` in `Tests/TestSupport`, every number worked out by hand) and `Tests/Expected/companies/<scenario>.json` (one per fixture capture, numbers only). They use the quality report's band format. Every coverage ratio is higher-is-better. The floor is the baseline rounded down to three decimals, with no tolerance: coverage on a fixed capture and list is exact, and the target is "baseline minus nothing". Byte ratios under 10,000 bytes and `labelSourceShare.*` are recorded as informational. Each band note records the curated list version and checksum
-- Ratchet: `CoverageRatchet.check`; the CLI exits 3 below a floor. `curatedOnlyCoverageBaselinesHold` runs it on every fixture band (skips without `TATTLE_FIXTURES`). Raising a floor after adding curated rows: re-run `--write-bands` on the fixtures, keep the note
+- `--unmatched-out` writes the most frequent unidentified registrable domains (flows, bytes, name; at most 200; mode 600) to a local file for curation. The names go only to that file, never to the screen. Keep it in a private folder outside the repo. The command refuses a path inside a git work tree (it walks up looking for `.git`), creates the file new with mode 600 from the first byte (an existing file or a symlink is refused), and `.gitignore` lists `*.unmatched-domains.txt`
+- Band files: `Tests/Expected/companies-synthetic.json` (hand-built corpus, `CompanyCorpus` in `Tests/TestSupport`, every number worked out by hand) and `Tests/Expected/companies/<scenario>.json` (one per fixture capture, numbers only). They use the quality report's band format. Every coverage ratio is higher-is-better. The floor is the exact baseline value (the `baseline` field is rounded to three decimals for reading), with no tolerance: coverage on a fixed capture and list is exact, and the target is "baseline minus nothing". Byte ratios under 10,000 bytes and `labelSourceShare.*` are recorded as informational. Each band note records the curated list version and checksum
+- Ratchet: `CoverageRatchet.check`; the CLI exits 3 below a floor. A band with a floor above 0 also fails when the report has no value for it (the metric is missing or its denominator is 0), so a run that loses all its named domains cannot pass. `curatedOnlyCoverageBaselinesHold` runs it on every fixture band (skips without `TATTLE_FIXTURES`). Raising a floor after adding curated rows: re-run `--write-bands` on the fixtures, keep the note
 
-### Curated-only baseline (curated list version 2, 2026-11-22)
+### Curated-only baseline (curated list version 3, full Public Suffix List, 2026-11-22)
 
-| Capture | companyCoverage | companyCoverageOfNamedBytes | domainCoverage | unmatched.connections |
-|---|---|---|---|---|
-| s0-idle | 5,709,032 / 5,838,617 (97.8%) | 5,709,032 / 5,831,431 (97.9%) | 11 / 14 (78.6%) | 19 |
-| s1-safari | 374,666 / 2,005,927 (18.7%) | 374,666 / 1,987,977 (18.8%) | 1 / 5 (20.0%) | 21 |
-| s2-two-apps | 33,966,120 / 45,905,154 (74.0%) | 33,966,120 / 45,901,028 (74.0%) | 6 / 13 (46.2%) | 43 |
-| s3-youtube-quic | 99,482,226 / 99,556,929 (99.9%) | 99,482,226 / 99,554,296 (99.9%) | 11 / 14 (78.6%) | 10 |
-| s4-link-failures | 1,131,257 / 2,544,045 (44.5%) | 1,131,257 / 2,495,754 (45.3%) | 8 / 12 (66.7%) | 11 |
-| s5-midstream | 439,671 / 39,166,929 (1.1%) | 439,671 / 456,994 (96.2%) | 4 / 5 (80.0%) | 10 |
+Frozen again after owner decision OD14 (private suffixes give each hosted site its own registrable domain, and the 22 curated rows keyed by a platform's own suffix were removed). Before = curated list version 2 with the ICANN-only list.
+
+| Capture | companyCoverage (before) | companyCoverage | companyCoverageOfNamedBytes | domainCoverage (before) | domainCoverage | unmatched.connections (before) | unmatched.connections |
+|---|---|---|---|---|---|---|---|
+| s0-idle | 97.8% | 5,693,439 / 5,838,617 (97.5%) | 5,693,439 / 5,831,431 (97.6%) | 11 / 14 (78.6%) | 10 / 14 (71.4%) | 19 | 20 |
+| s1-safari | 18.7% | 374,666 / 2,005,927 (18.7%) | 374,666 / 1,987,977 (18.8%) | 1 / 5 (20.0%) | 1 / 5 (20.0%) | 21 | 21 |
+| s2-two-apps | 74.0% | 33,966,120 / 45,905,154 (74.0%) | 33,966,120 / 45,901,028 (74.0%) | 6 / 13 (46.2%) | 6 / 13 (46.2%) | 43 | 43 |
+| s3-youtube-quic | 99.9% | 98,014,839 / 99,556,929 (98.5%) | 98,014,839 / 99,554,296 (98.5%) | 11 / 14 (78.6%) | 10 / 19 (52.6%) | 10 | 34 |
+| s4-link-failures | 44.5% | 1,131,257 / 2,544,045 (44.5%) | 1,131,257 / 2,495,754 (45.3%) | 8 / 12 (66.7%) | 8 / 12 (66.7%) | 11 | 11 |
+| s5-midstream | 1.1% | 439,671 / 39,166,929 (1.1%) | 439,671 / 456,994 (96.2%) | 4 / 5 (80.0%) | 4 / 5 (80.0%) | 10 | 10 |
 
 - `s5-midstream` has low `companyCoverage` because most of its bytes are connections that began before the capture and have no name: that part is the unseen share, not a list gap
 - Domain counts are small, so one added row moves `domainCoverage` by several points. Read the byte ratios first

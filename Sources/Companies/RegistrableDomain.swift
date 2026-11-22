@@ -8,7 +8,19 @@ public func registrableDomain(of hostname: String) -> String? {
     registrableDomain(of: hostname, in: .bundled)
 }
 
+/// the platform that hosts the site, when the registrable domain of `hostname` comes from a private-section
+/// rule of the list (`someone.pages.dev` is hosted on a platform; `example.com` is not). nil otherwise.
+/// the platform is the name in the list's comment block for the rule, or the suffix itself when that
+/// name could not be read. it says where a site is hosted, never who owns it
+public func hostingPlatform(of hostname: String) -> String? {
+    registrable(of: hostname, in: .bundled)?.platform
+}
+
 func registrableDomain(of hostname: String, in list: PublicSuffixList) -> String? {
+    registrable(of: hostname, in: list)?.domain
+}
+
+func registrable(of hostname: String, in list: PublicSuffixList) -> (domain: String, platform: String?)? {
     var name = hostname.lowercased()
     if name.hasSuffix(".") { name.removeLast() }
     guard !name.isEmpty, name.utf8.count <= 253, !isIPLiteral(name) else { return nil }
@@ -17,9 +29,13 @@ func registrableDomain(of hostname: String, in list: PublicSuffixList) -> String
     guard labels.count >= 2, !labels.contains(where: \.isEmpty) else { return nil }
 
     let unicode = labels.map(Punycode.decodeLabel)
-    let suffix = list.suffixLength(of: unicode)
+    let (suffix, rule) = list.suffixMatch(of: unicode)
     guard labels.count > suffix else { return nil }
-    return labels.suffix(suffix + 1).joined(separator: ".")
+    var platform: String?
+    if let rule, let named = list.privatePlatform[rule] {
+        platform = named.isEmpty ? labels.suffix(suffix).joined(separator: ".") : named
+    }
+    return (labels.suffix(suffix + 1).joined(separator: "."), platform)
 }
 
 private func isIPLiteral(_ name: String) -> Bool {

@@ -103,3 +103,42 @@ private enum SudoUserFixture {
     #expect(FileOwnership.missingDirectories(of: deep) == [dir.path + "/a", dir.path + "/a/b"])
     #expect(FileOwnership.missingDirectories(of: dir.appendingPathComponent("f").path).isEmpty)
 }
+
+@Test func gitWorkTreeIsFoundFromAnyDepth() throws {
+    let outside = try tempDir()
+    defer { try? FileManager.default.removeItem(at: outside) }
+    #expect(FileOwnership.gitWorkTreeRoot(containing: outside.appendingPathComponent("a.txt").path) == nil)
+
+    let repo = try tempDir()
+    defer { try? FileManager.default.removeItem(at: repo) }
+    try FileManager.default.createDirectory(at: repo.appendingPathComponent(".git"), withIntermediateDirectories: true)
+    let deep = repo.appendingPathComponent("a/b", isDirectory: true)
+    try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+    let root = repo.resolvingSymlinksInPath().path
+    // a new file, a file in a folder that does not exist yet, and an existing file
+    #expect(FileOwnership.gitWorkTreeRoot(containing: deep.appendingPathComponent("new.txt").path) == root)
+    #expect(FileOwnership.gitWorkTreeRoot(containing: repo.appendingPathComponent("x/y/z.txt").path) == root)
+    #expect(FileOwnership.gitWorkTreeRoot(containing: repo.appendingPathComponent(".git/config").path) == root)
+    // a linked work tree has a .git file, not a folder
+    let linked = try tempDir()
+    defer { try? FileManager.default.removeItem(at: linked) }
+    try Data("gitdir: elsewhere\n".utf8).write(to: linked.appendingPathComponent(".git"))
+    #expect(FileOwnership.gitWorkTreeRoot(containing: linked.appendingPathComponent("f.txt").path) != nil)
+    // a symlink into the repo is resolved
+    let link = outside.appendingPathComponent("link")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: deep)
+    #expect(FileOwnership.gitWorkTreeRoot(containing: link.appendingPathComponent("f.txt").path) == root)
+}
+
+@Test func openForWritingCreatesTheFilePrivateFromTheStart() throws {
+    let dir = try tempDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let path = dir.appendingPathComponent("out.txt").path
+    let handle = try FileOwnership.openForWriting(path: path)
+    var info = stat()
+    #expect(fstat(handle.fileDescriptor, &info) == 0)
+    #expect(info.st_mode & 0o777 == 0o600)
+    try handle.close()
+    // an existing file is refused, never overwritten
+    #expect(throws: (any Error).self) { try FileOwnership.openForWriting(path: path) }
+}
