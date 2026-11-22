@@ -1,6 +1,6 @@
 # Companies
 
-**Status:** Problem 1.1 done: registrable domain from the bundled Public Suffix List. The curated company list and classifier come in later problems.
+**Status:** Problems 1.1 and 1.2 done: registrable domain from the bundled Public Suffix List, the curated company list and `CompanyClassifier`. Second sources (public tracker list) and the app to company table come later.
 
 ## Purpose
 
@@ -50,3 +50,16 @@
 | Data size | at most 3 MB | 76 KB (6950 rules) |
 
 - Provisional. `loadCostIsPrinted` prints load time and added memory and asserts the 200 ms sanity floor and the 3 MB data size. Memory is not asserted (parallel tests inflate the process footprint); read it from `swift test -c release --filter Companies`
+
+## Curated list and classifier (Problem 1.2)
+
+- File: `Resources/curated.tsv`, tab separated, one header line `domain company parent category note`. `md/COMPANIES-curated.md` is the readable table (generated, sorted by category, with counts) that the owner reviews
+- `domain` is a registrable domain or a hostname under one, lowercase, no trailing dot. `category` is one of `advertising`, `analytics`, `social`, `contentDelivery`, `cloudService`, `appleSystem` (`unclassified` is the absence of a row and is rejected). `note` is a short public rationale with no adjectives
+- Every row has source `curated`. Rows are built from public knowledge of widely known companies only; they are never chosen from anyone's captures or reports. A domain whose owner is not certain is left out, not guessed
+- Load is strict: an unknown category, a duplicate key, a key that is not registrable (or not lowercase), an empty field or a wrong column count fails the whole load. The error names the line number only, never a value
+- Lookup ladder: the full hostname, then each parent suffix down to and including the registrable domain; the most specific row wins (`ads.example.com` can differ from `example.com`). Names are matched whole, never by substring. No match gives an explicit label with category `unclassified` and source `none`
+- Streaming and other media services' own domains are `cloudService` ("app service"); their video and image servers are `contentDelivery`. There is no separate media category
+- API: `CompanyClassifier(curated:)` (immutable, `Sendable`). `classify(hostname:appleOwner:order:)` tries sources in `order` (provisional `[.curated, .appleOwner]`; precedence is decided later by the agreement experiment). `label(hostname:from:appleOwner:)` runs exactly one source and never looks at another. `labelsBySource(hostname:appleOwner:)` returns every source's answer for comparison
+- `CompanyLabel.source` says who answered (`curated`, `trackerList`, `appleOwner`, `none`); `rule` says which rung (`curatedHostname`, `curatedRegistrable`, `appleOwner`, `noMatch`); `datasetId` (`tattle-curated`), `datasetVersion` and `datasetSHA256` come from the manifest. The `appleOwner` source returns the report's owner string as `company` with no parent and category `unclassified`, because the report gives neither. `relation` is `unknown` until the app to company table exists
+- To change the list: edit `curated.tsv`, run `scripts/build-curated.sh [version]` (refreshes the manifest hash, row count and the review table), run the tests. Bump the version when the content changes
+- Cost: `lookupCostIsPrinted` prints the per-hostname cost of `classify` (sanity floor 200 microseconds)

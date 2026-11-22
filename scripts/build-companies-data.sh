@@ -30,7 +30,10 @@ grep -q 'Mozilla Public' "$input" || { echo "licence header (MPL) not found in $
 source_sha=$(shasum -a 256 "$input" | cut -d' ' -f1)
 data_sha=$(shasum -a 256 "$out/psl.dat" | cut -d' ' -f1)
 rules=$(grep -v '^//' "$out/psl.dat" | grep . | sort -u | wc -l | tr -d ' ')
-cat > "$out/manifest.json" <<JSON
+# keeps the other datasets already in the manifest (the curated list has its own script)
+old=$(mktemp)
+if [ -f "$out/manifest.json" ]; then cp "$out/manifest.json" "$old"; else echo '{"datasets":[]}' > "$old"; fi
+cat > "$out/manifest.json.new" <<JSON
 {
   "datasets": [
     {
@@ -48,4 +51,6 @@ cat > "$out/manifest.json" <<JSON
   ]
 }
 JSON
+jq --slurpfile old "$old" '.datasets += ($old[0].datasets | map(select(.file != "psl.dat")))' "$out/manifest.json.new" > "$out/manifest.json"
+rm -f "$out/manifest.json.new" "$old"
 echo "wrote $out/psl.dat ($rules rules) and $out/manifest.json"

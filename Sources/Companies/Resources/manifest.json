@@ -11,6 +11,18 @@
       "sha256": "3ad39c4db943bc7d0cb0c30a86e5bae6fe023695dc4a622d9469f090c4e2a4c2",
       "sourceSHA256": "017501d3fa7911c60ac7e0f68df4122b07216c585c15dc30e0f0c74b8d13a2b9",
       "rules": 6950
+    },
+    {
+      "name": "Tattle curated company list",
+      "file": "curated.tsv",
+      "version": "1",
+      "commit": "",
+      "sourceURL": "",
+      "licence": "MIT (own data, public knowledge)",
+      "fetched": "2026-11-22",
+      "sha256": "a90ee72d0709f39869368e7112ac7c7c0153c47dde5693e3d6e6497f13527f10",
+      "sourceSHA256": "a90ee72d0709f39869368e7112ac7c7c0153c47dde5693e3d6e6497f13527f10",
+      "rules": 422
     }
   ]
 }
