@@ -146,3 +146,30 @@ private func classifier(_ rows: String...) throws -> CompanyClassifier {
     #expect(plain.hostingPlatform == nil && plain.hostedDetail == nil && plain.unidentifiedText == "Not identified")
     #expect(c.label(hostname: "someone.pages.dev", from: .curated).hostingPlatform != nil)
 }
+
+@Test func operatedSuffixGivesPlatformCompany() throws {
+    // the bundled list marks googleapis.com as platform-operated: its hosts are the platform's own
+    let label = CompanyClassifier().classify(hostname: "someservice.googleapis.com")
+    #expect(label.isMatched && label.source == .curated)
+    #expect(label.rule == .curatedOperatedSuffix)
+    #expect(label.parent == "Alphabet" && label.category == .cloudService)
+    #expect(label.hostingPlatform == nil)
+    // an exact hostname row still wins over the suffix row; the suffix row wins over the unknown-site rung
+    let c = try classifier(
+        "suffix:pages.dev\tPagesCo\tPagesParent\tcloudService\tplatform's own hosts\n",
+        "x.special.pages.dev\tSpecial\tSpecialParent\tonlineService\tnote\n")
+    #expect(c.classify(hostname: "x.special.pages.dev").company == "Special")
+    #expect(c.classify(hostname: "x.special.pages.dev").rule == .curatedHostname)
+    #expect(c.classify(hostname: "special.pages.dev").rule == .curatedOperatedSuffix)
+    #expect(c.classify(hostname: "a.b.pages.dev").rule == .curatedOperatedSuffix)
+    #expect(c.classify(hostname: "a.b.pages.dev").company == "PagesCo")
+}
+
+@Test func customerSuffixStaysUnknownSite() {
+    let c = CompanyClassifier()
+    for host in ["someone.pages.dev", "d111.cloudfront.net", "x.myshopify.com", "a.akamaihd.net", "x.appspot.com"] {
+        let label = c.classify(hostname: host)
+        #expect(!label.isMatched && label.company == nil, "\(host)")
+        #expect(label.hostingPlatform != nil, "\(host)")
+    }
+}

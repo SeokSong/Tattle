@@ -1,6 +1,6 @@
 # Companies
 
-**Status:** Problems 1.1, 1.2 and 1.4 done (1.3 labels at view time; the curated-only coverage baseline is frozen; OD14 applied): registrable domain from the bundled Public Suffix List (both sections), the curated company list and `CompanyClassifier`. Second sources (public tracker list) and the app to company table come later.
+**Status:** Problems 1.1, 1.2 and 1.4 done (1.3 labels at view time; the curated-only coverage baseline is frozen; OD14 and OD15 applied): registrable domain from the bundled Public Suffix List (both sections), the curated company list and `CompanyClassifier`. Second sources (public tracker list) and the app to company table come later.
 
 ## Purpose
 
@@ -66,6 +66,17 @@
 - To change the list: edit `curated.tsv`, run `scripts/build-curated.sh [version]` (refreshes the manifest hash, row count and the review table), run the tests. Bump the version when the content changes
 - Cost: `lookupCostIsPrinted` prints the per-hostname cost of `classify` (sanity floor 200 microseconds)
 
+## Platform-operated suffixes (OD15)
+
+Some private-section suffixes are the platform's own services, not a place where customers host sites. A curated row `suffix:<private suffix>` (same columns; the note is a fixed public phrase) marks one: every host under it gets that row's company, parent and category, with rule `curatedOperatedSuffix`. The key must be a plain private-section rule of the bundled list; otherwise the whole load fails (`notPrivateSuffix`). Ladder: exact hostname row, rows of each parent, then the operated suffix, then the registrable domain's row, then (private suffix, not operated) an unknown website hosted on the platform, then not identified. Mark a suffix only when the platform itself serves essentially all its subdomains; when in doubt it stays an unknown hosted site.
+
+| Suffix | Decision | Reason |
+|---|---|---|
+| `googleapis.com` | Operated (Google, Alphabet, cloud or app service) | Platform's own API hosts; customer content uses paths |
+| `cloudfront.net`, `akamai.net`, `akamaiedge.net`, `akamaihd.net`, `akamaized.net`, `akadns.net`, `edgekey.net`, `edgesuite.net`, `fastlylb.net`, `cloudflare.net`, `azureedge.net`, `trafficmanager.net` | Hosted on platform | Delivery networks that serve their customers' sites under per-customer names; the site is the customer's |
+| `appspot.com`, `firebaseapp.com`, `web.app`, `workers.dev`, `pages.dev`, `azurewebsites.net`, `myshopify.com`, `blogspot.com` | Hosted on platform | Customers publish their own sites under a name they choose |
+| `githubusercontent.com` | Hosted on platform | Serves user-published content |
+
 ## Coverage and the frozen curated-only baseline (Problem 1.4)
 
 `tattle companies coverage <capture> | --db <path> --session <id|latest> [--json] [--bands <file>] [--write-bands <file> --label <text>] [--unmatched-out <file>]` prints how much of a capture the company sources can name. It is computed at read time from saved flows (`Sources/Summary/Coverage.swift`); nothing runs on the packet path. Output is keys and numbers only, so it can be committed as a band file.
@@ -86,18 +97,18 @@
 - Band files: `Tests/Expected/companies-synthetic.json` (hand-built corpus, `CompanyCorpus` in `Tests/TestSupport`, every number worked out by hand) and `Tests/Expected/companies/<scenario>.json` (one per fixture capture, numbers only). They use the quality report's band format. Every coverage ratio is higher-is-better. The floor is the exact baseline value (the `baseline` field is rounded to three decimals for reading), with no tolerance: coverage on a fixed capture and list is exact, and the target is "baseline minus nothing". Byte ratios under 10,000 bytes and `labelSourceShare.*` are recorded as informational. Each band note records the curated list version and checksum
 - Ratchet: `CoverageRatchet.check`; the CLI exits 3 below a floor. A band with a floor above 0 also fails when the report has no value for it (the metric is missing or its denominator is 0), so a run that loses all its named domains cannot pass. `curatedOnlyCoverageBaselinesHold` runs it on every fixture band (skips without `TATTLE_FIXTURES`). Raising a floor after adding curated rows: re-run `--write-bands` on the fixtures, keep the note
 
-### Curated-only baseline (curated list version 3, full Public Suffix List, 2026-11-22)
+### Curated-only baseline (curated list version 4, full Public Suffix List, 2026-11-22)
 
-Frozen again after owner decision OD14 (private suffixes give each hosted site its own registrable domain, and the 22 curated rows keyed by a platform's own suffix were removed). Before = curated list version 2 with the ICANN-only list.
+Frozen again after OD14 and OD15. Before = curated version 3 (OD14 only, no operated suffix); original = curated version 2 with the ICANN-only list.
 
-| Capture | companyCoverage (before) | companyCoverage | companyCoverageOfNamedBytes | domainCoverage (before) | domainCoverage | unmatched.connections (before) | unmatched.connections |
-|---|---|---|---|---|---|---|---|
-| s0-idle | 97.8% | 5,693,439 / 5,838,617 (97.5%) | 5,693,439 / 5,831,431 (97.6%) | 11 / 14 (78.6%) | 10 / 14 (71.4%) | 19 | 20 |
-| s1-safari | 18.7% | 374,666 / 2,005,927 (18.7%) | 374,666 / 1,987,977 (18.8%) | 1 / 5 (20.0%) | 1 / 5 (20.0%) | 21 | 21 |
-| s2-two-apps | 74.0% | 33,966,120 / 45,905,154 (74.0%) | 33,966,120 / 45,901,028 (74.0%) | 6 / 13 (46.2%) | 6 / 13 (46.2%) | 43 | 43 |
-| s3-youtube-quic | 99.9% | 98,014,839 / 99,556,929 (98.5%) | 98,014,839 / 99,554,296 (98.5%) | 11 / 14 (78.6%) | 10 / 19 (52.6%) | 10 | 34 |
-| s4-link-failures | 44.5% | 1,131,257 / 2,544,045 (44.5%) | 1,131,257 / 2,495,754 (45.3%) | 8 / 12 (66.7%) | 8 / 12 (66.7%) | 11 | 11 |
-| s5-midstream | 1.1% | 439,671 / 39,166,929 (1.1%) | 439,671 / 456,994 (96.2%) | 4 / 5 (80.0%) | 4 / 5 (80.0%) | 10 | 10 |
+| Capture | companyCoverage (original / before) | companyCoverage | domainCoverage (original / before) | domainCoverage | unmatched.connections (original / before) | unmatched.connections |
+|---|---|---|---|---|---|---|
+| s0-idle | 97.8% / 97.5% | 5,693,439 / 5,838,617 (97.5%) | 11/14 / 10/14 | 10 / 14 (71.4%) | 19 / 20 | 20 |
+| s1-safari | 18.7% / 18.7% | 374,666 / 2,005,927 (18.7%) | 1/5 / 1/5 | 1 / 5 (20.0%) | 21 / 21 | 21 |
+| s2-two-apps | 74.0% / 74.0% | 33,966,120 / 45,905,154 (74.0%) | 6/13 / 6/13 | 6 / 13 (46.2%) | 43 / 43 | 43 |
+| s3-youtube-quic | 99.9% / 98.5% | 99,482,226 / 99,556,929 (99.9%) | 11/14 / 10/19 | 16 / 19 (84.2%) | 10 / 34 | 10 |
+| s4-link-failures | 44.5% / 44.5% | 1,131,257 / 2,544,045 (44.5%) | 8/12 / 8/12 | 8 / 12 (66.7%) | 11 / 11 | 11 |
+| s5-midstream | 1.1% / 1.1% | 439,671 / 39,166,929 (1.1%) | 4/5 / 4/5 | 4 / 5 (80.0%) | 10 / 10 | 10 |
 
 - `s5-midstream` has low `companyCoverage` because most of its bytes are connections that began before the capture and have no name: that part is the unseen share, not a list gap
 - Domain counts are small, so one added row moves `domainCoverage` by several points. Read the byte ratios first

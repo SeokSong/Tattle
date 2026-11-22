@@ -8,6 +8,8 @@ public enum CuratedListError: Error, Equatable, Sendable {
     case unknownCategory(line: Int)
     case notRegistrable(line: Int)
     case duplicateDomain(line: Int)
+    /// a `suffix:` row whose suffix is not a plain rule of the list's private section
+    case notPrivateSuffix(line: Int)
     case fileMissing
 }
 
@@ -21,8 +23,17 @@ public struct CuratedList: Sendable {
     private let table: [String: Company]
 
     public var count: Int { table.count }
-    /// every row, sorted by domain
-    public var entries: [Company] { table.values.sorted { $0.domain < $1.domain } }
+    /// the key prefix that marks a platform-operated suffix row (owner decision OD15)
+    public static let operatedPrefix = "suffix:"
+
+    /// every row for a domain or hostname, sorted by domain
+    public var entries: [Company] {
+        table.values.filter { !$0.domain.hasPrefix(Self.operatedPrefix) }.sorted { $0.domain < $1.domain }
+    }
+    /// the platform-operated suffix rows, sorted; `domain` is the key with its `suffix:` prefix
+    public var operatedSuffixes: [Company] {
+        table.values.filter { $0.domain.hasPrefix(Self.operatedPrefix) }.sorted { $0.domain < $1.domain }
+    }
 
     /// parses tab separated text: one header line, then domain, company, parent, category, note.
     /// strict: a bad row fails the whole load (a half-loaded list would silently misclassify)
@@ -44,7 +55,14 @@ public struct CuratedList: Sendable {
                 throw .unknownCategory(line: number)
             }
             let domain = fields[0]
-            guard Self.isValidKey(domain) else { throw .notRegistrable(line: number) }
+            if domain.hasPrefix(Self.operatedPrefix) {
+                // a platform-operated suffix must be a plain private-section rule of the bundled list
+                let suffix = String(domain.dropFirst(Self.operatedPrefix.count))
+                guard suffix == suffix.lowercased(), PublicSuffixList.bundled.privatePlatform[suffix] != nil,
+                      !suffix.hasPrefix("*."), !suffix.hasPrefix("!") else { throw .notPrivateSuffix(line: number) }
+            } else {
+                guard Self.isValidKey(domain) else { throw .notRegistrable(line: number) }
+            }
             guard table[domain] == nil else { throw .duplicateDomain(line: number) }
             table[domain] = Company(domain: domain, company: fields[1], parent: fields[2], category: category, note: fields[4])
         }
@@ -82,9 +100,16 @@ public struct CuratedList: Sendable {
 
     /// the ladder: the full hostname, then each parent suffix down to and including the
     /// registrable domain; the most specific row wins. never matches on substrings
+    /// ladder: exact hostname row, rows of each parent, then (at the registrable domain) a platform-operated
+    /// suffix row, then the registrable domain's own row. a suffix row is reached only when the name is under
+    /// that private suffix, so customers' sites under other suffixes are never named after the platform
     func lookup(_ name: String, registrable: String) -> (Company, LabelRule)? {
         var candidate = Substring(name)
         while true {
+            if candidate.count == registrable.count, let dot = candidate.firstIndex(of: "."),
+               let operated = table[Self.operatedPrefix + candidate[candidate.index(after: dot)...]] {
+                return (operated, .curatedOperatedSuffix)
+            }
             if let row = table[String(candidate)] {
                 return (row, candidate.count == registrable.count ? .curatedRegistrable : .curatedHostname)
             }
