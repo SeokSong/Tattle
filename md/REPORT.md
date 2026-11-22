@@ -200,6 +200,10 @@ Tolerance rule, applied when a band file is written (`Bands.make`, values rounde
 - A metric with a denominator under 10,000 bytes is written with `"informational": true` and no floor or ceiling
 - Writing over an existing file keeps its `notes`
 
+## Company coverage
+
+Company coverage (`tattle companies coverage`) is a separate read-time report with its own band files in `Tests/Expected/companies/`. Its metrics, denominators and the frozen curated-only baseline are in `md/COMPANIES.md`. It reuses this section's band format and, as `hostnameCoverageSniOnly` does, the bytes of flows to port 443 as its base.
+
 ## Command
 
 ```sh

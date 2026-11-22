@@ -67,6 +67,20 @@ public enum FileOwnership {
         return FileHandle(fileDescriptor: fd, closeOnDealloc: true)
     }
 
+    /// the nearest ancestor folder that holds a `.git` entry (a folder, or a file for a linked work tree),
+    /// found by walking up from the path with symlinks resolved; nil when the path is outside any work tree.
+    /// the path need not exist: the nearest existing ancestor is used
+    public static func gitWorkTreeRoot(containing path: String) -> String? {
+        var url = URL(fileURLWithPath: path)
+        while url.path != "/", !FileManager.default.fileExists(atPath: url.path) { url.deleteLastPathComponent() }
+        url = url.resolvingSymlinksInPath()
+        while true {
+            if FileManager.default.fileExists(atPath: url.appendingPathComponent(".git").path) { return url.path }
+            if url.path == "/" { return nil }
+            url.deleteLastPathComponent()
+        }
+    }
+
     /// the ancestors of a path (nearest last) that do not exist yet
     public static func missingDirectories(of path: String) -> [String] {
         var missing: [String] = []
