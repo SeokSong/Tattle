@@ -128,6 +128,7 @@ Use: browsing, social apps, about 10 minutes of video, then the phone locked; th
 | Full pipeline (`bench`, multi-app, release) | ≥1,500 packets/s (N1) | ~620,000 packets/s (best of 3, 2026-11-16) |
 | Throughput baseline (`bench`, s3-youtube-quic, 83,047 packets, release) | No more than 10% below this after M2 changes | 662,830 packets/s (best of 3, 2026-11-18) |
 | After 5.4 + 6.1 (back to back with the baseline tool, same machine) | Within 10% of the baseline tool | ~598k vs ~655k packets/s: about 9% slower (2026-11-18). After 5.3 the two were level, so 5.4 and 6.1 cost about 9%. Less than 1% budget left: later problems must bench back to back |
+| After 1.3 (company labels at read time; `bench`, s3-youtube-quic, release, 3 back-to-back pairs, 2026-11-22) | Within 1 percentage point of the M2 build | new 648k, 645k, 650k vs pre-M2 baseline tool 654k, 670k, 668k packets/s; new 660k, 624k, 653k vs M2 build 641k, 632k, 613k packets/s. Labels are built at view time, off the packet path |
 | Synthetic pipeline throughput (`syntheticThroughput`, 200,000 hand-built UDP packets, `store: nil`) | ≥50,000 packets/s (sanity floor) | ~200,000 packets/s (debug test build, 2026-11-17) |
 | Memory, open flows | — | Not measured |
 | Live capture (phone, YouTube), 2026-11-16 | Streams, stops on Ctrl-C | 26,916 packets / 177 s, 0 malformed, 91 flows, 25 SNI, 30 DNS, exit 0 |

@@ -4,6 +4,7 @@ import IOKit
 import IOKit.usb
 import Attribution
 import Capture
+import Companies
 import Dispatch
 import Domains
 import Flows
@@ -11,6 +12,7 @@ import PCAPNG
 import Pipeline
 import Report
 import Storage
+import Summary
 
 let appleVendorID = 1452
 
@@ -240,7 +242,18 @@ func hostnameText(_ flow: Flow, index: HostnameIndex) -> String {
     }
 }
 
-func flowLine(_ flow: Flow, index: HostnameIndex) -> String {
+/// the company and category of a flow's name, "Possible: " for a hint, "Not identified" for a name no
+/// list knows; empty when the flow has no name. the same words as the app
+func companyText(_ label: FlowLabel?) -> String {
+    guard let label else { return "" }
+    let value = label.label
+    guard value.isMatched, let company = value.company else { return "[Not identified]" }
+    var text = company
+    if value.category != .unclassified { text += ", " + value.category.label }
+    return "[" + (label.isPossible ? "Possible: " : "") + text + "]"
+}
+
+func flowLine(_ flow: Flow, index: HostnameIndex, cache: inout LabelCache) -> String {
     let timeFormatter = ISO8601DateFormatter()
     timeFormatter.formatOptions = [.withTime, .withColonSeparatorInTime]
     let key = flow.key
@@ -250,6 +263,8 @@ func flowLine(_ flow: Flow, index: HostnameIndex) -> String {
     var line = "  \(padded)  \(timeFormatter.string(from: flow.firstSeen))  \(flow.interface)  \(transport)  "
     line += "\(key.remoteAddress.description):\(key.remotePort)  in \(flow.ipBytesIn) out \(flow.ipBytesOut)"
     line += "  \(hostnameText(flow, index: index))"
+    let company = companyText(FlowLabels.label(for: flow, index: index, cache: &cache))
+    if !company.isEmpty { line += "  \(company)" }
     line += "  -> \(describe(Attributor.attribute(flow.tally)))"
     return line
 }
@@ -302,9 +317,10 @@ func printSummary(pipeline: CapturePipeline, stats: PipelineStats, final: Pipeli
 
     let flows = await pipeline.flowsSnapshot()
     let index = HostnameIndex(await pipeline.domainsSnapshot(), flows: flows)
+    var cache = LabelCache()
     print("\nTop flows by IP bytes:")
     for flow in flows.sorted(by: { $0.ipBytesIn + $0.ipBytesOut > $1.ipBytesIn + $1.ipBytesOut }).prefix(20) {
-        print(flowLine(flow, index: index))
+        print(flowLine(flow, index: index, cache: &cache))
     }
 
     print("\nBytes by category (IP bytes, whole flows):")
@@ -323,6 +339,8 @@ func printSummary(pipeline: CapturePipeline, stats: PipelineStats, final: Pipeli
     let phoneBytes = TrafficCategory.allCases.filter(\.isPhoneTraffic).reduce(0) { $0 + (categoryBytes[$1] ?? 0) }
     print("  Phone traffic total: \(phoneBytes) bytes")
 
+    printCompanyCounts(flows: flows, index: index, cache: &cache)
+
     print("\nDomains: DNS answers \(stats.dnsObservations)  SNI found \(stats.sniFound)")
     print("Handshake buffers gave up: TLS \(await pipeline.tlsGaveUp)  QUIC \(await pipeline.quicGaveUp)")
     print(gaveUpSummary(stats))
@@ -332,8 +350,39 @@ func printSummary(pipeline: CapturePipeline, stats: PipelineStats, final: Pipeli
         .sorted { $0.ipBytesIn + $0.ipBytesOut > $1.ipBytesIn + $1.ipBytesOut }
     print("\nFlows with more than one app name: \(multi.count)")
     for flow in multi {
-        print(flowLine(flow, index: index))
+        print(flowLine(flow, index: index, cache: &cache))
         print("      names: \(appNames(flow).joined(separator: ", "))")
+    }
+}
+
+/// numbers only: how many flows and distinct hostnames got a company. a hint is counted apart and
+/// never as named. computed here from the finished flows, not on the packet path
+func printCompanyCounts(flows: [Flow], index: HostnameIndex, cache: inout LabelCache) {
+    var namedMatched = 0, namedUnmatched = 0, hintMatched = 0, hintUnmatched = 0, unnamed = 0
+    var hostnames = Set<String>(), matchedHostnames = Set<String>()
+    var byCategory: [CompanyCategory: Int] = [:]
+    for flow in flows {
+        guard let result = FlowLabels.label(for: flow, index: index, cache: &cache) else { unnamed += 1; continue }
+        let matched = result.label.isMatched
+        if result.isPossible {
+            if matched { hintMatched += 1 } else { hintUnmatched += 1 }
+            continue
+        }
+        hostnames.insert(result.label.hostname)
+        if matched {
+            namedMatched += 1
+            matchedHostnames.insert(result.label.hostname)
+            byCategory[result.label.category, default: 0] += 1
+        } else {
+            namedUnmatched += 1
+        }
+    }
+    print("\nCompany labels (names seen in the connection; hints counted apart):")
+    print("  Flows with a company: \(namedMatched)  not identified: \(namedUnmatched)  no name: \(unnamed)")
+    print("  Possible only (hint names): \(hintMatched) with a company, \(hintUnmatched) not identified")
+    print("  Distinct hostnames: \(hostnames.count)  with a company: \(matchedHostnames.count)")
+    for category in CompanyCategory.curatable where byCategory[category] != nil {
+        print("  \(category.rawValue): \(byCategory[category] ?? 0) flows")
     }
 }
 
