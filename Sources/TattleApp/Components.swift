@@ -104,6 +104,7 @@ struct FlowTable: View {
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
                 GridRow {
                     Text("Name").bold()
+                    Text("Company").bold()
                     Text("Address").bold()
                     Text("App").bold()
                     Text("IP bytes").bold().gridColumnAlignment(.trailing)
@@ -126,6 +127,13 @@ struct FlowTable: View {
                             }
                         }
                         .help(flow.hostnameDetail)
+                        // a hint is neutral and italic like the name above it; no match says so plainly
+                        Text(flow.companyText ?? "")
+                            .foregroundStyle(flow.companyLabel?.isPossible == true || flow.companyLabel?.label.isMatched == false
+                                ? Color.secondary : Color.primary)
+                            .italic(flow.companyLabel?.isPossible == true)
+                            .lineLimit(1)
+                            .help(flow.companyDetail ?? "")
                         Text(flow.address).foregroundStyle(.secondary).lineLimit(1).textSelection(.enabled)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(flow.attribution).lineLimit(1)
@@ -137,7 +145,7 @@ struct FlowTable: View {
                     }
                 }
                 if let fold = FlowRows(lines: [], moreFlows: moreFlows).foldLine {
-                    GridRow { Text(fold).foregroundStyle(.secondary).gridCellColumns(4) }
+                    GridRow { Text(fold).foregroundStyle(.secondary).gridCellColumns(5) }
                 }
             }
         }

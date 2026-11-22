@@ -1,7 +1,9 @@
 import Attribution
+import Companies
 import Domains
 import Flows
 import Foundation
+import Summary
 
 // pure grouping of flows (live) or stored tally rows (sessions) into the by-process table
 
@@ -180,6 +182,32 @@ struct FlowLine: Identifiable {
     var attribution: String
     /// the category label, set only for flows that are not phone traffic
     var setAsideLabel: String?
+    /// the company behind the name; nil when the flow has no name (the reason is shown instead)
+    var companyLabel: FlowLabel?
+
+    /// the company cell: the company and one category word, "Possible: ..." when the name is only a
+    /// hint, "Not identified" when no source knows the name. nil for a flow with no name. the source
+    /// and dataset version are not on the row, see `companyDetail`
+    var companyText: String? {
+        guard let companyLabel else { return nil }
+        let label = companyLabel.label
+        guard label.isMatched, let company = label.company else { return "Not identified" }
+        var text = company
+        if label.category != .unclassified { text += " · " + label.category.label }
+        return companyLabel.isPossible ? "Possible: " + text : text
+    }
+
+    /// tooltip for the company cell: where the answer came from
+    var companyDetail: String? {
+        guard let companyLabel else { return nil }
+        let label = companyLabel.label
+        guard label.isMatched else { return "No company is listed for this name" }
+        var text = "Company list"
+        if let version = label.datasetVersion, !version.isEmpty { text += " version " + version }
+        if label.source == .appleOwner { text = "Owner named in the imported report" }
+        if companyLabel.isPossible { text += ". The name is a hint and may belong to another service on the same server" }
+        return text
+    }
 
     /// the text under or instead of the name in a table cell: the source, or the reason
     var hostnameNote: String {
@@ -213,9 +241,12 @@ func describeAttribution(_ result: AttributionResult) -> String {
 /// builds the hostname index once, then looks up each of the shown flows. `makeIndex` is a seam for tests
 func topFlows(
     _ flows: [Flow], observations: [DomainObservation] = [], limit: Int = 10,
+    classifier: CompanyClassifier = CompanyClassifier(),
     makeIndex: ([DomainObservation], [Flow]) -> HostnameIndex = { HostnameIndex($0, flows: $1) }
 ) -> [FlowLine] {
     let index = makeIndex(observations, flows)
+    // one label per distinct hostname for this refresh; dropped when the rows are built
+    var cache = LabelCache(classifier: classifier)
     return flows.sorted { $0.ipBytesIn + $0.ipBytesOut > $1.ipBytesIn + $1.ipBytesOut }
         .prefix(limit)
         .map { flow in
@@ -226,6 +257,7 @@ func topFlows(
                 ipBytes: flow.ipBytesIn + flow.ipBytesOut,
                 attribution: describeAttribution(Attributor.attribute(flow.tally)),
                 setAsideLabel: category.isPhoneTraffic ? nil : category.label)
+            line.companyLabel = FlowLabels.label(for: flow, index: index, cache: &cache)
             switch index.outcome(for: flow) {
             case .named(let resolved):
                 line.hostname = resolved.name
@@ -257,10 +289,11 @@ let liveRowLimit = 500
 
 func flowRows(
     _ flows: [Flow], observations: [DomainObservation] = [], limit: Int = liveRowLimit,
+    classifier: CompanyClassifier = CompanyClassifier(),
     makeIndex: ([DomainObservation], [Flow]) -> HostnameIndex = { HostnameIndex($0, flows: $1) }
 ) -> FlowRows {
     FlowRows(
-        lines: topFlows(flows, observations: observations, limit: limit, makeIndex: makeIndex),
+        lines: topFlows(flows, observations: observations, limit: limit, classifier: classifier, makeIndex: makeIndex),
         moreFlows: max(0, flows.count - limit))
 }
 

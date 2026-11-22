@@ -29,11 +29,13 @@ let package = Package(
             name: "Pipeline",
             dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains", "Storage", "Attribution"]
         ),
+        // read-time labels for the screens and the command line; never imported by the packet path
+        .target(name: "Summary", dependencies: ["Companies", "Flows", "Domains", "Attribution"]),
         .target(name: "Capture", dependencies: ["PCAPNG", "Storage", "Pipeline"]),
-        .executableTarget(name: "TattleCLI", dependencies: ["PCAPNG", "Storage", "Pipeline", "Capture", "Report"]),
+        .executableTarget(name: "TattleCLI", dependencies: ["PCAPNG", "Storage", "Pipeline", "Capture", "Report", "Companies", "Summary"]),
         .executableTarget(
             name: "TattleApp",
-            dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains", "Storage", "Attribution", "Pipeline", "Capture", "Report"]
+            dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains", "Storage", "Attribution", "Pipeline", "Capture", "Report", "Companies", "Summary"]
         ),
 
         // shared test helpers: fixture lookup and byte builders
@@ -41,6 +43,7 @@ let package = Package(
 
         .testTarget(name: "TattleCLITests", dependencies: ["PCAPNG", "TestSupport"]),
         .testTarget(name: "CompaniesTests", dependencies: ["Companies"]),
+        .testTarget(name: "SummaryTests", dependencies: ["Summary", "Companies", "Attribution", "Flows", "Domains", "PacketDecoder", "TestSupport"]),
         .testTarget(name: "PacketDecoderTests", dependencies: ["PacketDecoder", "TestSupport"]),
         .testTarget(name: "FlowsTests", dependencies: ["Flows", "TestSupport"]),
         .testTarget(name: "DomainsTests", dependencies: ["Domains", "TestSupport"]),
@@ -49,7 +52,7 @@ let package = Package(
         .testTarget(name: "ReportTests", dependencies: ["Report", "Attribution", "Pipeline", "PCAPNG", "TestSupport"]),
         .testTarget(name: "PipelineTests", dependencies: ["Pipeline", "TestSupport"]),
         .testTarget(name: "CaptureTests", dependencies: ["Capture", "TestSupport"]),
-        .testTarget(name: "TattleAppTests", dependencies: ["TattleApp", "TestSupport"]),
+        .testTarget(name: "TattleAppTests", dependencies: ["TattleApp", "Companies", "Summary", "TestSupport"]),
     ],
     swiftLanguageModes: [.v6]
 )
