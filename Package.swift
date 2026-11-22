@@ -4,9 +4,12 @@ import PackageDescription
 
 // one target per component, see md/DESIGN.md section 6b for the build order
 let package = Package(
-    name: "WatchCapture",
+    name: "Tattle",
     platforms: [
         .macOS(.v13)
+    ],
+    products: [
+        .executable(name: "tattle", targets: ["TattleCLI"])
     ],
     targets: [
         .target(name: "PCAPNG"),
@@ -24,17 +27,17 @@ let package = Package(
             name: "Pipeline",
             dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains", "Storage", "Attribution"]
         ),
-        .target(name: "Capture", dependencies: ["PCAPNG", "Pipeline"]),
-        .executableTarget(name: "WatchCapture", dependencies: ["PCAPNG", "Pipeline", "Capture", "Report"]),
+        .target(name: "Capture", dependencies: ["PCAPNG", "Storage", "Pipeline"]),
+        .executableTarget(name: "TattleCLI", dependencies: ["PCAPNG", "Storage", "Pipeline", "Capture", "Report"]),
         .executableTarget(
-            name: "WatchApp",
+            name: "TattleApp",
             dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains", "Storage", "Attribution", "Pipeline", "Capture", "Report"]
         ),
 
         // shared test helpers: fixture lookup and byte builders
         .target(name: "TestSupport", dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains"], path: "Tests/TestSupport"),
 
-        .testTarget(name: "WatchCaptureTests", dependencies: ["PCAPNG", "TestSupport"]),
+        .testTarget(name: "TattleCLITests", dependencies: ["PCAPNG", "TestSupport"]),
         .testTarget(name: "PacketDecoderTests", dependencies: ["PacketDecoder", "TestSupport"]),
         .testTarget(name: "FlowsTests", dependencies: ["Flows", "TestSupport"]),
         .testTarget(name: "DomainsTests", dependencies: ["Domains", "TestSupport"]),
@@ -43,7 +46,7 @@ let package = Package(
         .testTarget(name: "ReportTests", dependencies: ["Report", "Attribution", "Pipeline", "PCAPNG", "TestSupport"]),
         .testTarget(name: "PipelineTests", dependencies: ["Pipeline", "TestSupport"]),
         .testTarget(name: "CaptureTests", dependencies: ["Capture", "TestSupport"]),
-        .testTarget(name: "WatchAppTests", dependencies: ["WatchApp", "TestSupport"]),
+        .testTarget(name: "TattleAppTests", dependencies: ["TattleApp", "TestSupport"]),
     ],
     swiftLanguageModes: [.v6]
 )

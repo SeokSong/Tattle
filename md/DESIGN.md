@@ -1,4 +1,4 @@
-# Watch Design Doc
+# Tattle Design Doc
 
 Requirement IDs (F, I, N) are defined in [OVERVIEW.md](OVERVIEW.md#requirements).
 
@@ -82,7 +82,7 @@ Device check ──▶ Capture (rvictl + tcpdump) ──stdout──▶ PacketSo
 
 Separate entities, never merged into one record (packets, flows, domains and apps are different things).
 
-- **CaptureSession**: id, start, end, source (`rvi`), device (hashed id, name), Watch version
+- **CaptureSession**: id, start, end, source (`rvi`), device (hashed id, name), Tattle version
 - **Packet** (memory only, never stored): interface, timestamp, direction, captured and original length, `proc`, `eproc`, raw bytes
 - **NetworkFlow**: session, protocol, local IP:port, remote IP:port, interface, first and last seen, packets and bytes in each direction, end reason, process tally
 - **ProcessTally** (per flow): `(proc name, proc PID, eproc name, eproc PID) → packet count`, "none" included
@@ -128,7 +128,7 @@ Detail and field types: [FLOWS.md](FLOWS.md), [DOMAINS.md](DOMAINS.md), [STORAGE
 | `Attribution` | Flows, Domains | [ATTRIBUTION.md](ATTRIBUTION.md) | 5 |
 | `Pipeline` | all above | [PIPELINE.md](PIPELINE.md) | 6 |
 | `Report` | Flows, Domains, Attribution, Storage, PacketDecoder | [REPORT.md](REPORT.md) | 7 |
-| `WatchCapture` (CLI) | Pipeline | [PIPELINE.md](PIPELINE.md) | 6 |
+| `tattle` (CLI) | Pipeline | [PIPELINE.md](PIPELINE.md) | 6 |
 | Capture, App | Pipeline | [CAPTURE.md](CAPTURE.md), [APP.md](APP.md) | after the distribution decision |
 
 - One test target per module. All targets live in `Package.swift` from the start, with placeholder files, so each step only fills in its own folder
@@ -160,7 +160,7 @@ Detail and field types: [FLOWS.md](FLOWS.md), [DOMAINS.md](DOMAINS.md), [STORAGE
 |---|---|
 | Cable unplugged mid-capture | Measured on a phone: tcpdump exits in 2 to 3 s with "The interface disappeared". Close open flows, end the session as "interrupted" with the link-lost message, stop RVI. A stall with no exit is caught by the 15 s watchdog and an `ifconfig` check. The app reads tcpdump through a FIFO, whose end of file must be read explicitly (see [CAPTURE.md](CAPTURE.md)) |
 | tcpdump exits unexpectedly | Same as above, and show its exit code |
-| Watch crashes during capture | On next launch: stop any RVI device Watch started, close the unfinished session as "interrupted" |
+| Tattle crashes during capture | On next launch: stop any RVI device Tattle started, close the unfinished session as "interrupted" |
 | Parse error mid-stream | Stop the capture, keep what was saved, report the byte offset. Never skip silently (F11) |
 | Admin access revoked | Start is refused with a clear message; nothing runs half-started |
 

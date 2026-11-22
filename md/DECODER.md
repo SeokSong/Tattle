@@ -155,7 +155,7 @@ public struct PacketDecoder {
 - IPv4 first fragment and non-first fragment
 - Truncated TCP header → `.malformed`; ARP → `.skipped`
 - Direction: flags inbound/outbound, missing with learned local address, missing and unknown
-- Fixture (`WATCH_FIXTURES`): every packet of watch-clean-test is decoded, skipped or malformed; decoded + skipped + malformed == 1,292; malformed == 0; print the counts per outcome
+- Fixture (`TATTLE_FIXTURES`): every packet of watch-clean-test is decoded, skipped or malformed; decoded + skipped + malformed == 1,292; malformed == 0; print the counts per outcome
 
 ### Acceptance
 

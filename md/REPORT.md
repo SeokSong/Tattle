@@ -112,7 +112,7 @@ Each check prints `name`, `expected`, `actual`, `ok`. `reconciliation.ok` is the
 
 ## Session section (6.2)
 
-- Present only when the report was given `SessionStats`; without them the key is absent. `WatchCapture report <file>` builds them from the replay; `--db` reads the stored row (an old session shows zeros)
+- Present only when the report was given `SessionStats`; without them the key is absent. `tattle report <file>` builds them from the replay; `--db` reads the stored row (an old session shows zeros)
 - `session { gapCount, maxGapSeconds, saveFailures, unsavedFlows, kernelDropped }`. `kernelDropped` is absent in JSON when unknown (tcpdump was killed before printing its summary) and prints as `unknown` in the text. A nonzero count adds a `WARNING` line to the text report. Numbers only
 - A gap is a silence over 5 s in packet time (see [PIPELINE.md](PIPELINE.md#gaps-62)). A locked phone makes a gap; the session is not ended
 - The text report prints a `Session` block with the same numbers. It is not a reconciliation check and not in band files
@@ -125,7 +125,7 @@ Each check prints `name`, `expected`, `actual`, `ok`. `reconciliation.ok` is the
 
 ## Scenario files
 
-- A scenario file says what the phone did during a capture. It names apps and sites, so real ones live in `~/dev/watch-fixtures/scenarios/<id>.json` and are never committed
+- A scenario file says what the phone did during a capture. It names apps and sites, so real ones live in `~/dev/tattle-fixtures/scenarios/<id>.json` and are never committed
 - Only `id` and `windows` are required
 
 ```json
@@ -203,8 +203,8 @@ Tolerance rule, applied when a band file is written (`Bands.make`, values rounde
 ## Command
 
 ```sh
-WatchCapture report <file.pcap|pcapng> [options]
-WatchCapture report --db <path> --session <id|latest> [options]
+tattle report <file.pcap|pcapng> [options]
+tattle report --db <path> --session <id|latest> [options]
 ```
 
 | Option | Effect |

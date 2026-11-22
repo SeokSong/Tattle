@@ -130,10 +130,12 @@ public final class Store {
     }
 
     public static func defaultPath() -> URL {
-        let base =
-            FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
-        return base.appendingPathComponent("Watch/watch.sqlite")
+        defaultPath(base: nil)
+    }
+
+    /// base is injectable for tests; nil means the user's Application Support directory
+    static func defaultPath(base: URL?) -> URL {
+        AppIdentity.supportDirectory(base: base).appendingPathComponent("watch.sqlite")
     }
 
     private func migrate(_ steps: [Int: [String]]) throws {

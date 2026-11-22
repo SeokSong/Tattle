@@ -56,7 +56,7 @@ public struct PipelineStats: Sendable {
 - `retainDomains: true` keeps every flushed `DomainObservation` for `domainsSnapshot()`, as `retainFlows` does for flows. CLI and tests only: unbounded, never set in the app
 - `dnsSnapshot() -> [DomainObservation]` returns the recent DNS ring: the last `CapturePipeline.recentDNSCapacity` (5,000) DNS answers, oldest first. Always on, DNS only, fixed size (the oldest is overwritten), so it is safe in the app. The live screen builds its `HostnameIndex` from it; SNI names come from each flow's `serverName`. `PipelineStats.recentDNSCount` is its current size
 - Caps (6.1): see [Caps and counters](#caps-and-counters). `retainFlows` is used by the app (live list) and the CLI, so it is capped; `retainDomains` is CLI and tests only and is capped too
-- `PipelineStats.handshakeGaveUp: [String: Int]` counts handshake buffers that ended without a name, by `GaveUpReason` raw value (see [DOMAINS.md](DOMAINS.md)). Numbers only. `WatchCapture report` prints it as `Handshake gave up: ...`; a QUIC flow's Initial is decrypted at most 3 times
+- `PipelineStats.handshakeGaveUp: [String: Int]` counts handshake buffers that ended without a name, by `GaveUpReason` raw value (see [DOMAINS.md](DOMAINS.md)). Numbers only. `tattle report` prints it as `Handshake gave up: ...`; a QUIC flow's Initial is decrypted at most 3 times
 
 ### Gaps (6.2)
 
@@ -95,7 +95,7 @@ Every structure that grows with traffic has a cap, an eviction rule and a counte
 - `retainedDropped > 0` means in-memory totals are lower than the saved session. The CLI `report` and `flows` print a warning after the `Caps:` line; the reconciliation check `decodedAccounted` also fails in that case
 - Not capped on purpose, because they are batch inputs: `PCAPNGReader.parse` (the whole file, CLI `read` only) and the report and session screens, which read one stored session
 - `PipelineStats.anyCapHit` is true when any drop, eviction or fold counter is above 0
-- `WatchCapture report` and `flows` print one `Caps:` line with every counter and peak, after `Handshake gave up`
+- `tattle report` and `flows` print one `Caps:` line with every counter and peak, after `Handshake gave up`
 - Early flush runs inside `process`, so a slow store slows packet handling; the live timer flush still runs every 2 s and normally keeps the queue far below 20,000
 
 ### Errors
@@ -108,7 +108,7 @@ Every structure that grows with traffic has a cap, an eviction rule and a counte
 - Everything runs on the actor, single-threaded by design: 1,500 packets/s needs ~0.7 ms per packet, and the reader alone does 50k in 0.1 s. Measure before adding threads
 - No `Date()` calls per packet; packet timestamps drive expiry
 
-### CLI (`WatchCapture`)
+### CLI (`tattle`)
 
 | Command | Does |
 |---|---|
@@ -127,7 +127,7 @@ Every structure that grows with traffic has a cap, an eviction rule and a counte
 - Replaying a hand-built event list (one DNS answer, one TLS flow with a split ClientHello, one UDP flow) yields the expected flows, server name and domain observation
 - Stats add up: `packets == decoded + skipped + malformed`
 - Flush on replay writes the same flows a `store.flows(session:)` reads back
-- Fixture (`WATCH_FIXTURES`): all five files run to the trailer; `bench` on multi-app prints its rate
+- Fixture (`TATTLE_FIXTURES`): all five files run to the trailer; `bench` on multi-app prints its rate
 
 ### Acceptance
 

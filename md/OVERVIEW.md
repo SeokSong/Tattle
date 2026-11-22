@@ -1,6 +1,6 @@
-# Watch Project Overview
+# Tattle Project Overview
 
-Watch shows which iPhone apps talk to which internet services, when, and how much. It is inspired by the CBC Marketplace investigation *The App Trap*: the goal is to make network activity that is normally invisible understandable to ordinary users.
+Tattle shows which iPhone apps talk to which internet services, when, and how much. It is inspired by the CBC Marketplace investigation *The App Trap*: the goal is to make network activity that is normally invisible understandable to ordinary users.
 
 Scope for now: **iPhone captured through a Mac over USB.** The iPhone app, Windows and Linux come later.
 
@@ -9,26 +9,26 @@ Scope for now: **iPhone captured through a Mac over USB.** The iPhone app, Windo
 - A Mac app that captures an iPhone's network traffic over USB, using Apple's Remote Virtual Interface (RVI)
 - It reads Apple's per-packet process metadata (PKTAP), so traffic can be tied to the app that sent it
 - It groups packets into network flows, extracts hostnames from DNS and TLS/QUIC handshakes, and stores the results locally
-- It never decrypts anything. TLS and QUIC content stays encrypted; Watch reads only the unencrypted metadata around it
+- It never decrypts anything. TLS and QUIC content stays encrypted; Tattle reads only the unencrypted metadata around it
 
 ## Why build it
 
 - iOS gives users almost no view of what apps send in the background
 - Apple's App Privacy Report lists domains per app, but not volumes, timing, or which connection carried what
 - A Mac on a USB cable can see much more than an iPhone app is allowed to see, without a jailbreak
-- Watch should never claim to know more than it observed: unknown stays unknown
+- Tattle should never claim to know more than it observed: unknown stays unknown
 
 ## Example
 
-1. Plug the iPhone into the Mac and press Start in Watch
+1. Plug the iPhone into the Mac and press Start in Tattle
 2. Open YouTube on the phone and watch a video
-3. Watch shows the connections YouTube made, how many bytes each carried, and which hostnames they went to
+3. Tattle shows the connections YouTube made, how many bytes each carried, and which hostnames they went to
 4. Traffic from system services, and traffic with no process information, is shown separately instead of being credited to YouTube
 
 ## How it works (big picture)
 
 ```
-iPhone ──USB──▶ rvi0 (rvictl) ──▶ tcpdump -U -w - ──stdout──▶ Watch
+iPhone ──USB──▶ rvi0 (rvictl) ──▶ tcpdump -U -w - ──stdout──▶ Tattle
                                                               │
          PCAPNG reader ──▶ packet decoder ──▶ flow table ──▶ local store (7 days)
                                    │                ▲
@@ -36,7 +36,7 @@ iPhone ──USB──▶ rvi0 (rvictl) ──▶ tcpdump -U -w - ──stdout�
                                    └──▶ raw packet dropped
 ```
 
-- tcpdump streams PCAPNG to Watch over stdout. Nothing raw is written to disk
+- tcpdump streams PCAPNG to Tattle over stdout. Nothing raw is written to disk
 - The reader turns the stream into packets, each with an interface, a timestamp, and process info (`proc` and `eproc`)
 - The decoder reads IP and TCP/UDP headers, then the raw packet is dropped
 - The flow table groups packets into connections and keeps a tally of the processes seen on each
@@ -54,7 +54,7 @@ IDs are used across the design docs.
 | ID | Requirement |
 |---|---|
 | F1 | Check the iPhone is on USB and that CoreDevice reports it as wired with a connected tunnel, before capturing |
-| F2 | Start and stop RVI and tcpdump from Watch. Stop is immediate |
+| F2 | Start and stop RVI and tcpdump from Tattle. Stop is immediate |
 | F3 | Show clearly whenever a capture is running |
 | F4 | Process packets live, while the capture runs |
 | F5 | Decode IPv4, IPv6, TCP and UDP on Ethernet (en0, en2) and DLT_NULL (utun, pdp_ip0) interfaces |
@@ -160,7 +160,7 @@ Updated 2026-11-18.
 
 | Item | Status |
 |---|---|
-| Fixture captures restored to `~/dev/watch-fixtures` (six scripted captures plus scenario files) | Done |
+| Fixture captures restored to `~/dev/tattle-fixtures` (six scripted captures plus scenario files) | Done |
 | Classify Mac–phone link traffic (`heartbeatd`, `lockdownd`, `169.254.x`) | Done: six categories, app-tagged flows never moved |
 | Handle 16-character process names | Done |
 | Hostnames for connections older than the capture | Done as reasons and labelled hints (`startedBeforeCapture`, DNS and same-address hints outside the headline). Names for such flows cannot be recovered from the traffic (98.9% of app HTTPS bytes in the midstream capture) |
@@ -186,6 +186,7 @@ Deferred from Milestone 2:
 
 | Item | Notes |
 |---|---|
+| Plain-language summary report | For non-technical users: a clean overview of a session or the last 7 days in everyday words, e.g. "TikTok contacted 14 companies, 6 of them advertisers", "Most of your data went to Google", with no jargon, ports or hostnames up front. Details stay one click away. States what Tattle could not see. Depends on company classification |
 | Company and tracker classification | Domain → company list (bundled, offline) |
 | Destination map | Geolocation of remote IPs, with the CDN caveat |
 | Mac app polish | App filter, per-flow view, history across sessions |

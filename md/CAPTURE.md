@@ -4,7 +4,7 @@
 
 ## Purpose
 
-- Start and stop the iPhone's virtual interface and tcpdump from Watch (F2)
+- Start and stop the iPhone's virtual interface and tcpdump from Tattle (F2)
 - Hand tcpdump's output to the PCAPNG reader as a live stream (F4)
 - Make sure nothing keeps running after Stop, a crash, or an unplugged cable
 
@@ -49,7 +49,7 @@
 ## Stop and cleanup
 
 - Stop: SIGINT tcpdump, wait briefly, then SIGKILL if still running. Then `rvictl -x`
-- On launch: if Watch started an RVI device that is still active, stop it
+- On launch: if Tattle started an RVI device that is still active, stop it
 - Every exit path closes the capture session (see failure table in [DESIGN.md](DESIGN.md#8-failure-handling))
 
 ## Stall watchdog and link health
@@ -101,7 +101,7 @@
 
 - Off by default. A Settings switch
 - When on: also writes the raw PCAPNG stream to disk, shown in the capture bar
-- App: files go in `<app support>/Watch/diagnostics/` (0700), named `diagnostic-<ISO 8601 time, ":" as "-">.pcapng` (0600). A second file in the same second gets a `-2`, `-3` suffix (`DiagnosticFiles`, never overwrites)
+- App: files go in `<app support>/Tattle/diagnostics/` (0700), named `diagnostic-<ISO 8601 time, ":" as "-">.pcapng` (0600). A second file in the same second gets a `-2`, `-3` suffix (`DiagnosticFiles`, never overwrites)
 - App: files older than 24 hours are deleted at app start (only regular files named `diagnostic-*.pcapng`; a symlink with that name is removed, never followed). "Delete all" removes every one
 - The files contain raw packets, including any plain-HTTP bodies
 - CLI: `--diagnostic <file>` writes where you say and prints "The file is not deleted automatically". Nothing purges it
@@ -122,7 +122,7 @@
 
 ## Implementation spec (sudo mode)
 
-Target `Capture`, depends on `PCAPNG` and `Pipeline`. The CLI gains `capture`. Runs as root (`sudo .build/release/WatchCapture capture ...`); the Developer ID helper comes later with the same protocol.
+Target `Capture`, depends on `PCAPNG` and `Pipeline`. The CLI gains `capture`. Runs as root (`sudo .build/release/tattle capture ...`); the Developer ID helper comes later with the same protocol.
 
 ### Types
 
@@ -169,7 +169,7 @@ public actor CaptureController {
 
 ### Stale run directories (6.4)
 
-- A crashed app can leave `~/Library/Application Support/Watch/run/<uuid>/` behind, with a root tcpdump still writing to it. The app is not root and cannot signal it, but the script exits when its directory gets a `stop` file or disappears
+- A crashed app can leave `~/Library/Application Support/Tattle/run/<uuid>/` behind, with a root tcpdump still writing to it. The app is not root and cannot signal it, but the script exits when its directory gets a `stop` file or disappears
 - On launch `PrototypeCaptureLauncher.cleanStaleRunDirectories(runRoot:ownDirectory:grace:)` creates `stop` in each stale directory, waits 10 s, then removes its files and the directory
 - A directory is ours only if all of these hold: it is a real directory (checked with `lstat`, a symlink never qualifies) directly under the run root; its name is exactly a canonical uppercase `UUID().uuidString`; it is owned by this user; it holds only `script.sh`, `stream`, `log`, `osascript.err`, `stop`. Anything else is left alone, untouched and unreported. The directory of a capture in progress is never touched
 - The stop file is created with `O_EXCL | O_NOFOLLOW`; files are removed with `unlink` (a link is removed, not its target); there is no recursive delete. The `logs` directory is never opened
@@ -179,7 +179,7 @@ public actor CaptureController {
 ### CLI `capture`
 
 ```
-sudo .build/release/WatchCapture capture (--udid <udid> | --device <name>) [--db <path>] [--duration <seconds>] [--diagnostic <file.pcapng>] [--metrics <file.csv>]
+sudo .build/release/tattle capture (--udid <udid> | --device <name>) [--db <path>] [--duration <seconds>] [--diagnostic <file.pcapng>] [--metrics <file.csv>]
 ```
 
 - `--device`: resolve the udid through `devicectl list devices --json-output` (wired devices only); `--udid` skips that. Never print the udid; print the device name only
@@ -189,7 +189,7 @@ sudo .build/release/WatchCapture capture (--udid <udid> | --device <name>) [--db
 - `--duration`: stop automatically after that many seconds (for scripted tests)
 - `--diagnostic`: also tee the raw stream to that file (the opt-in diagnostic capture); print a warning line that raw packets are being written
 - `--metrics`: append one csv row every 2 seconds (`MetricsLog`, plan 6.6): header first, then elapsed seconds, packets, open and peak open flows, pending domains, handshake states, every cap counter, gap count, longest gap (ms), kernel drops and resident memory in bytes. Numbers only. Kernel drops is empty until tcpdump has ended (the count is unknown, never 0), so only the last row has it. The rows come from their own task, never from the packet path. Row k is due k x 2 s after the first row (fixed slots), and the task sleeps until the next slot; a wake-up that is late delays one row, not the ones after it. A slot missed completely is not back-filled, and every row has its real elapsed time, so a gap shows in the file. The first 30-minute run wrote 873 rows instead of 900 because the old timer waited 2 s after each actual write: with a 1.03 s wake-up the period became 2.06 s (1,800 / 873), a drift and not skipped samples; a last row is written after the pipeline stops. The file is created like the diagnostic file (`O_CREAT | O_EXCL | O_NOFOLLOW`, 0600, handed back to the user under sudo): an existing file or symlink is refused (exit 1) and a missing parent directory is not created
-- `WatchCapture metrics <file.csv>` reads such a file back: duration, rows, min, max and last resident memory, the least-squares slope over the last two thirds of the run (bytes per minute), peak open flows, gaps, and a verdict. "memory flat" means a slope under 1 MB per 10 minutes (our threshold; the plan names none). Exit 0, or 1 when the file is unreadable or not a metrics file
+- `tattle metrics <file.csv>` reads such a file back: duration, rows, min, max and last resident memory, the least-squares slope over the last two thirds of the run (bytes per minute), peak open flows, gaps, and a verdict. "memory flat" means a slope under 1 MB per 10 minutes (our threshold; the plan names none). Exit 0, or 1 when the file is unreadable or not a metrics file
 - Exit codes: 0 stopped by user or duration, 1 rvi failed, 2 tcpdump failed (print its last stderr lines), 3 device not found
 
 ### Tests (no phone needed)
@@ -199,7 +199,7 @@ sudo .build/release/WatchCapture capture (--udid <udid> | --device <name>) [--db
 - `stop` while the script is still running: returns within 3 s, the script is gone, `rvictl -x` was called (the fake script appends its argv to a log file the test reads)
 - rvictl printing `[FAILED]` → `rviStartFailed`, no tcpdump started
 - tcpdump exiting non-zero immediately → the source's stream throws and `terminationStatus` is set
-- Fixture (`WATCH_FIXTURES`): full `capture`-style run through the fake tools into a temp `Store`, flows count equals the `flows` command's count for the same file
+- Fixture (`TATTLE_FIXTURES`): full `capture`-style run through the fake tools into a temp `Store`, flows count equals the `flows` command's count for the same file
 
 ### Acceptance
 

@@ -2,10 +2,20 @@
 # creates and checks the private fixtures folder (real captures hold personal traffic,
 # so it must stay outside git and outside iCloud).
 # usage: scripts/fixtures.sh init|check
-#   WATCH_FIXTURES=/some/dir scripts/fixtures.sh check    (default ~/dev/watch-fixtures)
+#   TATTLE_FIXTURES=/some/dir scripts/fixtures.sh check    (default ~/dev/tattle-fixtures)
+# WATCH_FIXTURES is the deprecated old name, still read as a fallback; so is the old default
+# folder ~/dev/watch-fixtures when ~/dev/tattle-fixtures does not exist
 set -eu
 
-dir=${WATCH_FIXTURES:-$HOME/dev/watch-fixtures}
+if [ -n "${TATTLE_FIXTURES:-}" ]; then
+    dir=$TATTLE_FIXTURES
+elif [ -n "${WATCH_FIXTURES:-}" ]; then
+    dir=$WATCH_FIXTURES
+elif [ ! -d "$HOME/dev/tattle-fixtures" ] && [ -d "$HOME/dev/watch-fixtures" ]; then
+    dir=$HOME/dev/watch-fixtures
+else
+    dir=$HOME/dev/tattle-fixtures
+fi
 case $dir in
     "~") dir=$HOME ;;
     "~/"*) dir=$HOME/${dir#"~/"} ;;
@@ -59,7 +69,7 @@ check() {
     cd "$real"
     echo "files in $real:"
     manifest=MANIFEST.sha256
-    tmp=$(mktemp "${TMPDIR:-/tmp}/watch-manifest.XXXXXX")
+    tmp=$(mktemp "${TMPDIR:-/tmp}/tattle-manifest.XXXXXX")
     trap 'rm -f "$tmp"' EXIT
     find . -type f ! -name "$manifest" ! -name .DS_Store | sort | while IFS= read -r f; do
         size=$(stat -f %z "$f")
