@@ -37,7 +37,7 @@ let package = Package(
         .executableTarget(name: "TattleCLI", dependencies: ["PCAPNG", "Storage", "Pipeline", "Capture", "Report", "Companies", "Summary"]),
         .executableTarget(
             name: "TattleApp",
-            dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains", "Storage", "Attribution", "Pipeline", "Capture", "Report", "Companies", "Summary"]
+            dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains", "Storage", "Attribution", "Pipeline", "Capture", "Report", "Companies", "Summary", "PrivacyReport"]
         ),
 
         // shared test helpers: fixture lookup and byte builders
@@ -55,7 +55,7 @@ let package = Package(
         .testTarget(name: "ReportTests", dependencies: ["Report", "Attribution", "Pipeline", "PCAPNG", "Companies", "Summary", "TestSupport"]),
         .testTarget(name: "PipelineTests", dependencies: ["Pipeline", "Storage", "PrivacyReport", "TestSupport"]),
         .testTarget(name: "CaptureTests", dependencies: ["Capture", "TestSupport"]),
-        .testTarget(name: "TattleAppTests", dependencies: ["TattleApp", "Companies", "Summary", "TestSupport"]),
+        .testTarget(name: "TattleAppTests", dependencies: ["TattleApp", "Companies", "Summary", "Storage", "Pipeline", "PrivacyReport", "TestSupport"]),
     ],
     swiftLanguageModes: [.v6]
 )
