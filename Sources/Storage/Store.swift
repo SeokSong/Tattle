@@ -32,7 +32,7 @@ public struct CaptureSession: Sendable {
     }
 }
 
-private let schemaVersion = 2
+private let schemaVersion = 3
 
 /// the version 1 schema, frozen. never edit: change the schema by adding a migration
 private let schemaV1SQL = """
@@ -77,7 +77,25 @@ private let migrations: [Int: [String]] = [
         "alter table session add column kernel_dropped integer",
         "alter table session add column save_failures integer not null default 0",
         "alter table session add column unsaved_flows integer not null default 0",
-    ]
+    ],
+    3: [
+        """
+        create table report_import (
+          id text primary key, file_sha256 text not null unique,
+          period_start real not null, period_end real not null, imported_at real not null,
+          lines_read integer, records_kept integer, malformed integer, unknown_types integer,
+          format_version integer)
+        """,
+        """
+        create table report_contact (
+          import_id text not null references report_import(id) on delete cascade,
+          app_id text not null, domain text not null, domain_owner text,
+          hits integer not null, first_seen real, last_seen real,
+          initiated_type text, domain_type integer, domain_classification integer,
+          primary key (import_id, app_id, domain))
+        """,
+        "create index report_contact_app on report_contact(app_id)",
+    ],
 ]
 
 public struct SessionStats: Equatable, Sendable {
@@ -100,7 +118,7 @@ public struct SessionStats: Equatable, Sendable {
 }
 
 public final class Store {
-    private let db: Database
+    let db: Database  // internal: the import store extension lives in another file
 
     /// creates directories with 0700 and the file with 0600, runs migrations
     public convenience init(path: URL) throws {
@@ -373,16 +391,22 @@ public final class Store {
     /// deletes sessions that ended more than `olderThan` seconds ago. flows, tally and domains cascade
     public func expire(olderThan: TimeInterval) throws {
         let st = try db.statement("delete from session where ended_at is not null and ended_at < ?")
-        st.bind(1, Date().timeIntervalSince1970 - olderThan)
+        let cutoff = Date().timeIntervalSince1970 - olderThan
+        st.bind(1, cutoff)
         try st.run()
+        // imports follow the same setting, counted from the end of the report's period. contacts cascade
+        let imports = try db.statement("delete from report_import where period_end < ?")
+        imports.bind(1, cutoff)
+        try imports.run()
         // secure_delete overwrites freed pages; truncating the wal removes its copies of them
         try db.exec("pragma wal_checkpoint(TRUNCATE)")
     }
 
-    /// removes every session (the install salt stays). then the wal is emptied and the file vacuumed,
+    /// removes every session and imported report (the install salt stays). then the wal is emptied and the file vacuumed,
     /// so no deleted content is left in either file
     public func deleteAll() throws {
         try db.exec("delete from session")
+        try db.exec("delete from report_import")  // contacts cascade
         try db.exec("pragma wal_checkpoint(TRUNCATE)")
         try db.exec("vacuum")
         try db.exec("pragma wal_checkpoint(TRUNCATE)")
