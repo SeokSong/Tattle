@@ -130,9 +130,28 @@ Detail and field types: [FLOWS.md](FLOWS.md), [DOMAINS.md](DOMAINS.md), [STORAGE
 | `Report` | Flows, Domains, Attribution, Storage, PacketDecoder | [REPORT.md](REPORT.md) | 7 |
 | `tattle` (CLI) | Pipeline | [PIPELINE.md](PIPELINE.md) | 6 |
 | Capture, App | Pipeline | [CAPTURE.md](CAPTURE.md), [APP.md](APP.md) | after the distribution decision |
+| `Companies` (planned, M3) | — | planned | M3 |
+| `PrivacyReport` (planned, M3) | — | planned | M3 |
+| `Summary` (planned, M3) | Companies, Attribution, Flows, Domains | planned | M3 |
 
 - One test target per module. All targets live in `Package.swift` from the start, with placeholder files, so each step only fills in its own folder
 - Each step is built by a separate agent from its doc's "Implementation spec", then reviewed. Steps run one at a time: SwiftPM builds every test target into one bundle, so parallel half-finished targets would break each other's test runs
+
+### Milestone 3 modules and layering rules (planned)
+
+| Module | Job | Why it is separate |
+|---|---|---|
+| `Companies` | Domain to company and category: Public Suffix List, curated list, later a public list, classifier | No dependencies, so it can move to an iOS app unchanged |
+| `PrivacyReport` | Streaming parser for the App Privacy Report export | No dependencies; does not touch storage |
+| `Summary` | App summaries, the exposure band, tips, plain-language text: values in, values out | The SwiftUI app is hard to test; everything the summary says is tested here |
+| `Storage` | Gains plain row types for imports | Does not import `Companies` or `PrivacyReport` |
+| `Pipeline` | Gains the import glue (`ReportImporter`) | Keeps parsing and storing apart |
+
+- `PCAPNG`, `PacketDecoder`, `Flows`, `Domains`, `Storage`, `Attribution`, `Report`, `Capture` and `Pipeline` never import `Companies` or `Summary`: classification stays off the packet path and out of storage
+- `Companies` and `PrivacyReport` do not import each other
+- `Summary` never imports `Report`, `Storage`, `Capture`, `PrivacyReport` or `TattleApp`. Its input is its own plain value type (`AppContact`: app, domain, owner name, hits, first and last seen, source). The app maps stored report rows and capture flows into it
+- `Pipeline` adds a dependency on `PrivacyReport` (for the import glue) and keeps its dependency on `Storage`
+- New test targets: `CompaniesTests`, `PrivacyReportTests`, `SummaryTests`; a layering test fails if a rule is broken
 
 ## 7. Alternatives considered and rejected
 

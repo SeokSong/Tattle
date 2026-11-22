@@ -182,16 +182,22 @@ Deferred from Milestone 2:
 | Cross-session "same app" rows | No screen shows several sessions together |
 | Automatic reconnect after link loss | Needs more real failure evidence |
 
-### Milestone 3: user-facing product (next)
+### Milestone 3: user-facing product (in progress)
 
-| Item | Notes |
-|---|---|
-| Plain-language summary report | For non-technical users: a clean overview of a session or the last 7 days in everyday words, e.g. "TikTok contacted 14 companies, 6 of them advertisers", "Most of your data went to Google", with no jargon, ports or hostnames up front. Details stay one click away. States what Tattle could not see. Depends on company classification |
-| Company and tracker classification | Domain → company list (bundled, offline) |
-| Destination map | Geolocation of remote IPs, with the CDN caveat |
-| Mac app polish | App filter, per-flow view, history across sessions |
-| iOS app skeleton | App Privacy Report import; public APIs only (App Store priority). Committed scope: the report export (Settings → Privacy & Security → App Privacy Report → Save App Activity) covers the last 7 days while the phone is unplugged, which the Mac capture cannot. It lists app, domain and time, no bytes. Shown next to Mac captures, each labelled with its source |
-| Signed helper (`SMAppService`) | Needs the $99 Developer Program; deferred by decision |
+Decided with the owner on 2026-11-21. Built in the Mac app first; the iPhone app comes later.
+
+| Item | Status | Notes |
+|---|---|---|
+| Company and tracker classification | Committed, part 1 | Bundled and offline: a curated list plus the Public Suffix List first; a public tracker list only after its licence is checked. Which source wins on disagreement is decided by measuring each source on its own and checking the disagreements |
+| App Privacy Report import | Committed, part 2 | Network records only (no camera/location/contacts records, no website context). Covers the report's own dates (up to 7 days) while the phone is unplugged; contacts, no bytes |
+| Plain-language summary | Committed, part 3 | One merged view per app: advertising and tracking companies first, then all named companies, always with how many could not be identified. "Possible" names kept separate |
+| Advertising and tracking exposure | Committed, part 4 | A band, not a score: None found, Few (1-2), Some (3-5), Many (6+), hidden when under 70% of an app's domains are identified. Two tips (Background App Refresh, Tracking permission), each checked on a real phone |
+| Mac app polish | Committed, part 5 | App filter, per-connection view; "Show data amounts" toggle (off by default) after a reader test |
+| Exportable report (PDF or web page) | Later | Screen first |
+| History across sessions | Later | |
+| Destination map | Deferred | Location datasets have licence terms and CDN locations mislead |
+| iOS app | Later | Public APIs only (App Store priority) |
+| Signed helper (`SMAppService`) | Deferred | Needs the $99 Developer Program |
 
 ### Not started on purpose
 
