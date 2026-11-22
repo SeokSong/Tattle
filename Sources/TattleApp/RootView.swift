@@ -22,6 +22,7 @@ struct RootView: View {
             case .connect: ConnectView()
             case .live: LiveView()
             case .sessions: SessionsView()
+            case .importReport: ImportView(model: model.importModel)
             case .settings: SettingsView()
             }
         }

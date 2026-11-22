@@ -22,6 +22,10 @@ struct SettingsView: View {
                 Button("Delete all sessions...", role: .destructive) { confirmDelete = true }
                     .disabled(model.isBusy)
             }
+            Section("Imported reports") {
+                Text(ImportText.retention(days: model.retentionDays)).font(.caption).foregroundStyle(.secondary)
+                ImportListView(model: model.importModel)
+            }
             Section("Diagnostic capture") {
                 Toggle("Also save the raw packet stream", isOn: $model.diagnosticCapture)
                     .disabled(model.isBusy)

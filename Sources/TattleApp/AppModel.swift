@@ -15,6 +15,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     case connect = "Connect"
     case live = "Live"
     case sessions = "Sessions"
+    case importReport = "Import"
     case settings = "Settings"
 
     var id: String { rawValue }
@@ -24,6 +25,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .connect: return "cable.connector"
         case .live: return "waveform"
         case .sessions: return "clock.arrow.circlepath"
+        case .importReport: return "square.and.arrow.down"
         case .settings: return "gearshape"
         }
     }
@@ -103,6 +105,9 @@ final class AppModel: ObservableObject {
 
     private static let retentionKey = "retentionDays"
 
+    /// the App Privacy Report import screen and list; views observe it directly
+    let importModel: ImportModel
+
     private let storePath: URL
     private var store: Store?
     private var wiredDevice: DeviceSummary?
@@ -118,6 +123,7 @@ final class AppModel: ObservableObject {
 
     init(storePath: URL = Store.defaultPath()) {
         self.storePath = storePath
+        importModel = ImportModel(storePath: storePath)
         let saved = UserDefaults.standard.integer(forKey: Self.retentionKey)
         retentionDays = Self.retentionChoices.contains(saved) ? saved : 7
         do {
@@ -137,6 +143,7 @@ final class AppModel: ObservableObject {
         }
         DiagnosticFiles.purge(in: DiagnosticFiles.directory(under: storePath.deletingLastPathComponent()), now: Date())
         refreshSessions()
+        importModel.refresh()
     }
 
     // MARK: state helpers
@@ -427,6 +434,7 @@ final class AppModel: ObservableObject {
         guard !isBusy else { return }
         try? store?.expire(olderThan: TimeInterval(retentionDays) * 86400)
         refreshSessions()
+        importModel.refresh()
     }
 
     func deleteAll() {
@@ -439,6 +447,7 @@ final class AppModel: ObservableObject {
             storeError = "Delete failed: \(error.localizedDescription)"
         }
         refreshSessions()
+        importModel.refresh()
     }
 
     // MARK: helpers
