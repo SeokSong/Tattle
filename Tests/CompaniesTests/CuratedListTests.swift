@@ -13,10 +13,10 @@ private func row(_ domain: String, company: String = "Co", parent: String = "Par
 
 @Test func categoryNamesAreStable() {
     // raw values are written into exports; this is the vocabulary table
-    let expected = ["advertising", "analytics", "social", "contentDelivery", "cloudService", "appleSystem", "unclassified"]
+    let expected = ["advertising", "analytics", "social", "contentDelivery", "cloudService", "appleSystem", "onlineService", "unclassified"]
     #expect(CompanyCategory.allCases.map(\.rawValue) == expected)
     #expect(CompanyCategory.allCases.map(\.label) == [
-        "Advertising", "Analytics", "Social media", "Content delivery", "Cloud or app service", "Apple system", "Not matched",
+        "Advertising", "Analytics", "Social media", "Content delivery", "Cloud or app service", "Apple system", "Online service", "Not matched",
     ])
     #expect(CompanyCategory.allCases.filter(\.isAdvertisingOrTracking) == [.advertising, .analytics])
     #expect(LabelSource.allCases.map(\.rawValue) == ["curated", "trackerList", "appleOwner", "none"])
@@ -89,4 +89,13 @@ private func row(_ domain: String, company: String = "Co", parent: String = "Par
     #expect(list.version == entry.version && list.sha256 == entry.sha256)
     // the manifest still carries the public suffix list beside it
     #expect(manifest.datasets.contains { $0.file == "psl.dat" })
+}
+
+@Test func onlineServiceIsProductNotInfrastructure() {
+    #expect(!CompanyCategory.onlineService.isAdvertisingOrTracking)
+    #expect(CompanyCategory.curatable.contains(.onlineService))
+    let c = CompanyClassifier()
+    #expect(c.classify(hostname: "www.youtube.com").category == .onlineService)
+    #expect(c.classify(hostname: "rr1.googlevideo.com").category == .contentDelivery)
+    #expect(c.classify(hostname: "s3.amazonaws.com").category == .cloudService)
 }
