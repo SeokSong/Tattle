@@ -117,6 +117,7 @@ Use: browsing, social apps, about 10 minutes of video, then the phone locked; th
 - Band files are written from a real capture: `tattle report <capture> --write-bands Tests/Expected/<id>.json --label <label>`. Scenario files stay in `~/dev/tattle-fixtures/scenarios`
 - Who updates a band: the author of the change that moves a metric. Re-run `--write-bands` on the fixtures and add an entry to `notes` with the metric and the reason (for example a narrowed denominator). A band is never loosened without a note
 - A metric whose denominator is under 10,000 bytes is informational and never fails
+- Company coverage has its own bands: `Tests/Expected/companies-synthetic.json` (checked by `CoverageTests`, hand-built `CompanyCorpus`, no fixtures needed) and `Tests/Expected/companies/<scenario>.json` (checked by `curatedOnlyCoverageBaselinesHold` against `TATTLE_FIXTURES`, curated list only). The floor is the baseline rounded down, with no tolerance, and a later source must not lower it (`md/COMPANIES.md`). The folder is scanned by the repo guard like the rest of `Tests/Expected/`
 
 - `quietShare` (deviceLink + localNetwork + system) is only meaningful for the idle scenario. `--write-bands` writes it into every band file: after regenerating, remove it from all band files except `s0-idle.json`
 

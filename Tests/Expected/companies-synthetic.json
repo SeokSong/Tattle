@@ -1,0 +1,34 @@
+{
+  "baselineLabel" : "M3 1.4 curated-only, hand-built company corpus",
+  "metrics" : {
+    "companyCoverage" : {
+      "baseline" : 0.571,
+      "ceiling" : 1,
+      "floor" : 0.571
+    },
+    "companyCoverageOfNamedBytes" : {
+      "baseline" : 0.762,
+      "ceiling" : 1,
+      "floor" : 0.761
+    },
+    "domainCoverage" : {
+      "baseline" : 0.6,
+      "ceiling" : 1,
+      "floor" : 0.6
+    },
+    "labelSourceShare.curated" : {
+      "baseline" : 1,
+      "informational" : true
+    }
+  },
+  "notes" : [
+    {
+      "metric" : "companyCoverage",
+      "reason" : "frozen curated-only baseline: 8000 of 14000 bytes, worked out by hand in CompanyCorpus. later sources must not lower it; the floor is the baseline rounded down, with no tolerance, because coverage on a fixed corpus and list is exact"
+    }
+  ],
+  "scenario" : "companies-synthetic",
+  "totalsBand" : {
+
+  }
+}
