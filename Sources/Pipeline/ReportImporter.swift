@@ -113,6 +113,17 @@ public enum ReportImporter {
         return ReportImportSummary(result: result, outcome: outcome)
     }
 
+    /// the distinct app ids of the report at `file`, sorted, without storing anything. for the join rate
+    /// (`import-report --join-rate`); the ids are the report's own text and stay local
+    public static func appIds(file: URL, limits: ImportLimits = .standard) throws -> [String] {
+        let source: FileLineSource
+        do { source = try FileLineSource(url: file) } catch { throw failure(error) }
+        defer { source.close() }
+        do {
+            return Set(try ReportParser.parseCombined(source: source, limits: limits).contacts.map(\.appID)).sorted()
+        } catch { throw failure(error) }
+    }
+
     private static func failure(_ error: Error) -> ReportImportFailure {
         guard let e = error as? ImportError else {
             return ReportImportFailure(message: "The report could not be read. Nothing was imported.")
