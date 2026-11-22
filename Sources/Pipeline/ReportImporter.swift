@@ -124,6 +124,28 @@ public enum ReportImporter {
         } catch { throw failure(error) }
     }
 
+    /// every distinct domain of the report at `file` (lowercase) with the owner string Apple gave it: the smallest
+    /// non-empty one seen, or nil. nothing is stored. for the agreement matrix; the names stay local
+    public static func domainOwners(file: URL, limits: ImportLimits = .standard) throws -> [(domain: String, appleOwner: String?)] {
+        let source: FileLineSource
+        do { source = try FileLineSource(url: file) } catch { throw failure(error) }
+        defer { source.close() }
+        var owners: [String: String?] = [:]
+        do {
+            _ = try ReportParser.parse(source: source, limits: limits) { record in
+                let name = record.domain.lowercased()
+                let trimmed = record.domainOwner?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let given = (trimmed?.isEmpty == false) ? trimmed : nil
+                if let existing = owners[name] {
+                    if let given, existing == nil || given < existing! { owners[name] = given }
+                } else {
+                    owners[name] = given
+                }
+            }
+        } catch { throw failure(error) }
+        return owners.map { (domain: $0.key, appleOwner: $0.value) }
+    }
+
     private static func failure(_ error: Error) -> ReportImportFailure {
         guard let e = error as? ImportError else {
             return ReportImportFailure(message: "The report could not be read. Nothing was imported.")

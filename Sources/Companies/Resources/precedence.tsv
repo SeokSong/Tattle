@@ -1,0 +1,3 @@
+field	order	exception	note
+owner	curated,appleOwner	skip:appleOwner:cdnOperator	provisional order, the owner decides it after the agreement numbers (OD2)
+category	curated	none	Apple gives no category

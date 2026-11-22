@@ -38,6 +38,9 @@ func registrable(of hostname: String, in list: PublicSuffixList) -> (domain: Str
     return (labels.suffix(suffix + 1).joined(separator: "."), platform)
 }
 
+/// true for a name that is an IP address (ipv4, its shorthands, or ipv6): it has no name to classify
+public func isIPAddress(_ name: String) -> Bool { isIPLiteral(name.lowercased()) }
+
 private func isIPLiteral(_ name: String) -> Bool {
     // ipv6 (possibly bracketed, possibly with a zone)
     if name.contains(":") || name.hasPrefix("[") { return true }

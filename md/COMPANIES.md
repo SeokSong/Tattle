@@ -1,6 +1,6 @@
 # Companies
 
-**Status:** Problems 1.1, 1.2 and 1.4 done (1.3 labels at view time; the curated-only coverage baseline is frozen; OD14 and OD15 applied): registrable domain from the bundled Public Suffix List (both sections), the curated company list and `CompanyClassifier`. Second sources (public tracker list) and the app to company table come later.
+**Status:** Problems 1.1, 1.2, 1.4 and 1.7 (curated and Apple owner sources; the order is provisional, the owner decides it) done (1.3 labels at view time; the curated-only coverage baseline is frozen; OD14 and OD15 applied): registrable domain from the bundled Public Suffix List (both sections), the curated company list and `CompanyClassifier`. Second sources (public tracker list) and the app to company table come later.
 
 ## Purpose
 
@@ -124,3 +124,47 @@ Frozen again after OD14 and OD15. Before = curated version 3 (OD14 only, no oper
 - `relation` (OD12): `AppTable.relation(appCompany:labelParent:)` gives `unknown` when the app's company is unknown or the label has no parent (an unmatched domain, or an Apple owner string), `sameCompanyAsApp` when the two parents are equal ignoring case, otherwise `other`. `CompanyLabel.relative(toAppCompany:)` applies it, and `FlowLabels.label(for:index:cache:appCompany:)` passes the company of the app that made the flow
 - Join rate: `tattle import-report <file> --join-rate [--unjoined-out <file>]` (nothing is stored) and `tattle apps coverage <capture> [--unmatched-out <file>]` print counts only; the id lists go to a local mode 600 file outside the work tree
 - The table is a starting set. Capture names are mostly system daemons, which are not apps and are not in the table
+
+## Source precedence and the agreement matrix (Problem 1.7)
+
+Precedence is data: `Resources/precedence.tsv`, tab separated, header `field order exception note`, one row per field. `PrecedenceTable` loads it strictly (an unknown field, source or exception, a duplicate or missing field, a source that cannot answer the field, or an exception naming a source not in the row's order fails the whole load, with the line number only). Changing the order is a data edit: edit the file, run `scripts/build-precedence.sh`, run the tests.
+
+| Field | Order | Exception |
+|---|---|---|
+| owner (company and parent) | curated, then appleOwner (the public tracker list joins when problem 1.6 is unblocked) | `skip:appleOwner:cdnOperator`: an Apple owner that is a CDN operator is set aside |
+| category | curated (the tracker list later) | none |
+
+- The order is provisional. The owner sets the final order after seeing the agreement numbers (OD2)
+- Apple's `domainOwner` exists only for an imported report: `classify(hostname:appleOwner:)` takes it as a plain String (Companies never imports PrivacyReport). Capture flows pass no owner, so Apple plays no part there
+- The category never comes from Apple, which gives none: the category row cannot list `appleOwner` (the load fails) and an Apple-only label has category `unclassified` and no parent
+- `CompanyClassifier.resolve(hostname:appleOwner:)` returns the label plus which answers an exception skipped; `classify` returns its label. Passing an explicit `order:` still fixes the sources (the curated-only coverage baseline does)
+- `Resources/apple-owner-aliases.tsv` (header `appleOwner kind parent note`): `alias` maps an Apple owner string to the curated parent it clearly is (a legal name of that company); `cdn` marks a CDN operator (Akamai, Fastly, Cloudflare) and also maps it to its parent. Matching is the whole string, ignoring case and runs of spaces; no fuzzy matching. Every `parent` is a curated parent (a test checks it). Amazon is an alias and not a CDN operator: the owner string cannot tell CloudFront from the company's other services
+- Source-pair agreement uses the sources alone: `Agreement.measure` runs each source on its own and never lets one see the other. A name with no Apple owner is simply not answered by Apple
+
+### Experiment design (OD2)
+
+1. Classify every domain of an App Privacy Report with the curated list alone and with Apple's owner string alone
+2. Count, per pair: both name the same parent, both name different parents, only one names it, neither. Bare IP addresses (OD16) have no name to classify: they are excluded and counted separately
+3. Every disagreement (and every name only Apple named) goes to a local file outside the work tree; the owner reads it and sets the order
+4. A name is the same when the curated parent and Apple's owner (through an alias row, else as written) are equal ignoring case. There is no "different category" count for this pair, because Apple gives no category
+
+Command: `tattle companies agreement --report <file> [--disagreements-out <file>]` prints numbers only. The local file has columns `kind` (`different` or `onlySecond`, Apple only), domain, curated parent, curated category, Apple owner, aliased parent; mode 600, new file only, refused inside a git work tree. The public tracker list is not a source yet; `Agreement.measure` takes the pair as parameters, so adding it is a data and wiring change.
+
+### Measured (2026-11-22, the owner's App Privacy Report v4, numbers only)
+
+| Count | Value |
+|---|---|
+| Distinct domains with a name | 1090 |
+| IP addresses excluded | 720 |
+| Curated only | 573 |
+| Apple owner only | 19 |
+| Both, same parent | 53 |
+| Both, different parent | 0 |
+| Neither | 445 |
+| Same parent only through an alias row | 48 |
+| Different parent where the owner is a CDN operator | 0 |
+| Apple only where the owner is a CDN operator | 0 |
+
+Before the alias table the same run gave 5 same and 48 different: every one of the 48 was a legal-name difference, none a real disagreement. The CDN exception changed no answer on this report (no CDN operator appears as an owner), so it is kept as a guard for other reports. With these numbers the two possible orders give the same label wherever both answer; they differ only in whether an owner string beats a curated name, which never changes the parent here.
+
+Golden synthetic conflict set: `Tests/CompaniesTests/ConflictSetTests.swift`, 25 made-up names with made-up owners, each with an expected winner and rule; a coverage test checks that every source of every order and every exception of the bundled table is used by a case.
