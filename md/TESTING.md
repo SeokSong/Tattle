@@ -1,6 +1,6 @@
 # Testing
 
-**Status:** 389 tests, green with and without fixtures (2026-11-18; Milestone 2 done). By target: Attribution 57, Capture 79, Domains 43, Flows 28, PacketDecoder 21, Pipeline 23, Report 76, Storage 20, WatchApp 19, WatchCapture (includes the PCAPNG reader) 23. Four scripted captures are the fixture set; the baseline is frozen in `Tests/Expected/`.
+**Status:** 389 tests, green with and without fixtures (2026-11-18; Milestone 2 done). By target: Attribution 57, Capture 79, Domains 43, Flows 28, PacketDecoder 21, Pipeline 23, Report 76, Storage 20, TattleApp 19, TattleCLI (includes the PCAPNG reader) 23. Four scripted captures are the fixture set; the baseline is frozen in `Tests/Expected/`.
 
 ## Approach
 
@@ -11,7 +11,7 @@
 
 ## Fixture captures
 
-Private folder `~/dev/watch-fixtures` (override with `WATCH_FIXTURES`), outside git and outside iCloud. Real captures hold personal traffic, so nothing in it is committed or shared.
+Private folder `~/dev/tattle-fixtures` (override with `TATTLE_FIXTURES`; `WATCH_FIXTURES` and the old folder name `~/dev/watch-fixtures` still work as deprecated fallbacks), outside git and outside iCloud. Real captures hold personal traffic, so nothing in it is committed or shared.
 
 - Layout: `captures/` (PCAPNG), `scenarios/` (scenario JSON), `reports/` (report JSON, local), `db/`; all mode 0700
 - `scripts/fixtures.sh init` creates it; `scripts/fixtures.sh check` fails if the folder is inside a git work tree, under `Mobile Documents`, `/Desktop` or `/Documents`, or group/world readable, then lists files with sizes and writes `MANIFEST.sha256`
@@ -35,8 +35,8 @@ Scripted captures, recorded 2026-11-18 with `capture --diagnostic` (scenario scr
 
 One optional 30-minute capture shows whether memory is flat. Needs the phone; the owner runs it.
 
-- Capture: `sudo .build/release/WatchCapture capture --device "<name>" --db ~/dev/watch-fixtures/db/s5-long.sqlite --metrics ~/dev/watch-fixtures/reports/s5-metrics.csv --duration 1800` (no `--diagnostic`: raw packets are not needed). Use the phone normally: browse, a video for 10 minutes, then locked for 10 minutes. Note the time of each step
-- Read: `.build/release/WatchCapture metrics ~/dev/watch-fixtures/reports/s5-metrics.csv`
+- Capture: `sudo .build/release/tattle capture --device "<name>" --db ~/dev/tattle-fixtures/db/s5-long.sqlite --metrics ~/dev/tattle-fixtures/reports/s5-metrics.csv --duration 1800` (no `--diagnostic`: raw packets are not needed). Use the phone normally: browse, a video for 10 minutes, then locked for 10 minutes. Note the time of each step
+- Read: `.build/release/tattle metrics ~/dev/tattle-fixtures/reports/s5-metrics.csv`
 
 | Output line | Meaning |
 |---|---|
@@ -68,7 +68,7 @@ Use: browsing, social apps, about 10 minutes of video, then the phone locked; th
 
 ## Synthetic corpus
 
-`SyntheticCorpus.mixed()` (Tests/TestSupport) returns PCAPNG bytes built from hand-made frames plus an `Expected` value with every answer worked out by hand. `GoldenReportTests` runs the bytes through `CapturePipeline` and `ReportBuilder` and checks exact equality. Nothing is read from disk, so the tests need no `WATCH_FIXTURES` and no golden file is committed (so nothing under `Tests/Expected/` to guard). Output is deterministic: fixed timestamps, ports and addresses, and the report JSON has sorted keys.
+`SyntheticCorpus.mixed()` (Tests/TestSupport) returns PCAPNG bytes built from hand-made frames plus an `Expected` value with every answer worked out by hand. `GoldenReportTests` runs the bytes through `CapturePipeline` and `ReportBuilder` and checks exact equality. Nothing is read from disk, so the tests need no `TATTLE_FIXTURES` and no golden file is committed (so nothing under `Tests/Expected/` to guard). Output is deterministic: fixed timestamps, ports and addresses, and the report JSON has sorted keys.
 
 - Names are fictional (`.test`, `.example`); addresses come from 192.0.2.0/24 and 2001:db8::/32, plus the phone's private 10.0.0.2, the mDNS group and a private `fd5d::` address
 - `SyntheticCorpus.withTrailer()` is the same capture followed by the 24-byte pcap trailer (a VPN corpus is deferred)
@@ -113,8 +113,8 @@ Use: browsing, social apps, about 10 minutes of video, then the phone locked; th
 ## Regression ratchet
 
 - Band files in `Tests/Expected/<scenario>.json` hold a floor and a ceiling per metric, measured on a real capture (format and tolerance rule: `md/REPORT.md`). They hold numbers only; `RepoGuardTests` fails the suite if a hostname, address or device id appears in that folder
-- `FixtureBandsTests` runs the pipeline and report on `WATCH_FIXTURES/captures/<scenario>.pcapng` for each band file and asserts no regression. It skips when the variable is unset or the capture is missing
-- Band files are written from a real capture: `WatchCapture report <capture> --write-bands Tests/Expected/<id>.json --label <label>`. Scenario files stay in `~/dev/watch-fixtures/scenarios`
+- `FixtureBandsTests` runs the pipeline and report on `TATTLE_FIXTURES/captures/<scenario>.pcapng` for each band file and asserts no regression. It skips when the variable is unset or the capture is missing
+- Band files are written from a real capture: `tattle report <capture> --write-bands Tests/Expected/<id>.json --label <label>`. Scenario files stay in `~/dev/tattle-fixtures/scenarios`
 - Who updates a band: the author of the change that moves a metric. Re-run `--write-bands` on the fixtures and add an entry to `notes` with the metric and the reason (for example a narrowed denominator). A band is never loosened without a note
 - A metric whose denominator is under 10,000 bytes is informational and never fails
 
@@ -136,7 +136,7 @@ Use: browsing, social apps, about 10 minutes of video, then the phone locked; th
 
 ## Fixture tests
 
-- Tests that need a capture read the directory from `WATCH_FIXTURES` and skip when it's unset, so `swift test` is green on any machine
+- Tests that need a capture read the directory from `TATTLE_FIXTURES` and skip when it's unset, so `swift test` is green on any machine
 - Shared helper in `Tests/TestSupport` (a plain target, not a test target): `fixtureURL("watch-clean-test.pcap") -> URL?`, plus the byte builders (PCAPNG blocks, `PacketBuilder` frames, DNS, TLS and QUIC messages, the synthetic corpus) so every test target can build captures by hand
 - Fixture tests print their counts, so a run doubles as a report
 - `CaptureTests` run as one `@Suite(.serialized)`: they spawn processes, send signals and install process-wide handlers, so parallel runs raced (pid files written before stream data, EOF before exit). Fakes write their pid after the data. If a run ever hangs, `pkill -9 -f swiftpm-testing-helper` clears stale runners; swift-testing buffers output when not on a tty, so a killed run shows nothing
@@ -148,8 +148,8 @@ Use: browsing, social apps, about 10 minutes of video, then the phone locked; th
 ```
 swift test
 scripts/fixtures.sh check
-WATCH_FIXTURES=~/dev/watch-fixtures swift test
-swift build -c release && .build/release/WatchCapture read ~/dev/watch-fixtures/captures/watch-clean-test.pcap
+TATTLE_FIXTURES=~/dev/tattle-fixtures swift test
+swift build -c release && .build/release/tattle read ~/dev/tattle-fixtures/captures/watch-clean-test.pcap
 ```
 
 ## Open questions

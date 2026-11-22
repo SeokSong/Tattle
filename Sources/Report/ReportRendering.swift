@@ -1,11 +1,12 @@
 import Attribution
 import Foundation
+import Storage
 
 // text form of a report. same numbers as the JSON; names only when the report has detail.
 public enum ReportRendering {
     public static func text(_ report: QualityReport) -> String {
         var lines: [String] = []
-        lines.append("Quality report (version \(report.reportVersion), Watch \(report.watchVersion))")
+        lines.append("Quality report (version \(report.reportVersion), \(AppIdentity.name) \(report.watchVersion))")
         lines.append("")
         lines.append("flows \(report.totals.flows)  packets \(report.totals.packets)  ip bytes \(report.totals.ipBytes)")
         for (name, bytes) in report.byInterface.sorted(by: { $0.key < $1.key }) {

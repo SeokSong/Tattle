@@ -119,12 +119,14 @@ Added with `alter table ... add column`; defaults make old rows valid. Category 
 - A fresh database runs V1 then every migration in one transaction; an existing one runs the missing steps in one transaction and updates `meta.schema_version`. A failing step rolls everything back
 - A database with a higher version than the app supports throws `StorageError.newerSchema(found:supported:)`
 
+- The support folder name comes from `AppIdentity` (`Tattle`). On first use, a real `Watch` folder in Application Support is moved to `Tattle` (a rename on the same volume, permissions kept). Nothing is overwritten: if `Tattle` already exists, or `Watch` is a symlink, both are left alone. The database file keeps its name `watch.sqlite`
+
 ### API
 
 ```swift
 public final class Store {
     public init(path: URL) throws                 // creates dirs with 0700, file 0600, runs migrations
-    public static func defaultPath() -> URL       // ~/Library/Application Support/Watch/watch.sqlite
+    public static func defaultPath() -> URL       // ~/Library/Application Support/Tattle/watch.sqlite
     public func beginSession(_ s: CaptureSession) throws
     public func endSession(id: UUID, at: Date, reason: String) throws
     public func save(flows: [Flow], domains: [DomainObservation], session: UUID) throws   // one transaction, upsert flows + replace their tally rows
@@ -156,7 +158,7 @@ public final class Store {
 
 ### Data inventory
 
-Every place Watch keeps data. Each later change that stores something new must add a row here and in the README.
+Every place Tattle keeps data. Each later change that stores something new must add a row here and in the README.
 
 | What | Where | Retention | Cleared by Delete all |
 |---|---|---|---|
@@ -167,9 +169,9 @@ Every place Watch keeps data. Each later change that stores something new must a
 | Temporary files: `devicectl` JSON output (device name and id; `DeviceLookup`, `getDeviceInfo`), tool output of `rvictl`, `ifconfig` (`CaptureController.run`, 0600) | `FileManager.temporaryDirectory` (per-user, 0700) | Removed in a `defer` when the command ends; a crash can leave one until the system clears the folder | No |
 | Band files (`report --write-bands`): numbers only | The path given (the repo's `Tests/Expected/` for committed ones) | User-managed | No |
 | Capture script log and run directory | Root script's run folder (see [CAPTURE.md](CAPTURE.md)) | Removed by `stop()`; a directory a crashed app left is stopped and removed at the next launch. The script log moves to `logs/` (newest 10 kept) | Not touched; contains no packets, no hostnames |
-| Report JSON (`WatchCapture report --json`) | Printed to stdout only; saved only if the user redirects it | User-managed | No (outside the database) |
-| Metrics file (`capture --metrics`, opt-in): one csv row every 2 s of counts and memory, numbers only (no hostnames, addresses or device ids) | The path given, created new (0600), `~/dev/watch-fixtures/reports` for the long run | User-managed | No (outside the database) |
-| Fixture captures and scenario files | `~/dev/watch-fixtures` (developer only) | User-managed | No |
+| Report JSON (`tattle report --json`) | Printed to stdout only; saved only if the user redirects it | User-managed | No (outside the database) |
+| Metrics file (`capture --metrics`, opt-in): one csv row every 2 s of counts and memory, numbers only (no hostnames, addresses or device ids) | The path given, created new (0600), `~/dev/tattle-fixtures/reports` for the long run | User-managed | No (outside the database) |
+| Fixture captures and scenario files | `~/dev/tattle-fixtures` (developer only) | User-managed | No |
 
 ### Privacy
 

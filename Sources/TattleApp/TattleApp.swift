@@ -1,7 +1,8 @@
 import AppKit
+import Storage
 import SwiftUI
 
-// the Mac app shell, see md/APP.md. run with `swift run WatchApp` as the normal user
+// the Mac app shell, see md/APP.md. run with `swift run TattleApp` as the normal user
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -14,12 +15,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct WatchApp: App {
+struct TattleApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup("Watch") {
+        WindowGroup(AppIdentity.name) {
             RootView()
                 .environmentObject(model)
                 .frame(minWidth: 880, minHeight: 560)

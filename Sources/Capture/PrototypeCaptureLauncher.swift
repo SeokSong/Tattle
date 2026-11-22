@@ -1,5 +1,6 @@
 import Foundation
 import PCAPNG
+import Storage
 
 // prototype stand-in for the privileged helper: one admin-password prompt per capture through osascript.
 // the app never runs as root. the udid lives in the script file (0600, in a 0700 run directory) and in
@@ -76,7 +77,7 @@ public actor PrototypeCaptureLauncher {
     /// logs kept besides the newest
     static let logsToKeep = 10
 
-    /// runRoot defaults to ~/Library/Application Support/Watch/run. runner and tools are for tests
+    /// runRoot defaults to ~/Library/Application Support/Tattle/run. runner and tools are for tests
     public init(
         runRoot: URL? = nil, tools: CaptureTools = .init(), accessTimeout: TimeInterval = PrototypeCaptureLauncher.accessTimeout,
         runner: Runner? = nil
@@ -89,10 +90,7 @@ public actor PrototypeCaptureLauncher {
     }
 
     public static func defaultRunRoot() -> URL {
-        let base =
-            FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
-        return base.appendingPathComponent("Watch/run", isDirectory: true)
+        AppIdentity.supportDirectory().appendingPathComponent("run", isDirectory: true)
     }
 
     /// the run directory of the capture in progress, if any
@@ -375,7 +373,7 @@ public actor PrototypeCaptureLauncher {
     /// a crashed app can leave a run directory with a root tcpdump still writing to it. the script exits
     /// when its directory gets a `stop` file or disappears, and the app cannot signal root, so: create the
     /// stop file in each stale directory, wait `grace`, then remove the files and the directory.
-    /// only directories Watch made are touched: a real directory (never a symlink) directly under the run
+    /// only directories Tattle made are touched: a real directory (never a symlink) directly under the run
     /// root, named exactly like `UUID().uuidString`, owned by this user, holding only the launcher's own
     /// files. nothing is followed, nothing is removed recursively, the logs directory is never looked at,
     /// and no root is needed. a directory that cannot be cleared goes to `failed`

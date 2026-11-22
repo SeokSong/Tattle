@@ -5,7 +5,7 @@
 ## Purpose
 
 - Turn tcpdump's output into packets with interface, timestamp and process info
-- Our own reader, so Watch doesn't depend on tcpdump's text output (`-k`)
+- Our own reader, so Tattle doesn't depend on tcpdump's text output (`-k`)
 
 ## Why PCAPNG
 
@@ -133,7 +133,7 @@ public struct DataPacketSource: PacketSource   // for tests
 - `finish()` with a half block throws `truncatedBlock`
 - `direction` from flags: 1 → inbound, 2 → outbound, missing → unknown
 - `data.count == capturedLength`
-- Fixture (skipped when `WATCH_FIXTURES` is unset): `FilePacketSource` on `watch-clean-test.pcap` yields 1,292 packets and `.pcapTrailer`
+- Fixture (skipped when `TATTLE_FIXTURES` is unset): `FilePacketSource` on `watch-clean-test.pcap` yields 1,292 packets and `.pcapTrailer`
 
 ### Acceptance
 

@@ -1,8 +1,8 @@
-# Watch
+# Tattle
 
 See which apps on an iPhone talk to which servers, when, and how much. No jailbreak needed, and nothing is decrypted.
 
-Watch is a macOS tool written in Swift. It captures an iPhone's network traffic over a USB cable, tags each packet with the app that sent it, groups packets into connections, and reads the hostname of each connection from the parts of the traffic that are not encrypted. Everything runs and stays on the Mac.
+Tattle is a macOS tool written in Swift. It captures an iPhone's network traffic over a USB cable, tags each packet with the app that sent it, groups packets into connections, and reads the hostname of each connection from the parts of the traffic that are not encrypted. Everything runs and stays on the Mac.
 
 This is a personal research and portfolio project, not a product. It was inspired by the CBC Marketplace investigation *The App Trap* into what phone apps send in the background.
 
@@ -29,7 +29,7 @@ Each hostname carries its source. `[sni]` means the name was read from that conn
 ![Pipeline](img/pipeline.png)
 
 ```
-iPhone ──USB──▶ rvi0 (rvictl) ──▶ tcpdump -U -P -w - ──stdout──▶ Watch
+iPhone ──USB──▶ rvi0 (rvictl) ──▶ tcpdump -U -P -w - ──stdout──▶ Tattle
                                                                    │
    PCAPNG reader ──▶ packet decoder ──▶ flow table ──▶ SQLite (7 days)
                            │                 ▲
@@ -38,7 +38,7 @@ iPhone ──USB──▶ rvi0 (rvictl) ──▶ tcpdump -U -P -w - ──stdou
 ```
 
 1. **Capture.** Apple's Remote Virtual Interface (`rvictl`) makes the phone's network stack visible on the Mac as `rvi0`. `tcpdump` streams it as PCAPNG.
-2. **Attribution.** The capture uses Apple's PKTAP format, which tags each packet with the process name and PID that sent it. When a system service acts for an app, it also names that app (for example, a DNS lookup made by `mDNSResponder` for TikTok). Watch reads these tags with its own PCAPNG parser, including Apple's undocumented process-information blocks.
+2. **Attribution.** The capture uses Apple's PKTAP format, which tags each packet with the process name and PID that sent it. When a system service acts for an app, it also names that app (for example, a DNS lookup made by `mDNSResponder` for TikTok). Tattle reads these tags with its own PCAPNG parser, including Apple's undocumented process-information blocks.
 3. **Decoding.** IPv4 and IPv6, TCP and UDP, on both Ethernet and tunnel interfaces. Byte counts use IP lengths, so the same traffic counts the same over Wi-Fi and cellular.
 4. **Flows.** Packets are grouped into connections. Each connection keeps a tally of every process that touched it rather than a single label, so attribution can be recalculated later.
 5. **Hostnames.** From DNS answers, from the TLS ClientHello's server name (SNI), and from QUIC Initial packets. QUIC Initials are encrypted with keys that anyone can derive from the packet itself (RFC 9001), so reading the hostname does not mean breaking any encryption.
@@ -53,8 +53,8 @@ These are deliberate limits, or limits of the platform. They are not bugs.
 | Needs a Mac and a USB cable | RVI only works over a wired connection to a Mac. An iPhone app on its own can't see other apps' traffic |
 | Needs administrator rights on the Mac | `rvictl` and packet capture need root. The app asks for the admin password at each start |
 | Can't be distributed through the Mac App Store | The App Sandbox blocks root and packet capture. A signed version would ship outside the store, like Wireshark |
-| Never sees content | TLS and QUIC payloads stay encrypted. Watch reads only hostnames and packet sizes |
-| About 1% of packets have no process tag | Shown as "Unattributed". Watch never guesses an app from an IP address |
+| Never sees content | TLS and QUIC payloads stay encrypted. Tattle reads only hostnames and packet sizes |
+| About 1% of packets have no process tag | Shown as "Unattributed". Tattle never guesses an app from an IP address |
 | DNS can disappear | With iCloud Private Relay or encrypted DNS, DNS answers are invisible. Hostnames from SNI still work |
 | Connections that started before the capture have no hostname | Their handshake happened before recording began. They are reported as "Connection started before capture", for TCP and for QUIC. A name is offered only as a hint when another connection of the same app to the same server has one |
 | Process names are cut to 16 characters by iOS | For example, `appstorecomponen` |
@@ -62,15 +62,15 @@ These are deliberate limits, or limits of the platform. They are not bugs.
 
 ## Security and privacy measures
 
-- **No decryption, no content.** Only DNS answers, TLS/QUIC server names, packet headers and sizes are read. Watch never parses plain-HTTP bodies, but a diagnostic file (below) contains them.
-- **Raw packets stay off the disk unless the diagnostic switch is on.** tcpdump streams to Watch through a pipe, and each packet is dropped once decoded. The only exception is a capped buffer (5 packets or 16 KB per connection) that holds packets until the hostname is found. Saving raw packets is a separate opt-in diagnostic switch that is off at every launch. When it is on, the whole stream, including any plain-HTTP bodies, is written to a file in a private `diagnostics` folder next to the database. The app deletes those files after 24 hours and with "Delete all"; the command-line tool does not delete its file.
+- **No decryption, no content.** Only DNS answers, TLS/QUIC server names, packet headers and sizes are read. Tattle never parses plain-HTTP bodies, but a diagnostic file (below) contains them.
+- **Raw packets stay off the disk unless the diagnostic switch is on.** tcpdump streams to Tattle through a pipe, and each packet is dropped once decoded. The only exception is a capped buffer (5 packets or 16 KB per connection) that holds packets until the hostname is found. Saving raw packets is a separate opt-in diagnostic switch that is off at every launch. When it is on, the whole stream, including any plain-HTTP bodies, is written to a file in a private `diagnostics` folder next to the database. The app deletes those files after 24 hours and with "Delete all"; the command-line tool does not delete its file.
 - **Device identifier never stored.** The phone's UDID exists only in memory and in a short-lived 0600 script. The database stores a salted SHA-256 hash, and logs and error messages never contain the UDID.
-- **Local only.** Watch makes no network requests. The database is created with 0600 permissions in a 0700 directory.
+- **Local only.** Tattle makes no network requests. The database is created with 0600 permissions in a 0700 directory.
 - **Limited retention.** Sessions expire after 7 days, and "Delete all" removes every stored session and every diagnostic file made by the app.
 - **Root access kept narrow.** The app itself never runs as root. At Start it runs a generated script through the macOS admin dialog. The script does three things only: start RVI, run tcpdump on that one interface, and stop both. It tears RVI down on every exit path, and its log is kept for debugging.
 - **Nothing is guessed.** "Unknown app" and "unknown hostname" are separate states. A DNS answer is shown as evidence, not as proof that the app connected.
 
-## What Watch stores
+## What Tattle stores
 
 | What | Where | Kept | Removed by "Delete all" |
 |---|---|---|---|
@@ -81,9 +81,9 @@ These are deliberate limits, or limits of the platform. They are not bugs.
 | Short-lived temporary files: device list from `devicectl` (holds the device name and id), output of `rvictl` and `ifconfig` | The per-user temporary folder (0700; the tool-output file is also 0600) | Deleted when the command finishes; a crash can leave one until the system clears the temporary folder | No |
 | Band files (`report --write-bands`): counts and ratios per test capture, numbers only | The file you name | User-managed | No |
 | Capture script log and run folder | The root script's run folder | Removed by `stop()`; a directory a crashed app left is stopped and removed at the next launch. The script log moves to `logs/` (newest 10 kept) | No; no packets or hostnames in it |
-| Quality report JSON | Printed by `WatchCapture report`; where the user saves it | User-managed | No |
+| Quality report JSON | Printed by `tattle report`; where the user saves it | User-managed | No |
 | Metrics file (opt-in `--metrics` on the command line): packet and flow counts, cap counters, gap counts, memory size; numbers only | The file you name, created new with mode 0600 | User-managed | No |
-| Fixture captures (developers only) | `~/dev/watch-fixtures` | User-managed | No |
+| Fixture captures (developers only) | `~/dev/tattle-fixtures` | User-managed | No |
 
 Full list: [md/STORAGE.md](md/STORAGE.md#data-inventory).
 
@@ -151,16 +151,16 @@ Requirements: macOS 13+, Xcode command-line tools (Swift 6), and an iPhone that 
 swift build -c release
 
 # command line
-.build/release/WatchCapture flows capture.pcapng                    # analyse a saved capture
-sudo .build/release/WatchCapture capture --device iphone --db ~/watch.sqlite   # live capture, Ctrl-C to stop
+.build/release/tattle flows capture.pcapng                    # analyse a saved capture
+sudo .build/release/tattle capture --device iphone --db ~/watch.sqlite   # live capture, Ctrl-C to stop
 
-WatchCapture report capture.pcapng [--detail] [--json]              # quality report; exit 2 if a check fails
-WatchCapture report --db ~/watch.sqlite --session latest          # report on a stored session
+tattle report capture.pcapng [--detail] [--json]              # quality report; exit 2 if a check fails
+tattle report --db ~/watch.sqlite --session latest          # report on a stored session
 
 # Mac app (prototype)
-swift run WatchApp
+swift run TattleApp
 
-# tests (fixture tests run when WATCH_FIXTURES points at a folder of captures)
+# tests (fixture tests run when TATTLE_FIXTURES points at a folder of captures; WATCH_FIXTURES is the deprecated old name)
 scripts/test.sh
 ```
 
@@ -176,7 +176,9 @@ scripts/test.sh
 | `Storage` | SQLite schema, retention, salted device hash |
 | `Pipeline` | Ties the steps together, for live capture and file replay |
 | `Capture` | rvictl/tcpdump control, privileged launcher, device lookup |
-| `WatchCapture`, `WatchApp` | Command-line tool and SwiftUI app |
+| `tattle` (target `TattleCLI`), `TattleApp` | Command-line tool and SwiftUI app |
+
+Originally called Watch; renamed to Tattle on 2026-11-21 because "Watch" could conflict with Apple Watch for an iOS app. The old `~/Library/Application Support/Watch` folder is moved to `Tattle` on first run.
 
 Design notes for each part are in [md/](md/). Start with [OVERVIEW.md](md/OVERVIEW.md) and [DESIGN.md](md/DESIGN.md).
 

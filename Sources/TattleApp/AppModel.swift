@@ -132,7 +132,7 @@ final class AppModel: ObservableObject {
         Task { [weak self] in
             let result = await PrototypeCaptureLauncher.cleanStaleRunDirectories(runRoot: PrototypeCaptureLauncher.defaultRunRoot())
             if !result.failed.isEmpty {
-                self?.storeError = "\(result.failed.count) old capture folder(s) could not be removed. They hold no packets and are safe to delete from ~/Library/Application Support/Watch/run."
+                self?.storeError = "\(result.failed.count) old capture folder(s) could not be removed. They hold no packets and are safe to delete from ~/Library/Application Support/\(AppIdentity.supportFolder)/run."
             }
         }
         DiagnosticFiles.purge(in: DiagnosticFiles.directory(under: storePath.deletingLastPathComponent()), now: Date())

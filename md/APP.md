@@ -59,13 +59,13 @@ Mockups (made before the app was built):
 
 ## Implementation spec (prototype, free mode)
 
-Target `WatchApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `swift run WatchApp` as the normal user). Depends on `Capture`, `Pipeline`, `Storage`, `Attribution`, `Flows`, `Domains`, `PacketDecoder`, `PCAPNG`. Tests in `WatchAppTests` for the non-UI logic.
+Target `TattleApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `swift run TattleApp` as the normal user). Depends on `Capture`, `Pipeline`, `Storage`, `Attribution`, `Flows`, `Domains`, `PacketDecoder`, `PCAPNG`. Tests in `TattleAppTests` for the non-UI logic.
 
 ### Getting root without running the GUI as root
 
 - The app never runs as root. On Start it launches a privileged script through `osascript -e 'do shell script "/bin/sh <scriptPath>" with administrator privileges'`, which shows the native admin-password dialog (the "Grant access" screen's **Allow once**). This is a stand-in for the `SMAppService` helper; the protocol is the same three steps
 - `PrototypeCaptureLauncher` (in the `Capture` target):
-    - makes a private run directory (`0700`, under `~/Library/Application Support/Watch/run/<uuid>/`) holding `script.sh` (`0600`), a FIFO `stream`, and the path of a `stop` marker
+    - makes a private run directory (`0700`, under `~/Library/Application Support/Tattle/run/<uuid>/`) holding `script.sh` (`0600`), a FIFO `stream`, and the path of a `stop` marker
     - `script.sh`: run `rvictl -s <udid>`; require `[SUCCEEDED]` and parse `with interface <rviN>`; `exec tcpdump -i <rviN> -n -p -s 0 -U -P -w - > stream &`; loop `while [ ! -e stop ] && kill -0 $pid; do sleep 0.2; done`; `kill -INT $pid; wait $pid`; `rvictl -x <udid>`; exit codes 1 rvi failed, 2 tcpdump failed. Its stderr goes to `log` in the run dir
     - `start(udid:) async throws -> FileHandlePacketSource`: writes the script, runs osascript on a background task, opens the FIFO for reading (opening blocks until tcpdump opens the write end; do it on a background task with a 60 s timeout for the password dialog) and returns the source
     - `stop() async`: creates the `stop` file, waits for osascript to exit (up to 5 s), deletes the run directory including the script (it first parses tcpdump's "packets dropped by kernel" from `log` into `lastKernelDropped`; see [CAPTURE.md](CAPTURE.md#kernel-drop-summary-64)). On app launch, run directories left by a crashed app are stopped and removed ([CAPTURE.md](CAPTURE.md#stale-run-directories-64)) (the udid lives only there, briefly, and in memory)
@@ -75,7 +75,7 @@ Target `WatchApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `swi
 
 ### App structure
 
-- `@main struct WatchApp: App` with `NSApplicationDelegateAdaptor` that sets `NSApp.setActivationPolicy(.regular)` and activates the app (needed when launched from `swift run`)
+- `@main struct TattleApp: App` with `NSApplicationDelegateAdaptor` that sets `NSApp.setActivationPolicy(.regular)` and activates the app (needed when launched from `swift run`)
 - `@MainActor final class AppModel: ObservableObject` owns everything the views show:
     - `deviceStatus: DeviceStatus?` refreshed every 5 s while on the Connect screen (devicectl is slow; never block the main thread)
     - `captureState: idle | requestingAccess | starting | capturing(since: Date) | stopping | failed(message)`
@@ -92,7 +92,7 @@ Target `WatchApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `swi
     - `AccessView`: the explanation and three buttons; **Allow once** triggers the osascript prompt; **Always allow** disabled with the note "needs the signed helper (later)"; Cancel
     - `LiveView`: red capture bar (dot, "Capturing", mm:ss timer, interface, Stop), four tiles (packets, flows, phone traffic bytes, % unattributed), the phone traffic by-process table (Unattributed row always present, system rows labelled), the "Not counted as phone traffic" section, top 10 flows by bytes with hostname, its source or the reason it has none, and attribution
     - `SessionsView`: list of past sessions (start, duration, packets, flows), select one to see the same phone traffic table and set-aside section (built from `store.flows`, bytes shared out by packet count per tally row) and top flows
-    - `SettingsView`: capture access (shows "Asked each time (prototype)"; Revoke disabled), retention picker 1/3/7 days, Delete all (with confirmation), diagnostic capture toggle (writes the raw stream to `~/Library/Application Support/Watch/diagnostics/diagnostic-<date>.pcapng` via a tee; shown in the capture bar when on; files are deleted after 24 hours at app start and by Delete all, see [CAPTURE.md](CAPTURE.md#diagnostic-capture))
+    - `SettingsView`: capture access (shows "Asked each time (prototype)"; Revoke disabled), retention picker 1/3/7 days, Delete all (with confirmation), diagnostic capture toggle (writes the raw stream to `~/Library/Application Support/Tattle/diagnostics/diagnostic-<date>.pcapng` via a tee; shown in the capture bar when on; files are deleted after 24 hours at app start and by Delete all, see [CAPTURE.md](CAPTURE.md#diagnostic-capture))
     - Window: sidebar (Connect, Live, Sessions, Settings) + detail, 880×560 minimum. Live is selected automatically when a capture starts
 - The UI never shows the udid or the device hash. Addresses and hostnames are shown (that is the product), nothing else leaves the process
 
@@ -112,7 +112,7 @@ Target `WatchApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `swi
 
 - The text lives in `HostnameSource.label`, `.shortLabel` and `UnnamedReason.label` (`Attribution/Hostnames.swift`)
 
-### Tests (`WatchAppTests`, no UI)
+### Tests (`TattleAppTests`, no UI)
 
 - `groupByProcess` from hand-built flows: an app with two pids collapses to one row; `.none`-only tally → "Unattributed" row; system process → "System:" row; sorted by bytes; `deviceLink` and `localNetwork` flows go to `setAside` and stay out of the phone total; set-aside labels equal `TrafficCategory.label`; display names replace raw names
 - `topFlows`: `sni` flow says "Seen in connection", a `dns` flow carries the may-differ caveat and its age, unnamed flows show their reason; the index is built once for 100 flows
@@ -122,7 +122,7 @@ Target `WatchApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `swi
 
 ### Acceptance
 
-- `swift build` and `swift test` green; `swift run WatchApp` opens the window as the normal user
+- `swift build` and `swift test` green; `swift run TattleApp` opens the window as the normal user
 - Live run on the phone (user): Start → password dialog → Live screen fills → Stop → session appears in Sessions; `rvictl -l` empty afterwards
 
 ## Open questions

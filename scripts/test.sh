@@ -2,7 +2,7 @@
 # runs the test suite with a time limit. clears test runners left over from an
 # interrupted run first: they hold the build lock and make the next run hang.
 # usage: scripts/test.sh [seconds] [swift test arguments...]
-#   WATCH_FIXTURES=~/dev/watch-fixtures scripts/test.sh 300
+#   TATTLE_FIXTURES=~/dev/tattle-fixtures scripts/test.sh 300   (WATCH_FIXTURES is the deprecated old name)
 limit=${1:-300}
 [ $# -gt 0 ] && shift
 pkill -9 -f swiftpm-testing-helper 2>/dev/null

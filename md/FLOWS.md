@@ -170,7 +170,7 @@ public struct FlowTable {
 - Two PIDs produce two tally rows
 - `drainDirty` returns each change once; a closed flow appears in one drain only
 - `requeue` after a failed save: a closed flow comes back in the next drain exactly once; an open flow comes back with its latest data; an open flow no longer in the table is ignored
-- Fixture (`WATCH_FIXTURES`, via the Decoder): sum of packets over flows + dropped (`other` transport) == decoded packets; sum of `ipBytes` matches the decoder's sum. Print flow count and how many had more than one non-none tally row (answers the open question)
+- Fixture (`TATTLE_FIXTURES`, via the Decoder): sum of packets over flows + dropped (`other` transport) == decoded packets; sum of `ipBytes` matches the decoder's sum. Print flow count and how many had more than one non-none tally row (answers the open question)
 
 ### Acceptance
 

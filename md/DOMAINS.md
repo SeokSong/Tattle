@@ -208,7 +208,7 @@ public struct HandshakeBuffer {
 - Buffer: found on the second packet; cap by packets; cap by bytes; non-TLS first byte never buffers; `forget` frees
 - Reasons: version negotiation and unknown version → `unsupportedVersion`; `0x40` first byte → `shortHeaderFirst`; five junk Initials → 3 decrypt attempts, `decryptFailed`; three readable but incomplete datagrams → `capReached`; hello without SNI → `noServerName`; six TLS fragments → `capReached`; reasons sum to the totals
 - QUIC: the RFC 9001 vector decrypts and yields the name; wrong DCID fails cleanly (bad GCM tag → nil, no crash)
-- Fixture (`WATCH_FIXTURES`, through decoder + flows): watch-clean-test yields DNS names containing `tiktokv.us`; count SNI names found; print how many flows on 443 ended with no name
+- Fixture (`TATTLE_FIXTURES`, through decoder + flows): watch-clean-test yields DNS names containing `tiktokv.us`; count SNI names found; print how many flows on 443 ended with no name
 
 ### Acceptance
 

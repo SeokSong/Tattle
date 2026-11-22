@@ -128,7 +128,7 @@ func getDeviceInfo(udid: String) throws -> DeviceInfoResponse {
 
     guard process.terminationStatus == 0 else {
         throw NSError(
-            domain: "WatchCapture",
+            domain: AppIdentity.name,
             code: Int(process.terminationStatus),
             userInfo: [
                 NSLocalizedDescriptionKey: "devicectl failed"
@@ -360,7 +360,7 @@ func runBench(path: String) async {
 // MARK: - metrics command
 
 let metricsUsage = """
-    usage: WatchCapture metrics <file.csv>
+    usage: tattle metrics <file.csv>
 
     reads a file written by capture --metrics and prints duration, rows, resident memory (min, max, last),
     the memory slope over the last two thirds of the run, peak open flows, gaps and a verdict.
@@ -391,7 +391,7 @@ func runMetrics(_ args: [String]) -> Int32 {
 // MARK: - capture command
 
 let captureUsage = """
-    usage: sudo WatchCapture capture (--udid <udid> | --device <name>) [--db <path>] [--duration <seconds>] [--diagnostic <file.pcapng>]
+    usage: sudo tattle capture (--udid <udid> | --device <name>) [--db <path>] [--duration <seconds>] [--diagnostic <file.pcapng>]
                                   [--metrics <file.csv>]
 
       --udid <udid>          device to capture, skips the devicectl lookup
@@ -731,8 +731,8 @@ func redactUDIDs(_ text: String, udid: String) -> String {
 // MARK: - Report
 
 let reportUsage = """
-    usage: WatchCapture report <file.pcap|pcapng> [options]
-           WatchCapture report --db <path> --session <id|latest> [options]
+    usage: tattle report <file.pcap|pcapng> [options]
+           tattle report --db <path> --session <id|latest> [options]
 
       --detail            add process names (names never appear without it)
       --json              print the JSON report instead of the text table

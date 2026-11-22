@@ -1,6 +1,6 @@
 import Foundation
 
-/// helpers so files made by `sudo WatchCapture capture` belong to the invoking user
+/// helpers so files made by `sudo tattle capture` belong to the invoking user
 public enum FileOwnership {
     public struct SudoUser: Equatable, Sendable {
         public let uid: uid_t

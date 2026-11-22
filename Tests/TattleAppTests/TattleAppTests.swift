@@ -5,7 +5,7 @@ import Foundation
 import PacketDecoder
 import Testing
 
-@testable import WatchApp
+@testable import TattleApp
 
 private func flow(
     _ tally: [ProcessPair: Int], bytes: Int, packets: Int? = nil, port: UInt16 = 443, name: String? = nil,

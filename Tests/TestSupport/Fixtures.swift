@@ -1,9 +1,12 @@
 import Foundation
 
-// fixture captures live outside the repo; tests skip when WATCH_FIXTURES is unset
+// fixture captures live outside the repo; tests skip when TATTLE_FIXTURES is unset.
+// WATCH_FIXTURES is the deprecated old name, still read as a fallback
 public enum Fixtures {
     public static var directory: URL? {
-        guard let path = ProcessInfo.processInfo.environment["WATCH_FIXTURES"], !path.isEmpty else {
+        let env = ProcessInfo.processInfo.environment
+        let value = [env["TATTLE_FIXTURES"], env["WATCH_FIXTURES"]].compactMap { $0 }.first { !$0.isEmpty }
+        guard let path = value else {
             return nil
         }
         return URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
