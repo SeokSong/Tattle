@@ -112,6 +112,31 @@ Added with `alter table ... add column`; defaults make old rows valid. Category 
 
 - API: `SessionStats`, `Store.setSessionStats(id:_:)`, `Store.sessionStats(id:)`, `FlowStore.recordSessionStats(id:_:)`
 
+### Schema version 3 (planned, Milestone 3)
+
+For review before any code (Milestone 3, problem 0.1). One migration for the whole milestone. Only the App Privacy Report import is stored: company labels, categories and summaries are computed when read, with the current company data, and the data version is printed (no per-session copy).
+
+| Table | Column | Type | Meaning |
+|---|---|---|---|
+| `report_import` | `id` | `text primary key` | One row per imported App Privacy Report file |
+| | `file_sha256` | `text not null unique` | Importing the same file twice is a no-op |
+| | `period_start` | `real` | Earliest `firstTimeStamp` in the file (Unix seconds) |
+| | `period_end` | `real not null` | Latest `timeStamp` in the file |
+| | `imported_at` | `real not null` | When it was imported |
+| | `lines_read`, `records_kept`, `malformed`, `unknown_types` | `integer` | Import counts, shown to the user |
+| `report_contact` | `import_id` | `text not null`, references `report_import(id)`, cascade delete | Which import it came from |
+| | `app_id` | `text not null` | The app's bundle id |
+| | `domain` | `text not null` | Domain the app contacted |
+| | `domain_owner` | `text` | Apple's owner name for the domain; often empty |
+| | `hits` | `integer not null` | How many times, as counted by iOS |
+| | `first_seen`, `last_seen` | `real` | First and last contact |
+| | `initiated_type`, `domain_type`, `domain_classification` | `text`, `integer`, `integer` | Kept raw; meaning undocumented, never shown or interpreted |
+
+- Primary key of `report_contact`: (`import_id`, `app_id`, `domain`); index on `app_id`
+- **Not stored** (owner decision): the report's `access` records (camera, location, contacts…) and the `context` field (the website a browser request was made in)
+- Retention: an import and its contacts are deleted 7 days after the report's `period_end`; "Delete all" removes them; both go into the data inventory
+- The report's period is shown with its real dates (an export can cover fewer than 7 days)
+
 ### Migration rule
 
 - One schema bump per milestone. Every bump has an old-database test (build the previous schema literally in the test, open with `Store`, check the data)
