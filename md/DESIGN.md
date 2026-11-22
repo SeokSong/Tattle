@@ -28,6 +28,7 @@ Requirement IDs (F, I, N) are defined in [OVERVIEW.md](OVERVIEW.md#requirements)
 | Flows | [FLOWS.md](FLOWS.md) | Flow key, timeouts, process tally |
 | Domains | [DOMAINS.md](DOMAINS.md) | DNS answers, SNI, the handshake buffer |
 | Attribution | [ATTRIBUTION.md](ATTRIBUTION.md) | Process evidence to app identity |
+| Companies | [COMPANIES.md](COMPANIES.md) | Registrable domain from the Public Suffix List, bundled company data |
 | Storage | [STORAGE.md](STORAGE.md) | Database, schema, retention |
 | Pipeline | [PIPELINE.md](PIPELINE.md) | Wiring, flushing, the CLI |
 | App | [APP.md](APP.md) | Mac screens and capture controls |
@@ -121,11 +122,13 @@ Detail and field types: [FLOWS.md](FLOWS.md), [DOMAINS.md](DOMAINS.md), [STORAGE
 | Target | Depends on | Doc | Order |
 |---|---|---|---|
 | `PCAPNG` | — | [PCAPNG.md](PCAPNG.md) | 1 |
+| `Companies` | — (Foundation only; ships resources) | [COMPANIES.md](COMPANIES.md) | 1 |
 | `PacketDecoder` | PCAPNG | [DECODER.md](DECODER.md) | 2 |
 | `Flows` | PacketDecoder | [FLOWS.md](FLOWS.md) | 3 |
 | `Domains` | PacketDecoder, Flows | [DOMAINS.md](DOMAINS.md) | 4 |
 | `Storage` | Flows, Domains | [STORAGE.md](STORAGE.md) | 5 |
 | `Attribution` | Flows, Domains | [ATTRIBUTION.md](ATTRIBUTION.md) | 5 |
+| `Summary` | Companies, Flows, Domains, Attribution | [COMPANIES.md](COMPANIES.md) | 6 |
 | `Pipeline` | all above | [PIPELINE.md](PIPELINE.md) | 6 |
 | `Report` | Flows, Domains, Attribution, Storage, PacketDecoder | [REPORT.md](REPORT.md) | 7 |
 | `tattle` (CLI) | Pipeline | [PIPELINE.md](PIPELINE.md) | 6 |
@@ -134,6 +137,7 @@ Detail and field types: [FLOWS.md](FLOWS.md), [DOMAINS.md](DOMAINS.md), [STORAGE
 | `PrivacyReport` (planned, M3) | — | planned | M3 |
 | `Summary` (planned, M3) | Companies, Attribution, Flows, Domains | planned | M3 |
 
+- `Companies` and `Summary` are imported only by the app, the CLI and the summary side. Pipeline, Flows, Domains, Storage, PacketDecoder, PCAPNG, Attribution, Report and Capture never import them, and `Summary` never imports Report, Storage, Capture or Pipeline; `LayeringTests` checks both
 - One test target per module. All targets live in `Package.swift` from the start, with placeholder files, so each step only fills in its own folder
 - Each step is built by a separate agent from its doc's "Implementation spec", then reviewed. Steps run one at a time: SwiftPM builds every test target into one bundle, so parallel half-finished targets would break each other's test runs
 

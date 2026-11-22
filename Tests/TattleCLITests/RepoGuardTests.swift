@@ -47,6 +47,32 @@ private func makeTree(_ files: [String: String]) throws -> URL {
     #expect(RepoGuard.scan(root: root).isEmpty)
 }
 
+@Test func guardAllowsOnlyLabelledDatasetCommits() {
+    let hash = String(repeating: "ab12", count: 10)
+    let list = "Sources/Companies/Resources/psl.dat", manifest = "Sources/Companies/Resources/manifest.json"
+    #expect(!RepoGuard.hasDeviceIdentifier("// COMMIT: \(hash)", path: list))
+    #expect(!RepoGuard.hasDeviceIdentifier("      \"commit\": \"\(hash)\",", path: manifest))
+    #expect(RepoGuard.hasDeviceIdentifier("note \(hash) unlabelled", path: list))
+    #expect(RepoGuard.hasDeviceIdentifier("// commit of nothing \(hash)", path: list))
+    // each label is allowed in its own file only, not repo-wide and not in the other file
+    #expect(RepoGuard.hasDeviceIdentifier("// COMMIT: \(hash)"))
+    #expect(RepoGuard.hasDeviceIdentifier("// COMMIT: \(hash)", path: manifest))
+    #expect(RepoGuard.hasDeviceIdentifier("\"commit\": \"\(hash)\"", path: list))
+    #expect(RepoGuard.hasDeviceIdentifier("\"commit\": \"\(hash)\"", path: "Sources/Other/data.json"))
+}
+
+@Test func guardScanAppliesTheCommitExceptionByPath() throws {
+    let hash = String(repeating: "cd34", count: 10)
+    let root = try makeTree([
+        "Sources/Companies/Resources/manifest.json": "  \"commit\": \"\(hash)\",\n",
+        "Sources/Elsewhere/manifest.json": "  \"commit\": \"\(hash)\",\n",
+    ])
+    defer { try? FileManager.default.removeItem(at: root) }
+    let violations = RepoGuard.scan(root: root)
+    #expect(violations.count == 1)
+    #expect(violations.first?.hasPrefix("Sources/Elsewhere/manifest.json:") == true)
+}
+
 @Test func repoIsClean() throws {
     let root = try #require(RepoGuard.repoRoot())
     #expect(RepoGuard.scan(root: root) == [])

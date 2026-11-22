@@ -4,6 +4,7 @@ import IOKit
 import IOKit.usb
 import Attribution
 import Capture
+import Companies
 import Dispatch
 import Domains
 import Flows
@@ -11,6 +12,7 @@ import PCAPNG
 import Pipeline
 import Report
 import Storage
+import Summary
 
 let appleVendorID = 1452
 
@@ -240,7 +242,18 @@ func hostnameText(_ flow: Flow, index: HostnameIndex) -> String {
     }
 }
 
-func flowLine(_ flow: Flow, index: HostnameIndex) -> String {
+/// the company and category of a flow's name, "Possible: " for a hint, "Not identified" for a name no
+/// list knows; empty when the flow has no name. the same words as the app
+func companyText(_ label: FlowLabel?) -> String {
+    guard let label else { return "" }
+    let value = label.label
+    guard value.isMatched, let company = value.company else { return "[" + value.unidentifiedText + "]" }
+    var text = company
+    if value.category != .unclassified { text += ", " + value.category.label }
+    return "[" + (label.isPossible ? "Possible: " : "") + text + "]"
+}
+
+func flowLine(_ flow: Flow, index: HostnameIndex, cache: inout LabelCache) -> String {
     let timeFormatter = ISO8601DateFormatter()
     timeFormatter.formatOptions = [.withTime, .withColonSeparatorInTime]
     let key = flow.key
@@ -250,6 +263,8 @@ func flowLine(_ flow: Flow, index: HostnameIndex) -> String {
     var line = "  \(padded)  \(timeFormatter.string(from: flow.firstSeen))  \(flow.interface)  \(transport)  "
     line += "\(key.remoteAddress.description):\(key.remotePort)  in \(flow.ipBytesIn) out \(flow.ipBytesOut)"
     line += "  \(hostnameText(flow, index: index))"
+    let company = companyText(FlowLabels.label(for: flow, index: index, cache: &cache))
+    if !company.isEmpty { line += "  \(company)" }
     line += "  -> \(describe(Attributor.attribute(flow.tally)))"
     return line
 }
@@ -302,9 +317,10 @@ func printSummary(pipeline: CapturePipeline, stats: PipelineStats, final: Pipeli
 
     let flows = await pipeline.flowsSnapshot()
     let index = HostnameIndex(await pipeline.domainsSnapshot(), flows: flows)
+    var cache = LabelCache()
     print("\nTop flows by IP bytes:")
     for flow in flows.sorted(by: { $0.ipBytesIn + $0.ipBytesOut > $1.ipBytesIn + $1.ipBytesOut }).prefix(20) {
-        print(flowLine(flow, index: index))
+        print(flowLine(flow, index: index, cache: &cache))
     }
 
     print("\nBytes by category (IP bytes, whole flows):")
@@ -323,6 +339,8 @@ func printSummary(pipeline: CapturePipeline, stats: PipelineStats, final: Pipeli
     let phoneBytes = TrafficCategory.allCases.filter(\.isPhoneTraffic).reduce(0) { $0 + (categoryBytes[$1] ?? 0) }
     print("  Phone traffic total: \(phoneBytes) bytes")
 
+    printCompanyCounts(flows: flows, index: index, cache: &cache)
+
     print("\nDomains: DNS answers \(stats.dnsObservations)  SNI found \(stats.sniFound)")
     print("Handshake buffers gave up: TLS \(await pipeline.tlsGaveUp)  QUIC \(await pipeline.quicGaveUp)")
     print(gaveUpSummary(stats))
@@ -332,8 +350,39 @@ func printSummary(pipeline: CapturePipeline, stats: PipelineStats, final: Pipeli
         .sorted { $0.ipBytesIn + $0.ipBytesOut > $1.ipBytesIn + $1.ipBytesOut }
     print("\nFlows with more than one app name: \(multi.count)")
     for flow in multi {
-        print(flowLine(flow, index: index))
+        print(flowLine(flow, index: index, cache: &cache))
         print("      names: \(appNames(flow).joined(separator: ", "))")
+    }
+}
+
+/// numbers only: how many flows and distinct hostnames got a company. a hint is counted apart and
+/// never as named. computed here from the finished flows, not on the packet path
+func printCompanyCounts(flows: [Flow], index: HostnameIndex, cache: inout LabelCache) {
+    var namedMatched = 0, namedUnmatched = 0, hintMatched = 0, hintUnmatched = 0, unnamed = 0
+    var hostnames = Set<String>(), matchedHostnames = Set<String>()
+    var byCategory: [CompanyCategory: Int] = [:]
+    for flow in flows {
+        guard let result = FlowLabels.label(for: flow, index: index, cache: &cache) else { unnamed += 1; continue }
+        let matched = result.label.isMatched
+        if result.isPossible {
+            if matched { hintMatched += 1 } else { hintUnmatched += 1 }
+            continue
+        }
+        hostnames.insert(result.label.hostname)
+        if matched {
+            namedMatched += 1
+            matchedHostnames.insert(result.label.hostname)
+            byCategory[result.label.category, default: 0] += 1
+        } else {
+            namedUnmatched += 1
+        }
+    }
+    print("\nCompany labels (names seen in the connection; hints counted apart):")
+    print("  Flows with a company: \(namedMatched)  not identified: \(namedUnmatched)  no name: \(unnamed)")
+    print("  Possible only (hint names): \(hintMatched) with a company, \(hintUnmatched) not identified")
+    print("  Distinct hostnames: \(hostnames.count)  with a company: \(matchedHostnames.count)")
+    for category in CompanyCategory.curatable where byCategory[category] != nil {
+        print("  \(category.rawValue): \(byCategory[category] ?? 0) flows")
     }
 }
 
@@ -889,6 +938,130 @@ func runReport(_ args: [String]) async -> Int32 {
     return 0
 }
 
+// MARK: - Companies
+
+let companiesUsage = """
+    usage: tattle companies coverage <file.pcap|pcapng> [options]
+           tattle companies coverage --db <path> --session <id|latest> [options]
+
+      --json              print the coverage report as JSON (numbers and keys only)
+      --bands <file>      compare with a coverage band file; exit 3 when coverage is below its floor
+      --write-bands <file> --label <text>
+                          write a band file from this run (keeps the notes of an existing file)
+      --unmatched-out <file>
+                          write the most frequent unidentified registrable domains to a local file
+                          (tab separated: flows, bytes, domain; mode 600, new file only). names go only to
+                          that file, never to the screen. refused inside a git work tree
+    sources: the curated list only (the frozen baseline). exit codes: 0 ok, 3 below the floor, 1 error
+    """
+
+/// coverage of a capture or a saved session by the company sources. read-time only: it reads flows and
+/// names already saved and never touches the packet path. returns the exit code
+func runCompanies(_ args: [String]) async -> Int32 {
+    func fail(_ message: String) -> Int32 {
+        FileHandle.standardError.write(Data((message + "\n" + companiesUsage + "\n").utf8))
+        return 1
+    }
+    guard args.first == "coverage" else { return fail("unknown companies command") }
+    var file: String?, db: String?, session: String?
+    var bandsPath: String?, writeBandsPath: String?, label: String?, unmatchedOut: String?
+    var json = false
+    var i = 1
+    while i < args.count {
+        let a = args[i]
+        switch a {
+        case "--json": json = true
+        case "--db", "--session", "--bands", "--write-bands", "--label", "--unmatched-out":
+            guard i + 1 < args.count else { return fail("\(a) needs a value") }
+            i += 1
+            switch a {
+            case "--db": db = args[i]
+            case "--session": session = args[i]
+            case "--bands": bandsPath = args[i]
+            case "--write-bands": writeBandsPath = args[i]
+            case "--unmatched-out": unmatchedOut = args[i]
+            default: label = args[i]
+            }
+        default:
+            guard !a.hasPrefix("--"), file == nil else { return fail("unexpected argument: \(a)") }
+            file = a
+        }
+        i += 1
+    }
+    if writeBandsPath != nil && label == nil { return fail("--write-bands needs --label") }
+    if writeBandsPath != nil && bandsPath != nil { return fail("use --bands or --write-bands, not both") }
+    // the file holds real domain names: never inside a git work tree, checked before any work is done
+    if let unmatchedOut, FileOwnership.gitWorkTreeRoot(containing: unmatchedOut) != nil {
+        return fail("--unmatched-out must point outside the git work tree: the file holds real domain names")
+    }
+    do {
+        var flows: [Flow] = [], domains: [DomainObservation] = []
+        switch (file, db) {
+        case (let path?, nil):
+            guard session == nil else { return fail("--session needs --db") }
+            let pipeline = CapturePipeline(store: nil, session: newSession(), retainFlows: true, retainDomains: true)
+            _ = try await pipeline.run(FilePacketSource(url: URL(fileURLWithPath: path)))
+            await pipeline.stop(reason: .captureStopped)
+            flows = await pipeline.flowsSnapshot()
+            domains = await pipeline.domainsSnapshot()
+        case (nil, let dbPath?):
+            guard let session else { return fail("--db needs --session <id|latest>") }
+            let store = try Store(path: URL(fileURLWithPath: dbPath))
+            let all = try store.sessions()
+            let chosen: CaptureSession?
+            if session == "latest" {
+                chosen = all.last
+            } else {
+                guard let id = UUID(uuidString: session) else { return fail("not a session id: \(session)") }
+                chosen = all.first { $0.id == id }
+            }
+            guard let chosen else {
+                FileHandle.standardError.write(Data("no such session\n".utf8))
+                return 1
+            }
+            flows = try store.flows(session: chosen.id)
+            domains = try store.domains(session: chosen.id)
+        default:
+            return fail("give either a capture file or --db")
+        }
+        let result = Coverage.build(flows: flows, index: HostnameIndex(domains, flows: flows), sources: [.curated])
+        var regressions: [CoverageRegression]?
+        if let bandsPath {
+            regressions = CoverageRatchet.check(
+                report: result.report, bands: try CoverageBands.load(URL(fileURLWithPath: bandsPath)))
+        }
+        if let writeBandsPath, let label {
+            let url = URL(fileURLWithPath: writeBandsPath)
+            let previous = try? CoverageBands.load(url)
+            let name = previous?.scenario ?? url.deletingPathExtension().lastPathComponent
+            let bands = CoverageBands.make(from: result.report, scenario: name, baselineLabel: label, previous: previous)
+            try Data(bands.json().utf8).write(to: url, options: .atomic)
+            FileHandle.standardError.write(Data("wrote bands to \(writeBandsPath)\n".utf8))
+        }
+        if let unmatchedOut {
+            let lines = result.unmatched.prefix(200).map { "\($0.flows)\t\($0.bytes)\t\($0.domain)" }
+            // created 0600 from the first byte; refuses an existing file or a symlink
+            let handle: FileHandle
+            do { handle = try FileOwnership.openForWriting(path: unmatchedOut) } catch {
+                return fail("cannot create the --unmatched-out file (it must be a new file): \(error)")
+            }
+            try handle.write(contentsOf: Data((lines.joined(separator: "\n") + "\n").utf8))
+            try handle.close()
+            FileHandle.standardError.write(Data("wrote \(lines.count) unidentified domains to a local file\n".utf8))
+        }
+        print(json ? try result.report.json() : result.report.text(), terminator: "")
+        if let regressions {
+            if !json { print("\nBands: " + (regressions.isEmpty ? "no regressions" : "REGRESSION")) }
+            for r in regressions { FileHandle.standardError.write(Data((r.description + "\n").utf8)) }
+            if !regressions.isEmpty { return 3 }
+        }
+    } catch {
+        FileHandle.standardError.write(Data("companies coverage failed: \(error)\n".utf8))
+        return 1
+    }
+    return 0
+}
+
 // MARK: - Main
 
 let arguments = CommandLine.arguments
@@ -899,6 +1072,10 @@ if arguments.count >= 2 && arguments[1] == "capture" {
 
 if arguments.count >= 2 && arguments[1] == "metrics" {
     exit(runMetrics(Array(arguments.dropFirst(2))))
+}
+
+if arguments.count >= 2 && arguments[1] == "companies" {
+    exit(await runCompanies(Array(arguments.dropFirst(2))))
 }
 
 if arguments.count >= 2 && arguments[1] == "report" {

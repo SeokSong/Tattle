@@ -1,4 +1,5 @@
 import Attribution
+import Companies
 import Flows
 import Domains
 import Foundation
@@ -243,4 +244,55 @@ private func dnsAnswer(_ host: String, _ address: IPAddress, ago: TimeInterval =
     #expect(kernelDroppedText(nil) == nil)
     #expect(kernelDroppedText(0) == nil)
     #expect(kernelDroppedText(12)?.contains("12 packets") == true)
+}
+
+// MARK: - company labels
+
+@Test func rowTextHasCompanyAndCategoryButNoSourceOrVersion() throws {
+    let f = flow([ProcessPair("Reddit", 1, nil, nil): 3], bytes: 900, name: "securepubads.g.doubleclick.net")
+    let line = try #require(topFlows([f]).first)
+    let text = try #require(line.companyText)
+    #expect(text == "DoubleClick · Advertising")
+    let version = CompanyClassifier().curated.version
+    #expect(!text.localizedCaseInsensitiveContains("curated"))
+    #expect(!text.contains("Company list"))
+    #expect(version.isEmpty || !text.contains("version"))
+    // the source and version are in the tooltip text
+    #expect(line.companyDetail?.contains("Company list version \(version)") == true)
+}
+
+@Test func hintRowSaysPossible() throws {
+    let f = flow([ProcessPair("Reddit", 1, nil, nil): 3], bytes: 900)
+    let dns = DomainObservation(
+        time: f.firstSeen.addingTimeInterval(-2), source: .dns, hostname: "securepubads.g.doubleclick.net",
+        addresses: [f.key.remoteAddress])
+    let line = try #require(topFlows([f], observations: [dns]).first)
+    #expect(line.companyText?.hasPrefix("Possible: ") == true)
+}
+
+@Test func unmatchedNameSaysNotIdentifiedAndUnnamedHasNoCompanyText() throws {
+    let named = flow([.none: 1], bytes: 10, name: "host.invalid")
+    #expect(topFlows([named]).first?.companyText == "Not identified")
+    let unnamed = flow([.none: 1], bytes: 10)
+    let line = try #require(topFlows([unnamed]).first)
+    #expect(line.companyText == nil)
+    #expect(line.unnamedReason != nil)
+}
+
+@Test func hostedUnknownSiteRowAndTooltip() throws {
+    let hosted = flow([.none: 1], bytes: 10, name: "someone.pages.dev")
+    let line = try #require(topFlows([hosted]).first)
+    #expect(line.companyText == "Website we couldn't identify")
+    let detail = try #require(line.companyDetail)
+    #expect(detail.hasPrefix("Unknown website, hosted on ") && detail.hasSuffix(" (a service many sites use)"))
+}
+
+@Test func aboutListsEveryManifestEntry() throws {
+    let manifest = try DatasetManifest.load()
+    let rows = aboutDatasets(manifest)
+    #expect(rows.count == manifest.datasets.count)
+    #expect(rows.count >= 2)
+    for (row, entry) in zip(rows, manifest.datasets) {
+        #expect(row.name == entry.name && row.version == entry.version && row.licence == entry.licence)
+    }
 }

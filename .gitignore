@@ -14,3 +14,6 @@ DerivedData/
 *.sqlite-*
 *.db
 *.log
+
+# local curation output (tattle companies coverage --unmatched-out) holds real domain names
+*.unmatched-domains.txt

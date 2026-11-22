@@ -110,6 +110,14 @@ Target `TattleApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `sw
 | `echHidden` | none | Name hidden by the app (ECH) | same |
 | `noHandshakeUDP`, `noDNSMatch` | none | No name found | same |
 
+### Company column in the flow tables
+
+- Both flow tables (Live top flows, session detail) have a Company column between Name and Address. Labels are computed when the rows are built, from each flow's resolved name, with one lookup per distinct hostname per refresh (`FlowLabels.label`, `LabelCache`). Nothing is stored and the packet path is untouched
+- Row text is the company and one category word ("DoubleClick · Advertising"). The source and the list version are in the tooltip only
+- **Hints show as Possible.** A name from DNS or from another connection to the same server gives "Possible: Company · Category" in secondary italic. A hint is never counted as named
+- A name that no list knows shows "Not identified", never a guess. A flow with no name, or an ECH flow, has an empty Company cell and keeps its reason in the Name cell
+- Settings has an About button: a sheet listing each bundled dataset from the manifest (name, version, licence, source) and the Public Suffix List notice
+
 - The text lives in `HostnameSource.label`, `.shortLabel` and `UnnamedReason.label` (`Attribution/Hostnames.swift`)
 
 ### Tests (`TattleAppTests`, no UI)

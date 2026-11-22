@@ -25,17 +25,25 @@ public enum RepoGuard {
         regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
-    // two documented exceptions, so docs can quote public values: a 40-hex value on a line
-    // that mentions a salt (the public quic initial salts), and the placeholder udid used
-    // as an example in the plan (built from pieces so this file stays clean)
+    // three documented exceptions, so docs and data can quote public values: a 40-hex value on a
+    // line that mentions a salt (the public quic initial salts), the placeholder udid used
+    // as an example in the plan (built from pieces so this file stays clean), and the git
+    // commit of a bundled dataset, only on a line that starts with its label and only in the one
+    // file that carries it: "// COMMIT:" in the public suffix list header, a "commit" key in the manifest
     static let placeholderUDID = "00008110" + "-" + "001A2B3C4D5E601E"
+    static let suffixListPath = "Sources/Companies/Resources/psl.dat"
+    static let manifestPath = "Sources/Companies/Resources/manifest.json"
 
-    static func hasDeviceIdentifier(_ text: String) -> Bool {
+    /// `path` is relative to the repo root; the commit-label exceptions apply only to the two files above
+    public static func hasDeviceIdentifier(_ text: String, path: String? = nil) -> Bool {
         for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
             let line = String(line)
             let lower = line.lowercased()
             if matches(udid, line), !lower.contains(placeholderUDID.lowercased()) { return true }
-            if matches(hex40, line), !lower.contains("salt") { return true }
+            let trimmed = lower.trimmingCharacters(in: .whitespaces)
+            let isCommitLabel = (path == suffixListPath && trimmed.hasPrefix("// commit:"))
+                || (path == manifestPath && trimmed.hasPrefix("\"commit\":"))
+            if matches(hex40, line), !lower.contains("salt"), !isCommitLabel { return true }
         }
         return false
     }
@@ -59,7 +67,7 @@ public enum RepoGuard {
             guard let data = try? Data(contentsOf: url), data.count <= maxTextBytes,
                   !data.contains(0), let text = String(data: data, encoding: .utf8) else { continue }
 
-            if hasDeviceIdentifier(text) {
+            if hasDeviceIdentifier(text, path: relative) {
                 violations.append("\(relative): device identifier (udid-like or 40 hex characters)")
             }
             if relative.hasPrefix("Tests/Expected/") {
