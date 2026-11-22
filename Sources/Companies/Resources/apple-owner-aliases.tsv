@@ -1,0 +1,37 @@
+appleOwner	kind	parent	note
+Google LLC	alias	Alphabet	legal name of the curated parent
+Google Inc.	alias	Alphabet	legal name of the curated parent
+Facebook, Inc.	alias	Meta Platforms	legal name of the curated parent
+Meta Platforms, Inc.	alias	Meta Platforms	legal name of the curated parent
+Microsoft Corporation	alias	Microsoft	legal name of the curated parent
+Apple Inc.	alias	Apple	legal name of the curated parent
+Amazon.com, Inc.	alias	Amazon	legal name of the curated parent
+Adobe Inc.	alias	Adobe	legal name of the curated parent
+Functional Software, Inc.	alias	Sentry	legal name of the curated parent
+Urban Airship, Inc.	alias	Airship	legal name of the curated parent
+Segment.io, Inc.	alias	Twilio	legal name of the curated parent
+Twilio Inc.	alias	Twilio	legal name of the curated parent
+Bugsnag Inc.	alias	SmartBear	legal name of the curated parent
+comScore, Inc	alias	Comscore	legal name of the curated parent
+Braze, Inc.	alias	Braze	legal name of the curated parent
+PayPal, Inc.	alias	PayPal	legal name of the curated parent
+Reddit Inc.	alias	Reddit	legal name of the curated parent
+Optimizely, Inc.	alias	Optimizely	legal name of the curated parent
+Magnite, Inc.	alias	Magnite	legal name of the curated parent
+Criteo SA	alias	Criteo	legal name of the curated parent
+OpenX Technologies Inc	alias	OpenX	legal name of the curated parent
+The Trade Desk Inc	alias	The Trade Desk	legal name of the curated parent
+AppLovin Corporation	alias	AppLovin	legal name of the curated parent
+Datadog, Inc.	alias	Datadog	legal name of the curated parent
+Liftoff Mobile, Inc.	alias	Liftoff	legal name of the curated parent
+Netflix, Inc.	alias	Netflix	legal name of the curated parent
+Snap Inc.	alias	Snap	legal name of the curated parent
+Pinterest, Inc.	alias	Pinterest	legal name of the curated parent
+Oracle Corporation	alias	Oracle	legal name of the curated parent
+Salesforce, Inc.	alias	Salesforce	legal name of the curated parent
+Stripe, Inc.	alias	Stripe	legal name of the curated parent
+Shopify Inc.	alias	Shopify	legal name of the curated parent
+Dropbox, Inc.	alias	Dropbox	legal name of the curated parent
+Akamai Technologies, Inc.	cdn	Akamai	content delivery network operator, names who runs the network and not the site
+Fastly, Inc.	cdn	Fastly	content delivery network operator, names who runs the network and not the site
+Cloudflare, Inc.	cdn	Cloudflare	content delivery network operator, names who runs the network and not the site

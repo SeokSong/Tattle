@@ -35,6 +35,30 @@
       "sha256": "0c6a7b21fb8728a9b2729d016d8c4750119914dbf52bcd5d76e335a9d7d51228",
       "sourceSHA256": "0c6a7b21fb8728a9b2729d016d8c4750119914dbf52bcd5d76e335a9d7d51228",
       "rules": 79
+    },
+    {
+      "name": "Tattle source precedence table",
+      "file": "precedence.tsv",
+      "version": "1",
+      "commit": "",
+      "sourceURL": "",
+      "licence": "MIT (own data, public knowledge)",
+      "fetched": "2026-11-22",
+      "sha256": "9741728ed4328dfb40a8339077c6cd37c60f65ac12debbbd0a8361e0d1d427c3",
+      "sourceSHA256": "9741728ed4328dfb40a8339077c6cd37c60f65ac12debbbd0a8361e0d1d427c3",
+      "rules": 2
+    },
+    {
+      "name": "Tattle Apple owner aliases",
+      "file": "apple-owner-aliases.tsv",
+      "version": "1",
+      "commit": "",
+      "sourceURL": "",
+      "licence": "MIT (own data, public knowledge)",
+      "fetched": "2026-11-22",
+      "sha256": "db93b12ef6603b336ed66c6bd6883657eea1bc09e095e1fb80484a1ad1fe87a2",
+      "sourceSHA256": "db93b12ef6603b336ed66c6bd6883657eea1bc09e095e1fb80484a1ad1fe87a2",
+      "rules": 36
     }
   ]
 }

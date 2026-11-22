@@ -953,6 +953,13 @@ let companiesUsage = """
                           (tab separated: flows, bytes, domain; mode 600, new file only). names go only to
                           that file, never to the screen. refused inside a git work tree
     sources: the curated list only (the frozen baseline). exit codes: 0 ok, 3 below the floor, 1 error
+
+    usage: tattle companies agreement --report <App_Privacy_Report.ndjson> [--disagreements-out <file>]
+      classifies every domain of the report with the curated list alone and with Apple's owner string alone
+      (neither sees the other) and prints counts only. IP addresses are excluded and counted
+      --disagreements-out <file>
+                          write every disagreement and every name only Apple named to a local file (tab
+                          separated; mode 600, new file only; refused inside a git work tree)
     """
 
 /// coverage of a capture or a saved session by the company sources. read-time only: it reads flows and
@@ -962,6 +969,7 @@ func runCompanies(_ args: [String]) async -> Int32 {
         FileHandle.standardError.write(Data((message + "\n" + companiesUsage + "\n").utf8))
         return 1
     }
+    if args.first == "agreement" { return runAgreement(Array(args.dropFirst()), fail: fail) }
     guard args.first == "coverage" else { return fail("unknown companies command") }
     var file: String?, db: String?, session: String?
     var bandsPath: String?, writeBandsPath: String?, label: String?, unmatchedOut: String?
@@ -1057,6 +1065,45 @@ func runCompanies(_ args: [String]) async -> Int32 {
         }
     } catch {
         FileHandle.standardError.write(Data("companies coverage failed: \(error)\n".utf8))
+        return 1
+    }
+    return 0
+}
+
+/// the agreement matrix of the curated list and Apple's owner string over one imported report's domains
+func runAgreement(_ args: [String], fail: (String) -> Int32) -> Int32 {
+    var report: String?, out: String?
+    var i = 0
+    while i < args.count {
+        guard ["--report", "--disagreements-out"].contains(args[i]), i + 1 < args.count else { return fail("bad argument: \(args[i])") }
+        if args[i] == "--report" { report = args[i + 1] } else { out = args[i + 1] }
+        i += 2
+    }
+    guard let report else { return fail("agreement needs --report <file>") }
+    // the file holds real domain names: never inside a git work tree, checked before any work is done
+    if let out, FileOwnership.gitWorkTreeRoot(containing: out) != nil {
+        return fail("--disagreements-out must point outside the git work tree: the file holds real domain names")
+    }
+    do {
+        let observations = try ReportImporter.domainOwners(file: URL(fileURLWithPath: report))
+        let (matrix, rows) = Agreement.measure(observations, classifier: CompanyClassifier())
+        if let out {
+            let lines = ["kind\tdomain\tcurated parent\tcurated category\tapple owner\taliased parent"] + rows.map {
+                [$0.kind.rawValue, $0.domain, $0.firstParent ?? "-", $0.firstCategory?.rawValue ?? "-", $0.secondOwner ?? "-", $0.secondParent ?? "-"]
+                    .joined(separator: "\t")
+            }
+            // created 0600 from the first byte; refuses an existing file or a symlink
+            let handle: FileHandle
+            do { handle = try FileOwnership.openForWriting(path: out) } catch {
+                return fail("cannot create the --disagreements-out file (it must be a new file): \(error)")
+            }
+            try handle.write(contentsOf: Data((lines.joined(separator: "\n") + "\n").utf8))
+            try handle.close()
+            FileHandle.standardError.write(Data("wrote \(rows.count) rows to a local file\n".utf8))
+        }
+        print(matrix.text(), terminator: "")
+    } catch {
+        FileHandle.standardError.write(Data("companies agreement failed: \(error)\n".utf8))
         return 1
     }
     return 0
