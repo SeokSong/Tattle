@@ -92,7 +92,7 @@ private func tables(_ store: Store) throws -> [String] {
     let a = importRow(start: 0, end: 3), b = importRow(start: 10, end: 13), c = importRow(start: 20, end: 23)
     for r in [a, b, c] { try store.saveImport(r, contacts: contacts(r)) }
     // overlaps a and b, not c
-    let n = importRow(start: 2, end: 11)
+    let n = importRow(start: 2, end: 14)
     #expect(try store.saveImport(n, contacts: contacts(n, count: 1)) == .stored(replaced: 2))
     #expect(Set(try store.imports().map(\.id)) == [n.id, c.id])
     #expect(try store.rowCount(table: "report_contact") == 3)
@@ -351,4 +351,33 @@ private func buildV2Database(_ path: URL) throws {
     sqlite3_close(h)
     let s = try Store(path: path)
     #expect(try s.schemaVersionValue() == 3)
+}
+
+@Test func olderOverlappingImportIsRefused() throws {
+    let path = tempPath()
+    defer { cleanup(path) }
+    let store = try Store(path: path)
+    let newer = importRow(start: 5, end: 12)
+    try store.saveImport(newer, contacts: contacts(newer))
+    let older = importRow(start: 0, end: 6)
+    #expect(try store.saveImport(older, contacts: contacts(older)) == .olderThanStored(newestPeriodEnd: newer.periodEnd))
+    #expect(try store.imports().map(\.id) == [newer.id])
+    #expect(try store.rowCount(table: "report_contact") == 2)
+    // touching also counts, and a non-overlapping older file is still stored
+    let touching = importRow(start: 0, end: 5)
+    #expect(try store.saveImport(touching, contacts: contacts(touching)) == .olderThanStored(newestPeriodEnd: newer.periodEnd))
+    let apart = importRow(start: 0, end: 4)
+    #expect(try store.saveImport(apart, contacts: contacts(apart)) == .stored(replaced: 0))
+    #expect(try store.imports().count == 2)
+}
+
+@Test func equalPeriodEndReplaces() throws {
+    let path = tempPath()
+    defer { cleanup(path) }
+    let store = try Store(path: path)
+    let a = importRow(start: 0, end: 6)
+    try store.saveImport(a, contacts: contacts(a))
+    let b = importRow(start: 2, end: 6)
+    #expect(try store.saveImport(b, contacts: contacts(b)) == .stored(replaced: 1))
+    #expect(try store.imports().map(\.id) == [b.id])
 }

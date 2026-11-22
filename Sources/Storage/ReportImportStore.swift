@@ -72,11 +72,15 @@ public enum SaveImportOutcome: Equatable, Sendable {
     case duplicate
     /// no contacts: nothing stored
     case empty
+    /// a stored import overlaps this one and ends later, so this file is older: nothing stored.
+    /// `newestPeriodEnd` is the latest `period_end` among those overlapping imports
+    case olderThanStored(newestPeriodEnd: Date)
 }
 
 extension Store {
-    /// one transaction: same hash is a no-op, otherwise every stored import whose period overlaps this one
-    /// is replaced (periods that only touch at one instant count as overlapping, so a record on the boundary
+    /// one transaction: same hash is a no-op; an overlapping stored import with a later `period_end` refuses this
+    /// (older) file; otherwise (equal `period_end` counts as newer) every stored import whose period overlaps
+    /// this one is replaced (periods that only touch at one instant count as overlapping, so a record on the boundary
     /// is never counted twice). contacts are stored under `row.id`
     @discardableResult
     public func saveImport(_ row: ReportImportRow, contacts: [ReportContactRow]) throws -> SaveImportOutcome {
@@ -88,6 +92,16 @@ extension Store {
             let exists = dup.int(0) > 0
             dup.reset()
             if exists { return .duplicate }
+
+            let newer = try db.statement(
+                "select max(period_end) from report_import where period_start <= ? and period_end >= ? and period_end > ?")
+            newer.bind(1, row.periodEnd.timeIntervalSince1970)
+            newer.bind(2, row.periodStart.timeIntervalSince1970)
+            newer.bind(3, row.periodEnd.timeIntervalSince1970)
+            _ = try newer.step()
+            let newestEnd: Double? = newer.isNull(0) ? nil : newer.double(0)
+            newer.reset()
+            if let newestEnd { return .olderThanStored(newestPeriodEnd: Date(timeIntervalSince1970: newestEnd)) }
 
             let old = try db.statement("select count(*) from report_import where period_start <= ? and period_end >= ?")
             old.bind(1, row.periodEnd.timeIntervalSince1970)
