@@ -124,9 +124,10 @@ For review before any code (Milestone 3, problem 0.1). One migration for the who
 | | `period_end` | `real not null` | Latest `timeStamp` in the file |
 | | `imported_at` | `real not null` | When it was imported |
 | | `lines_read`, `records_kept`, `malformed`, `unknown_types` | `integer` | Import counts, shown to the user |
+| | `format_version` | `integer` | The `v<number>` of the export's file name; null when the name has none. The import warns when it is not 4 |
 | `report_contact` | `import_id` | `text not null`, references `report_import(id)`, cascade delete | Which import it came from |
 | | `app_id` | `text not null` | The app's bundle id |
-| | `domain` | `text not null` | Domain the app contacted |
+| | `domain` | `text not null` | Domain the app contacted, lower case, no trailing dot; can be an IP address literal (often, in a real export) |
 | | `domain_owner` | `text` | Apple's owner name for the domain; often empty |
 | | `hits` | `integer not null` | How many times, as counted by iOS |
 | | `first_seen`, `last_seen` | `real` | First and last contact |
@@ -134,6 +135,7 @@ For review before any code (Milestone 3, problem 0.1). One migration for the who
 
 - Primary key of `report_contact`: (`import_id`, `app_id`, `domain`); index on `app_id`
 - **Combining records:** an export lists the same app and domain many times. They become one row: `hits` summed, `first_seen` the earliest, `last_seen` the latest, `domain_owner` the first non-empty value; for the three raw codes the value from the latest record is kept
+- **Field names and rules** come from the verified export: see [PRIVACY_REPORT.md](PRIVACY_REPORT.md). `period_start` and `period_end` are taken from the kept network records only, as absolute times
 - **Not stored** (owner decision): the report's `access` records (camera, location, contacts…) and the `context` field (the website a browser request was made in)
 - **An import must contain at least one network record.** An empty file, or one where every line is malformed, stores nothing and reports why
 - **Same file twice:** a file whose `file_sha256` is already stored is a no-op. Tattle reads the export; it never deletes or moves the user's original file
