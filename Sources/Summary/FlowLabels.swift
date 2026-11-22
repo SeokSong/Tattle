@@ -44,10 +44,11 @@ public struct LabelCache: Sendable {
 public enum FlowLabels {
     /// nil when the flow has no usable name: the reason it has none is shown instead, as before. an
     /// ech flow is never labelled from the outer name. an unmatched name gives a label with source
-    /// `.none` (shown as "Not identified"), never a guess
-    public static func label(for flow: Flow, index: HostnameIndex, cache: inout LabelCache) -> FlowLabel? {
+    /// `.none` (shown as "Not identified"), never a guess. `appCompany` is the parent company of the app that
+    /// made the connection (`AppTable.company(for:)`); it sets the label's `relation`, and nil leaves it unknown
+    public static func label(for flow: Flow, index: HostnameIndex, cache: inout LabelCache, appCompany: String? = nil) -> FlowLabel? {
         guard case .named(let resolved) = index.outcome(for: flow), !resolved.echPresent else { return nil }
         let evidence: EvidenceKind = resolved.source == .sni ? .captureName : .captureHint
-        return FlowLabel(label: cache.label(for: resolved.name), evidence: evidence)
+        return FlowLabel(label: cache.label(for: resolved.name).relative(toAppCompany: appCompany), evidence: evidence)
     }
 }

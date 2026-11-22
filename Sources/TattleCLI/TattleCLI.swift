@@ -1062,11 +1062,80 @@ func runCompanies(_ args: [String]) async -> Int32 {
     return 0
 }
 
+// MARK: - Apps
+
+let appsUsage = """
+    usage: tattle apps coverage <file.pcap|pcapng> [--unmatched-out <file>]
+
+    prints how many distinct process names of the capture the app table knows (counts only).
+      --unmatched-out <file>
+                          write the process names that did not join to a local file (mode 600, new
+                          file only, refused inside a git work tree). names go only to that file
+    """
+
+func runApps(_ args: [String]) async -> Int32 {
+    func fail(_ message: String) -> Int32 {
+        FileHandle.standardError.write(Data((message + "\n" + appsUsage + "\n").utf8))
+        return 2
+    }
+    guard args.first == "coverage" else { return fail("unknown apps command") }
+    var file: String?, unmatchedOut: String?
+    var i = 1
+    while i < args.count {
+        if args[i] == "--unmatched-out" {
+            i += 1
+            guard i < args.count else { return fail("--unmatched-out needs a path") }
+            unmatchedOut = args[i]
+        } else if args[i].hasPrefix("--") || file != nil {
+            return fail("unexpected argument")
+        } else {
+            file = args[i]
+        }
+        i += 1
+    }
+    guard let file else { return fail("give a capture file") }
+    if let unmatchedOut, FileOwnership.gitWorkTreeRoot(containing: unmatchedOut) != nil {
+        return fail("--unmatched-out must point outside the git work tree: the file holds real process names")
+    }
+    do {
+        let pipeline = CapturePipeline(store: nil, session: newSession(), retainFlows: true, retainDomains: false)
+        _ = try await pipeline.run(FilePacketSource(url: URL(fileURLWithPath: (file as NSString).expandingTildeInPath)))
+        await pipeline.stop(reason: .captureStopped)
+        let names = await pipeline.flowsSnapshot().flatMap { appNames($0) }
+        try printJoinRate(
+            AppTable.bundled.joinRate(processNames: names),
+            what: "Capture process names", unjoinedOut: unmatchedOut)
+        return 0
+    } catch {
+        FileHandle.standardError.write(Data("apps coverage failed: \(error)\n".utf8))
+        return 1
+    }
+}
+
 // MARK: - Import report
 
 let importReportUsage = """
     usage: tattle import-report <file> [--db <path>]
+           tattle import-report <file> --join-rate [--unjoined-out <file>]
+
+      --join-rate         do not import: print how many apps of the report the app table knows
+                          (counts only). nothing is stored
+      --unjoined-out <file>
+                          with --join-rate, write the report's unjoined bundle ids to a local file
+                          (mode 600, new file only, refused inside a git work tree)
     """
+
+/// counts only: how many distinct ids joined the app table. the ids that did not join go only to `unjoinedOut`
+func printJoinRate(_ rate: JoinRate, what: String, unjoinedOut: String?) throws {
+    print("\(what): \(rate.joined) of \(rate.total) joined the app table (\(rate.total - rate.joined) not joined)")
+    if let unjoinedOut {
+        // created 0600 from the first byte; refuses an existing file or a symlink
+        let handle = try FileOwnership.openForWriting(path: unjoinedOut)
+        try handle.write(contentsOf: Data((rate.notJoined.joined(separator: "\n") + "\n").utf8))
+        try handle.close()
+        FileHandle.standardError.write(Data("wrote \(rate.notJoined.count) unjoined ids to a local file\n".utf8))
+    }
+}
 
 func runImportReport(_ args: [String]) -> Int32 {
     func fail(_ message: String) -> Int32 {
@@ -1075,12 +1144,20 @@ func runImportReport(_ args: [String]) -> Int32 {
     }
     var file: String?
     var db: String?
+    var joinRate = false
+    var unjoinedOut: String?
     var i = 0
     while i < args.count {
         if args[i] == "--db" {
             i += 1
             guard i < args.count else { return fail("--db needs a path") }
             db = args[i]
+        } else if args[i] == "--join-rate" {
+            joinRate = true
+        } else if args[i] == "--unjoined-out" {
+            i += 1
+            guard i < args.count else { return fail("--unjoined-out needs a path") }
+            unjoinedOut = args[i]
         } else if args[i].hasPrefix("--") {
             return fail("unknown option")
         } else if file == nil {
@@ -1091,6 +1168,21 @@ func runImportReport(_ args: [String]) -> Int32 {
         i += 1
     }
     guard let file else { return fail("give the report file") }
+    if unjoinedOut != nil && !joinRate { return fail("--unjoined-out needs --join-rate") }
+    if joinRate {
+        if db != nil { return fail("--join-rate stores nothing, so --db does not apply") }
+        if let unjoinedOut, FileOwnership.gitWorkTreeRoot(containing: unjoinedOut) != nil {
+            return fail("--unjoined-out must point outside the git work tree: the file holds real app ids")
+        }
+        do {
+            let ids = try ReportImporter.appIds(file: URL(fileURLWithPath: (file as NSString).expandingTildeInPath))
+            try printJoinRate(AppTable.bundled.joinRate(bundleIds: ids), what: "Report apps", unjoinedOut: unjoinedOut)
+            return 0
+        } catch {
+            print("\(error)")
+            return 1
+        }
+    }
 
     // under sudo, new database files must still belong to the invoking user
     let sudoUser = FileOwnership.sudoUser(environment: ProcessInfo.processInfo.environment)
@@ -1135,6 +1227,10 @@ if arguments.count >= 2 && arguments[1] == "capture" {
 
 if arguments.count >= 2 && arguments[1] == "import-report" {
     exit(runImportReport(Array(arguments.dropFirst(2))))
+}
+
+if arguments.count >= 2 && arguments[1] == "apps" {
+    exit(await runApps(Array(arguments.dropFirst(2))))
 }
 
 if arguments.count >= 2 && arguments[1] == "metrics" {
