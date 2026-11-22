@@ -80,3 +80,18 @@ private func label(_ f: Flow, _ observations: [DomainObservation] = []) -> FlowL
     #expect(counter.value == 2)
     #expect(cache.classifications == 2)
 }
+
+@Test func labelCacheIgnoresCaseAndTrailingDot() {
+    var cache = LabelCache()
+    let a = cache.label(for: "Securepubads.G.DoubleClick.net")
+    let b = cache.label(for: "securepubads.g.doubleclick.net.")
+    let c = cache.label(for: "securepubads.g.doubleclick.net")
+    #expect(cache.classifications == 1)
+    #expect(a == b && b == c)
+}
+
+@Test func hostedSiteLabelCarriesThePlatform() {
+    let result = label(flow(name: "someone.pages.dev"))
+    #expect(result?.label.isMatched == false)
+    #expect(result?.label.hostingPlatform != nil)
+}

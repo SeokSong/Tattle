@@ -279,6 +279,14 @@ private func dnsAnswer(_ host: String, _ address: IPAddress, ago: TimeInterval =
     #expect(line.unnamedReason != nil)
 }
 
+@Test func hostedUnknownSiteRowAndTooltip() throws {
+    let hosted = flow([.none: 1], bytes: 10, name: "someone.pages.dev")
+    let line = try #require(topFlows([hosted]).first)
+    #expect(line.companyText == "Website we couldn't identify")
+    let detail = try #require(line.companyDetail)
+    #expect(detail.hasPrefix("Unknown website, hosted on ") && detail.hasSuffix(" (a service many sites use)"))
+}
+
 @Test func aboutListsEveryManifestEntry() throws {
     let manifest = try DatasetManifest.load()
     let rows = aboutDatasets(manifest)

@@ -36,14 +36,14 @@ public struct CompanyClassifier: Sendable {
             return CompanyLabel(
                 hostname: name, registrableDomain: registrable, company: row.company, parent: row.parent,
                 category: row.category, source: .curated, rule: rule, datasetId: CuratedList.datasetId,
-                datasetVersion: curated.version, datasetSHA256: curated.sha256, relation: .unknown)
+                datasetVersion: curated.version, datasetSHA256: curated.sha256, hostingPlatform: nil, relation: .unknown)
         case .appleOwner:
             // the report names an owner but gives no category or parent, so neither is invented
             guard let owner = appleOwner?.trimmingCharacters(in: .whitespacesAndNewlines), !owner.isEmpty else { break }
             return CompanyLabel(
                 hostname: name, registrableDomain: registrable, company: String(owner.prefix(200)), parent: nil,
                 category: .unclassified, source: .appleOwner, rule: .appleOwner, datasetId: nil,
-                datasetVersion: nil, datasetSHA256: nil, relation: .unknown)
+                datasetVersion: nil, datasetSHA256: nil, hostingPlatform: nil, relation: .unknown)
         case .trackerList, .none:
             break
         }
@@ -61,10 +61,11 @@ public struct CompanyClassifier: Sendable {
 
     private func unmatched(_ hostname: String) -> CompanyLabel {
         let name = Self.normalise(hostname)
+        let found = registrable(of: name, in: .bundled)
         return CompanyLabel(
-            hostname: name, registrableDomain: registrableDomain(of: name), company: nil, parent: nil,
+            hostname: name, registrableDomain: found?.domain, company: nil, parent: nil,
             category: .unclassified, source: .none, rule: .noMatch, datasetId: nil, datasetVersion: nil,
-            datasetSHA256: nil, relation: .unknown)
+            datasetSHA256: nil, hostingPlatform: found?.platform, relation: .unknown)
     }
 
     private static func normalise(_ hostname: String) -> String {

@@ -97,5 +97,5 @@ private func row(_ domain: String, company: String = "Co", parent: String = "Par
     let c = CompanyClassifier()
     #expect(c.classify(hostname: "www.youtube.com").category == .onlineService)
     #expect(c.classify(hostname: "rr1.googlevideo.com").category == .contentDelivery)
-    #expect(c.classify(hostname: "s3.amazonaws.com").category == .cloudService)
+    #expect(c.classify(hostname: "sts.amazonaws.com").category == .cloudService)
 }

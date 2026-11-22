@@ -82,7 +82,23 @@ public struct CompanyLabel: Sendable, Equatable {
     public let datasetId: String?
     public let datasetVersion: String?
     public let datasetSHA256: String?
+    /// set when the name is under a hosting platform's private suffix (`someone.pages.dev`): the platform
+    /// the unknown site is hosted on, never its owner. only on a label with no company
+    public let hostingPlatform: String?
     public var relation: LabelRelation
 
     public var isMatched: Bool { source != .none }
+
+    /// shown on a row for a name no list knows. one sentence for every unknown name
+    public static let notIdentifiedText = "Not identified"
+    /// shown instead of `notIdentifiedText` when the name is under a hosting platform's suffix
+    public static let unknownWebsiteText = "Website we couldn't identify"
+
+    /// the row text for a label with no company: the plain words, or the website words when hosted
+    public var unidentifiedText: String { hostingPlatform == nil ? Self.notIdentifiedText : Self.unknownWebsiteText }
+
+    /// the tooltip for a hosted unknown website; nil when the name is not under a platform's suffix
+    public var hostedDetail: String? {
+        hostingPlatform.map { "Unknown website, hosted on \($0) (a service many sites use)" }
+    }
 }

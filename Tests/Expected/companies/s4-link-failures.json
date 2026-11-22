@@ -1,20 +1,20 @@
 {
-  "baselineLabel" : "M3 1.4 curated-only baseline, curated list v2",
+  "baselineLabel" : "M3 1.4 curated-only baseline, curated list v3, full public suffix list (OD14)",
   "metrics" : {
     "companyCoverage" : {
       "baseline" : 0.445,
       "ceiling" : 1,
-      "floor" : 0.444
+      "floor" : 0.4446686281099588
     },
     "companyCoverageOfNamedBytes" : {
       "baseline" : 0.453,
       "ceiling" : 1,
-      "floor" : 0.453
+      "floor" : 0.45327263824880176
     },
     "domainCoverage" : {
       "baseline" : 0.667,
       "ceiling" : 1,
-      "floor" : 0.666
+      "floor" : 0.6666666666666666
     },
     "labelSourceShare.curated" : {
       "baseline" : 1,
@@ -24,7 +24,7 @@
   "notes" : [
     {
       "metric" : "companyCoverage",
-      "reason" : "frozen curated-only baseline (problem 1.4) measured with curated list version 2, sha256 db62066f58259cd56095caecaf71cbbe7a8d01c2ad43482f814ffaf95cfc11f0. later sources (apple owner, public list) must not lower it: the floor is the baseline rounded down to 3 decimals, with no tolerance, because coverage on a fixed capture and a fixed list is exact. companyCoverage is bytes of port 443 flows named by sni and identified, over all port 443 bytes (hints, ech and unnamed flows stay in the denominator). domainCoverage and labelSourceShare count distinct registrable domains. to raise a floor after adding curated rows, re-run tattle companies coverage with --write-bands and keep this note"
+      "reason" : "frozen curated-only baseline (problem 1.4) measured with curated list version 3 and the full public suffix list (owner decision OD14), sha256 cd415fcd4c7dd136337ca97130476e0da82a081ee397e2157edd79709b65f118. later sources (apple owner, public list) must not lower it: the floor is the exact baseline value (the baseline field is rounded to 3 decimals for reading), with no tolerance, because coverage on a fixed capture and a fixed list is exact. companyCoverage is bytes of port 443 flows named by sni and identified, over all port 443 bytes (hints, ech and unnamed flows stay in the denominator). domainCoverage and labelSourceShare count distinct registrable domains. to raise a floor after adding curated rows, re-run tattle companies coverage with --write-bands and keep this note"
     }
   ],
   "scenario" : "s4-link-failures",

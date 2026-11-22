@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 import Testing
-import Companies
+@testable import Companies
 
 // plain import (no @testable) so these also run under `swift test -c release`
 
@@ -26,11 +26,51 @@ import Companies
     #expect(registrableDomain(of: "a.city.kawasaki.jp") == "city.kawasaki.jp")
 }
 
-@Test func icannOnly() {
-    // github.io is in the private section; the answer comes from the icann rule for io
-    #expect(registrableDomain(of: "x.github.io") == "github.io")
-    #expect(registrableDomain(of: "a.b.blogspot.com") == "blogspot.com")
-    #expect(registrableDomain(of: "github.io") == "github.io")
+@Test func privateSuffixGivesOwnSite() {
+    // both sections are used (OD14): github.io and blogspot.com are suffixes, so each user's site is its own domain
+    #expect(registrableDomain(of: "x.github.io") == "x.github.io")
+    #expect(registrableDomain(of: "a.x.github.io") == "x.github.io")
+    #expect(registrableDomain(of: "a.b.blogspot.com") == "b.blogspot.com")
+    #expect(registrableDomain(of: "someone.pages.dev") == "someone.pages.dev")
+    // the suffix itself is not a registrable domain
+    #expect(registrableDomain(of: "github.io") == nil)
+    #expect(registrableDomain(of: "pages.dev") == nil)
+}
+
+@Test func platformFollowsThePrivateRule() {
+    #expect(hostingPlatform(of: "someone.pages.dev") == "Cloudflare, Inc.")
+    #expect(hostingPlatform(of: "www.someone.pages.dev") == "Cloudflare, Inc.")
+    #expect(hostingPlatform(of: "x.github.io") != nil)
+    // an ordinary domain, an icann suffix and a suffix itself have no platform
+    #expect(hostingPlatform(of: "www.example.com") == nil)
+    #expect(hostingPlatform(of: "x.example.co.uk") == nil)
+    #expect(hostingPlatform(of: "pages.dev") == nil)
+}
+
+@Test func privateSectionIsReadFromTheMarkers() {
+    let text = """
+        // ===BEGIN ICANN DOMAINS===
+        com
+        // ===END ICANN DOMAINS===
+        // ===BEGIN PRIVATE DOMAINS===
+        // PLATFORM: Host One
+        one.example.com
+        *.wild.com
+        // PLATFORM:
+        bare.com
+        // ===END PRIVATE DOMAINS===
+        """
+    let list = PublicSuffixList(contents: text)
+    #expect(list.ruleCount == 4)
+    #expect(list.privatePlatform["com"] == nil)
+    #expect(list.privatePlatform["one.example.com"] == "Host One")
+    #expect(list.privatePlatform["*.wild.com"] == "Host One")
+    // a block whose name could not be read: the suffix itself is the platform
+    #expect(list.privatePlatform["bare.com"] == "")
+    #expect(registrable(of: "a.b.one.example.com", in: list)?.domain == "b.one.example.com")
+    #expect(registrable(of: "a.b.one.example.com", in: list)?.platform == "Host One")
+    #expect(registrable(of: "a.bare.com", in: list)?.platform == "bare.com")
+    #expect(registrable(of: "a.b.example.com", in: list)?.platform == nil)
 }
 
 @Test func unknownSuffixUsesDefaultRule() {
@@ -85,6 +125,23 @@ import Companies
     let notices = try #require(DatasetManifest.resourceURL("NOTICES.txt"))
     let text = try String(contentsOf: notices, encoding: .utf8)
     #expect(text.contains("Mozilla Public License") && text.contains(entry.sourceURL))
+}
+
+@Test func missingBundleDoesNotCrash() throws {
+    // a location with no resource bundle gives nil, never a trap
+    let fake = FileManager.default.temporaryDirectory.appendingPathComponent("no-bundle-\(UUID().uuidString)")
+    #expect(DatasetManifest.locateBundle(in: [fake]) == nil)
+    #expect(DatasetManifest.resourceURL("psl.dat", searchDirectories: [fake]) == nil)
+    #expect(DatasetManifest.resourceURL("psl.dat", searchDirectories: []) == nil)
+    #expect(throws: (any Error).self) { try DatasetManifest.load(searchDirectories: [fake]) }
+    // a folder with the bundle name but no files gives nil for every file
+    let empty = fake.appendingPathComponent(DatasetManifest.bundleName, isDirectory: true)
+    try FileManager.default.createDirectory(at: empty, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: fake) }
+    #expect(DatasetManifest.locateBundle(in: [fake]) == empty)
+    #expect(DatasetManifest.resourceURL("psl.dat", searchDirectories: [fake]) == nil)
+    // the real search still finds the shipped files
+    #expect(DatasetManifest.resourceURL("psl.dat") != nil)
 }
 
 @Test func bundledListIsLoaded() {
