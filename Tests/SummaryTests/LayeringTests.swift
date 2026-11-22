@@ -78,4 +78,16 @@ private func imports(_ file: URL) -> Set<String> {
         let extra = imports(file).subtracting(["Foundation"])
         #expect(extra.isEmpty, "\(file.lastPathComponent) imports more than Foundation")
     }
+    // PrivacyReport has no dependencies either: Foundation only, so it imports neither Companies nor
+    // Storage, and Companies (Foundation only, above) cannot import it
+    let report = swiftFiles(in: "PrivacyReport")
+    #expect(!report.isEmpty)
+    for file in report {
+        let extra = imports(file).subtracting(["Foundation"])
+        #expect(extra.isEmpty, "\(file.lastPathComponent) imports more than Foundation")
+    }
+    // Storage never imports the parser: the import glue in Pipeline maps between them
+    for file in swiftFiles(in: "Storage") {
+        #expect(!imports(file).contains("PrivacyReport"), "\(file.lastPathComponent) imports PrivacyReport")
+    }
 }
