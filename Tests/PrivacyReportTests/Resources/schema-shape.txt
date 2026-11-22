@@ -1,0 +1,49 @@
+file name shape: App_Privacy_Report_v9_9999-99-99T99_99_99.ndjson
+file size bytes: 1575054
+lines: 5568 newline-terminated, 5568 total
+longest line bytes: 411
+mode: 600
+
+unparseable lines: 0
+non-object lines: 0
+
+== record type access: 3407 records
+  accessCount: present 3407/3407, types number, min 0, max 0, sum 0, distinct 1, values 0 x3407
+  accessor.identifier: present 3407/3407, types string, length 9 to 35, empty 0, distinct 35
+  accessor.identifierType: present 3407/3407, types string, length 8 to 8, empty 0, distinct 1
+  broadcaster.identifier: present 8/3407, types string, length 18 to 18, empty 0, distinct 1
+  broadcaster.identifierType: present 8/3407, types string, length 8 to 8, empty 0, distinct 1
+  category: present 3407/3407, types string, length 6 to 15, empty 0, distinct 7, words camera 89; contacts 885; location 1616; mediaLibrary 394; microphone 140; photos 275; screenRecording 8
+  identifier: present 3407/3407, types string, length 36 to 36, empty 0, distinct 1705
+  kind: present 3407/3407, types string, length 11 to 13, empty 0, distinct 2, words intervalBegin 1705; intervalEnd 1702
+  outOfProcess: present 20/3407, types boolean, true 20
+  timeStamp: present 3407/3407, types string, length 29 to 29, empty 0, distinct 3304, formats 9999-99-99T99:99:99.999<tz> x3407, offsets -08:00 x3407
+  type: present 3407/3407, types string, length 6 to 6, empty 0, distinct 1, words access 3407
+
+== record type networkActivity: 2161 records
+  bundleID: present 2161/2161, types string, length 9 to 35, empty 0, distinct 59
+  context: present 2161/2161, types string, length 0 to 19, empty 2010, distinct 22
+  contextVerificationType: present 2161/2161, types number, min 0, max 2, sum 302, distinct 2, values 0 x2010; 2 x151
+  domain: present 2161/2161, types string, length 6 to 110, empty 0, distinct 1810
+  domainClassification: present 2161/2161, types number, min 1, max 2, sum 2895, distinct 2, values 1 x1427; 2 x734
+  domainOwner: present 2161/2161, types string, length 0 to 38, empty 2032, distinct 36
+  domainType: present 2161/2161, types number, min 1, max 2, sum 4191, distinct 2, values 1 x131; 2 x2030
+  firstTimeStamp: present 2161/2161, types string, length 29 to 29, empty 0, distinct 2157, formats 9999-99-99T99:99:99.999<tz> x2161, offsets -08:00 x2161
+  hits: present 2161/2161, types number, min 1, max 515, sum 16155, distinct 96
+  initiatedType: present 2161/2161, types string, length 12 to 15, empty 0, distinct 2, words AppInitiated 2057; NonAppInitiated 104
+  timeStamp: present 2161/2161, types string, length 29 to 29, empty 0, distinct 2161, formats 9999-99-99T99:99:99.999<tz> x2161, offsets -08:00 x2161
+  type: present 2161/2161, types string, length 15 to 15, empty 0, distinct 1, words networkActivity 2161
+
+== bundle id and domain shapes (networkActivity)
+  distinct bundle ids: 59
+  distinct domains: 1810
+  distinct domain owners (non-empty): 35
+  records with an owner: 129 of 2161
+  bundle id dot-component counts: 2 parts x3; 3 parts x51; 4 parts x4; 5 parts x1
+  bundle ids starting with a reverse-dns first part of 3 letters (com, net, org...): 57
+  bundle ids with a recognisable last component (letters only, 3 to 30 chars): 53
+  bundle ids whose last component is generic (app, ios, mobile, iphone, ipad, release, prod): 3
+  domains with an ip-literal shape: 720
+  domains with upper case letters: 110
+  domains with a trailing dot: 0
+  period fields: firstTimeStamp and timeStamp, see formats above
