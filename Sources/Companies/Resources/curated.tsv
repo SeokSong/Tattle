@@ -399,3 +399,4 @@ lyft.com	Lyft	Lyft	onlineService	company's own domain
 airbnb.com	Airbnb	Airbnb	onlineService	company's own domain
 booking.com	Booking.com	Booking Holdings	onlineService	company's own domain
 tripadvisor.com	Tripadvisor	Tripadvisor	onlineService	company's own domain
+suffix:googleapis.com	Google APIs	Alphabet	cloudService	platform's own API hosts; customer content uses paths

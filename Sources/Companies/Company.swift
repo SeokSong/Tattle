@@ -47,6 +47,8 @@ public enum LabelRule: String, Sendable, Codable {
     case curatedHostname
     /// a curated row keyed by the registrable domain
     case curatedRegistrable
+    /// a curated row that marks the private suffix as platform-operated: every host under it is the platform's own
+    case curatedOperatedSuffix
     /// the owner string from an imported report
     case appleOwner
     case noMatch

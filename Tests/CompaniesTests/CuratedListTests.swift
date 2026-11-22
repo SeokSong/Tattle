@@ -99,3 +99,18 @@ private func row(_ domain: String, company: String = "Co", parent: String = "Par
     #expect(c.classify(hostname: "rr1.googlevideo.com").category == .contentDelivery)
     #expect(c.classify(hostname: "sts.amazonaws.com").category == .cloudService)
 }
+
+@Test func operatedSuffixMustBePrivateRule() throws {
+    let ok = "suffix:pages.dev\tCo\tParent\tcloudService\tplatform's own hosts\n"
+    #expect(try CuratedList(parsing: header + ok).operatedSuffixes.count == 1)
+    // an icann suffix, a name that is no rule, a wildcard, a registrable domain and an uppercase key all fail
+    for key in ["suffix:co.uk", "suffix:com", "suffix:example.com", "suffix:*.compute.amazonaws.com", "suffix:Pages.dev", "suffix:"] {
+        #expect(throws: CuratedListError.notPrivateSuffix(line: 2), "\(key)") {
+            try CuratedList(parsing: header + "\(key)\tCo\tParent\tcloudService\tnote\n")
+        }
+    }
+    // the bundled list marks only a small number
+    let bundled = try CuratedList.loadBundled()
+    #expect(bundled.operatedSuffixes.map(\.domain) == ["suffix:googleapis.com"])
+    #expect(!bundled.entries.contains { $0.domain.hasPrefix("suffix:") })
+}

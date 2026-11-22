@@ -15,14 +15,14 @@
     {
       "name": "Tattle curated company list",
       "file": "curated.tsv",
-      "version": "3",
+      "version": "4",
       "commit": "",
       "sourceURL": "",
       "licence": "MIT (own data, public knowledge)",
       "fetched": "2026-11-22",
-      "sha256": "cd415fcd4c7dd136337ca97130476e0da82a081ee397e2157edd79709b65f118",
-      "sourceSHA256": "cd415fcd4c7dd136337ca97130476e0da82a081ee397e2157edd79709b65f118",
-      "rules": 400
+      "sha256": "3350dbee0beee132400d007966c83e6aa670d4032b5b462eccd5fd9995b6f72e",
+      "sourceSHA256": "3350dbee0beee132400d007966c83e6aa670d4032b5b462eccd5fd9995b6f72e",
+      "rules": 401
     }
   ]
 }
