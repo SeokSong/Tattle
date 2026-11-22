@@ -131,7 +131,11 @@ private final class FailingStore: ReportImportStoring {
     let dir = try tempDir()
     defer { try? FileManager.default.removeItem(at: dir) }
     let store = try Store(path: dir.appendingPathComponent("t.db"))
-    let file = try write(B.file(sampleLines()), in: dir)
+    // other tests write the same sample under the same name at the same time, so this export gets
+    // its own name and content; otherwise their files look like copies made by the importer
+    let unique = UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
+    let lines = sampleLines() + [B.network(app: "com.example.u\(unique)", domain: "u\(unique).example.com", hits: 1, last: B.stamp(16))]
+    let file = try write(B.file(lines), in: dir, name: "App_Privacy_Report_v4_2026-11-18T10_00_00_\(unique).ndjson")
     let temp = FileManager.default.temporaryDirectory
     let before = Set(try FileManager.default.contentsOfDirectory(atPath: temp.path))
     _ = try ReportImporter.run(file: file, store: store)
