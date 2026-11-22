@@ -31,17 +31,17 @@ out=md/COMPANIES-curated.md
   echo
   echo "- Version $version, $rows rows, SHA-256 \`$sha\`"
   echo "- Every row has \`source: curated\`. Rows are built from public knowledge only; the owner reviews them in the PR"
-  echo "- Category labels: Advertising, Analytics, Social media, Content delivery, Cloud or app service, Apple system"
+  echo "- Category labels: Advertising, Analytics, Social media, Content delivery, Cloud or app service, Apple system, Online service"
   echo
   echo "## Counts per category"
   echo
   echo "| Category | Rows |"
   echo "|---|---|"
-  for c in advertising analytics social contentDelivery cloudService appleSystem; do
+  for c in advertising analytics social contentDelivery cloudService appleSystem onlineService; do
     echo "| $c | $(awk -F'\t' -v c="$c" 'NR>1 && $4==c' "$tsv" | wc -l | tr -d ' ') |"
   done
   echo "| Total | $rows |"
-  for c in advertising analytics social contentDelivery cloudService appleSystem; do
+  for c in advertising analytics social contentDelivery cloudService appleSystem onlineService; do
     echo
     echo "## $c"
     echo

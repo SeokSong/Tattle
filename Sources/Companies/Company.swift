@@ -9,6 +9,7 @@ public enum CompanyCategory: String, CaseIterable, Sendable, Codable {
     case contentDelivery
     case cloudService
     case appleSystem
+    case onlineService
     case unclassified
 
     /// the label shown to users
@@ -20,6 +21,7 @@ public enum CompanyCategory: String, CaseIterable, Sendable, Codable {
         case .contentDelivery: "Content delivery"
         case .cloudService: "Cloud or app service"
         case .appleSystem: "Apple system"
+        case .onlineService: "Online service"
         case .unclassified: "Not matched"
         }
     }

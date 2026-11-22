@@ -22,17 +22,17 @@ ytimg.com	YouTube	Alphabet	contentDelivery	company's own delivery network domain
 ggpht.com	Google	Alphabet	contentDelivery	company's own delivery network domain
 gvt1.com	Google	Alphabet	contentDelivery	company's own delivery network domain
 gvt2.com	Google	Alphabet	contentDelivery	company's own delivery network domain
-youtube.com	YouTube	Alphabet	cloudService	company's own domain
-youtu.be	YouTube	Alphabet	cloudService	company's own domain
-youtube-nocookie.com	YouTube	Alphabet	cloudService	company's own domain
-android.com	Android	Alphabet	cloudService	company's own domain
+youtube.com	YouTube	Alphabet	onlineService	company's own domain
+youtu.be	YouTube	Alphabet	onlineService	company's own domain
+youtube-nocookie.com	YouTube	Alphabet	onlineService	company's own domain
+android.com	Android	Alphabet	onlineService	company's own domain
 appspot.com	Google App Engine	Alphabet	cloudService	company's own domain
 firebaseapp.com	Firebase	Alphabet	cloudService	company's own domain
 firebaseio.com	Firebase	Alphabet	cloudService	company's own domain
 web.app	Firebase Hosting	Alphabet	cloudService	company's own domain
 recaptcha.net	reCAPTCHA	Alphabet	cloudService	company's own domain
-blogger.com	Blogger	Alphabet	cloudService	company's own domain
-blogspot.com	Blogger	Alphabet	cloudService	company's own domain
+blogger.com	Blogger	Alphabet	onlineService	company's own domain
+blogspot.com	Blogger	Alphabet	onlineService	company's own domain
 goo.gl	Google	Alphabet	cloudService	company's own domain
 facebook.com	Facebook	Meta Platforms	social	company's own domain
 fb.com	Facebook	Meta Platforms	social	company's own domain
@@ -47,13 +47,13 @@ messenger.com	Messenger	Meta Platforms	social	company's own domain
 threads.net	Threads	Meta Platforms	social	company's own domain
 meta.com	Meta	Meta Platforms	social	company's own domain
 amazon-adsystem.com	Amazon Ads	Amazon	advertising	documented ad network or ad service
-amazon.com	Amazon	Amazon	cloudService	company's own domain
+amazon.com	Amazon	Amazon	onlineService	company's own domain
 media-amazon.com	Amazon	Amazon	contentDelivery	company's own delivery network domain
 ssl-images-amazon.com	Amazon	Amazon	contentDelivery	company's own delivery network domain
 amazonaws.com	Amazon Web Services	Amazon	cloudService	company's own domain
 awsstatic.com	Amazon Web Services	Amazon	contentDelivery	company's own delivery network domain
 cloudfront.net	Amazon CloudFront	Amazon	contentDelivery	company's own delivery network domain
-primevideo.com	Prime Video	Amazon	cloudService	company's own domain
+primevideo.com	Prime Video	Amazon	onlineService	company's own domain
 aiv-cdn.net	Prime Video	Amazon	contentDelivery	company's own delivery network domain
 amazontrust.com	Amazon Trust Services	Amazon	cloudService	company's own domain
 twitch.tv	Twitch	Amazon	social	company's own domain
@@ -62,11 +62,11 @@ jtvnw.net	Twitch	Amazon	contentDelivery	company's own delivery network domain
 microsoft.com	Microsoft	Microsoft	cloudService	company's own domain
 microsoftonline.com	Microsoft	Microsoft	cloudService	company's own domain
 live.com	Microsoft	Microsoft	cloudService	company's own domain
-office.com	Microsoft 365	Microsoft	cloudService	company's own domain
-office365.com	Microsoft 365	Microsoft	cloudService	company's own domain
-outlook.com	Outlook	Microsoft	cloudService	company's own domain
-msn.com	MSN	Microsoft	cloudService	company's own domain
-bing.com	Bing	Microsoft	cloudService	company's own domain
+office.com	Microsoft 365	Microsoft	onlineService	company's own domain
+office365.com	Microsoft 365	Microsoft	onlineService	company's own domain
+outlook.com	Outlook	Microsoft	onlineService	company's own domain
+msn.com	MSN	Microsoft	onlineService	company's own domain
+bing.com	Bing	Microsoft	onlineService	company's own domain
 windows.com	Windows	Microsoft	cloudService	company's own domain
 windows.net	Microsoft Azure	Microsoft	cloudService	company's own domain
 azure.com	Microsoft Azure	Microsoft	cloudService	company's own domain
@@ -77,15 +77,15 @@ msecnd.net	Microsoft Azure CDN	Microsoft	contentDelivery	company's own delivery 
 msauth.net	Microsoft	Microsoft	cloudService	company's own domain
 msftauth.net	Microsoft	Microsoft	cloudService	company's own domain
 msftconnecttest.com	Microsoft	Microsoft	cloudService	company's own domain
-skype.com	Skype	Microsoft	cloudService	company's own domain
-xbox.com	Xbox	Microsoft	cloudService	company's own domain
-xboxlive.com	Xbox	Microsoft	cloudService	company's own domain
+skype.com	Skype	Microsoft	onlineService	company's own domain
+xbox.com	Xbox	Microsoft	onlineService	company's own domain
+xboxlive.com	Xbox	Microsoft	onlineService	company's own domain
 bat.bing.com	Bing Ads	Microsoft	advertising	hostname of the company's own ad or analytics product
 clarity.ms	Microsoft Clarity	Microsoft	analytics	documented analytics service
 linkedin.com	LinkedIn	Microsoft	social	company's own domain
 licdn.com	LinkedIn	Microsoft	contentDelivery	company's own delivery network domain
 ads.linkedin.com	LinkedIn Ads	Microsoft	advertising	hostname of the company's own ad or analytics product
-github.com	GitHub	Microsoft	cloudService	company's own domain
+github.com	GitHub	Microsoft	onlineService	company's own domain
 githubusercontent.com	GitHub	Microsoft	contentDelivery	company's own delivery network domain
 githubassets.com	GitHub	Microsoft	contentDelivery	company's own delivery network domain
 adnxs.com	Xandr	Microsoft	advertising	documented ad network or ad service
@@ -203,10 +203,10 @@ telegram.org	Telegram	Telegram	social	company's own domain
 t.me	Telegram	Telegram	social	company's own domain
 signal.org	Signal	Signal Foundation	social	company's own domain
 line.me	LINE	LY Corporation	social	company's own domain
-naver.com	Naver	Naver	cloudService	company's own domain
+naver.com	Naver	Naver	onlineService	company's own domain
 kakao.com	Kakao	Kakao	social	company's own domain
 kakaocdn.net	Kakao	Kakao	contentDelivery	company's own delivery network domain
-daum.net	Daum	Kakao	cloudService	company's own domain
+daum.net	Daum	Kakao	onlineService	company's own domain
 qq.com	Tencent QQ	Tencent	social	company's own domain
 tencent.com	Tencent	Tencent	cloudService	company's own domain
 wechat.com	WeChat	Tencent	social	company's own domain
@@ -214,24 +214,24 @@ weibo.com	Weibo	Weibo	social	company's own domain
 vk.com	VK	VK	social	company's own domain
 bilibili.com	Bilibili	Bilibili	social	company's own domain
 hdslb.com	Bilibili	Bilibili	contentDelivery	company's own delivery network domain
-baidu.com	Baidu	Baidu	cloudService	company's own domain
+baidu.com	Baidu	Baidu	onlineService	company's own domain
 bdstatic.com	Baidu	Baidu	contentDelivery	company's own delivery network domain
-alibaba.com	Alibaba	Alibaba	cloudService	company's own domain
+alibaba.com	Alibaba	Alibaba	onlineService	company's own domain
 alicdn.com	Alibaba	Alibaba	contentDelivery	company's own delivery network domain
 aliyun.com	Alibaba Cloud	Alibaba	cloudService	company's own domain
 aliyuncs.com	Alibaba Cloud	Alibaba	cloudService	company's own domain
-taobao.com	Taobao	Alibaba	cloudService	company's own domain
-tmall.com	Tmall	Alibaba	cloudService	company's own domain
+taobao.com	Taobao	Alibaba	onlineService	company's own domain
+tmall.com	Tmall	Alibaba	onlineService	company's own domain
 alipay.com	Alipay	Ant Group	cloudService	company's own domain
 umeng.com	Umeng	Alibaba	analytics	documented analytics service
-yahoo.com	Yahoo	Yahoo	cloudService	company's own domain
+yahoo.com	Yahoo	Yahoo	onlineService	company's own domain
 yimg.com	Yahoo	Yahoo	contentDelivery	company's own delivery network domain
 yahooapis.com	Yahoo	Yahoo	cloudService	company's own domain
-aol.com	AOL	Yahoo	cloudService	company's own domain
+aol.com	AOL	Yahoo	onlineService	company's own domain
 flurry.com	Flurry	Yahoo	analytics	documented analytics service
 analytics.yahoo.com	Yahoo Analytics	Yahoo	analytics	hostname of the company's own ad or analytics product
-yandex.com	Yandex	Yandex	cloudService	company's own domain
-yandex.ru	Yandex	Yandex	cloudService	company's own domain
+yandex.com	Yandex	Yandex	onlineService	company's own domain
+yandex.ru	Yandex	Yandex	onlineService	company's own domain
 yandex.net	Yandex	Yandex	contentDelivery	company's own delivery network domain
 scorecardresearch.com	Comscore	Comscore	analytics	documented analytics service
 comscore.com	Comscore	Comscore	analytics	documented analytics service
@@ -293,93 +293,93 @@ jsdelivr.net	jsDelivr	jsDelivr	contentDelivery	company's own delivery network do
 b-cdn.net	Bunny.net	Bunny.net	contentDelivery	company's own delivery network domain
 imgix.net	imgix	imgix	contentDelivery	company's own delivery network domain
 cloudinary.com	Cloudinary	Cloudinary	contentDelivery	company's own delivery network domain
-netflix.com	Netflix	Netflix	cloudService	company's own domain
+netflix.com	Netflix	Netflix	onlineService	company's own domain
 nflxvideo.net	Netflix	Netflix	contentDelivery	company's own delivery network domain
 nflximg.net	Netflix	Netflix	contentDelivery	company's own delivery network domain
 nflxext.com	Netflix	Netflix	contentDelivery	company's own delivery network domain
 nflxso.net	Netflix	Netflix	contentDelivery	company's own delivery network domain
-spotify.com	Spotify	Spotify	cloudService	company's own domain
+spotify.com	Spotify	Spotify	onlineService	company's own domain
 scdn.co	Spotify	Spotify	contentDelivery	company's own delivery network domain
 spotifycdn.com	Spotify	Spotify	contentDelivery	company's own delivery network domain
-disneyplus.com	Disney+	Disney	cloudService	company's own domain
-disney.com	Disney	Disney	cloudService	company's own domain
+disneyplus.com	Disney+	Disney	onlineService	company's own domain
+disney.com	Disney	Disney	onlineService	company's own domain
 bamgrid.com	Disney Streaming	Disney	cloudService	company's own domain
-hulu.com	Hulu	Disney	cloudService	company's own domain
+hulu.com	Hulu	Disney	onlineService	company's own domain
 hulustream.com	Hulu	Disney	contentDelivery	company's own delivery network domain
 huluim.com	Hulu	Disney	contentDelivery	company's own delivery network domain
-hbo.com	HBO	Warner Bros. Discovery	cloudService	company's own domain
-hbomax.com	HBO Max	Warner Bros. Discovery	cloudService	company's own domain
-max.com	Max	Warner Bros. Discovery	cloudService	company's own domain
-paramountplus.com	Paramount+	Paramount	cloudService	company's own domain
-peacocktv.com	Peacock	Comcast	cloudService	company's own domain
-nbc.com	NBC	Comcast	cloudService	company's own domain
+hbo.com	HBO	Warner Bros. Discovery	onlineService	company's own domain
+hbomax.com	HBO Max	Warner Bros. Discovery	onlineService	company's own domain
+max.com	Max	Warner Bros. Discovery	onlineService	company's own domain
+paramountplus.com	Paramount+	Paramount	onlineService	company's own domain
+peacocktv.com	Peacock	Comcast	onlineService	company's own domain
+nbc.com	NBC	Comcast	onlineService	company's own domain
 comcast.com	Comcast	Comcast	cloudService	company's own domain
-xfinity.com	Xfinity	Comcast	cloudService	company's own domain
-vimeo.com	Vimeo	Vimeo	cloudService	company's own domain
+xfinity.com	Xfinity	Comcast	onlineService	company's own domain
+vimeo.com	Vimeo	Vimeo	onlineService	company's own domain
 vimeocdn.com	Vimeo	Vimeo	contentDelivery	company's own delivery network domain
-dailymotion.com	Dailymotion	Dailymotion	cloudService	company's own domain
-soundcloud.com	SoundCloud	SoundCloud	cloudService	company's own domain
+dailymotion.com	Dailymotion	Dailymotion	onlineService	company's own domain
+soundcloud.com	SoundCloud	SoundCloud	onlineService	company's own domain
 sndcdn.com	SoundCloud	SoundCloud	contentDelivery	company's own delivery network domain
-deezer.com	Deezer	Deezer	cloudService	company's own domain
+deezer.com	Deezer	Deezer	onlineService	company's own domain
 dzcdn.net	Deezer	Deezer	contentDelivery	company's own delivery network domain
-pandora.com	Pandora	SiriusXM	cloudService	company's own domain
-siriusxm.com	SiriusXM	SiriusXM	cloudService	company's own domain
-tidal.com	TIDAL	Block	cloudService	company's own domain
-plex.tv	Plex	Plex	cloudService	company's own domain
-roku.com	Roku	Roku	cloudService	company's own domain
-tubitv.com	Tubi	Fox Corporation	cloudService	company's own domain
-tubi.tv	Tubi	Fox Corporation	cloudService	company's own domain
-crunchyroll.com	Crunchyroll	Sony	cloudService	company's own domain
-dazn.com	DAZN	DAZN Group	cloudService	company's own domain
-youku.com	Youku	Alibaba	cloudService	company's own domain
-iqiyi.com	iQIYI	iQIYI	cloudService	company's own domain
-epicgames.com	Epic Games	Epic Games	cloudService	company's own domain
+pandora.com	Pandora	SiriusXM	onlineService	company's own domain
+siriusxm.com	SiriusXM	SiriusXM	onlineService	company's own domain
+tidal.com	TIDAL	Block	onlineService	company's own domain
+plex.tv	Plex	Plex	onlineService	company's own domain
+roku.com	Roku	Roku	onlineService	company's own domain
+tubitv.com	Tubi	Fox Corporation	onlineService	company's own domain
+tubi.tv	Tubi	Fox Corporation	onlineService	company's own domain
+crunchyroll.com	Crunchyroll	Sony	onlineService	company's own domain
+dazn.com	DAZN	DAZN Group	onlineService	company's own domain
+youku.com	Youku	Alibaba	onlineService	company's own domain
+iqiyi.com	iQIYI	iQIYI	onlineService	company's own domain
+epicgames.com	Epic Games	Epic Games	onlineService	company's own domain
 unrealengine.com	Epic Games	Epic Games	cloudService	company's own domain
-steampowered.com	Steam	Valve	cloudService	company's own domain
+steampowered.com	Steam	Valve	onlineService	company's own domain
 steamstatic.com	Steam	Valve	contentDelivery	company's own delivery network domain
 steamcontent.com	Steam	Valve	contentDelivery	company's own delivery network domain
 valvesoftware.com	Valve	Valve	cloudService	company's own domain
-playstation.com	PlayStation	Sony	cloudService	company's own domain
+playstation.com	PlayStation	Sony	onlineService	company's own domain
 playstation.net	PlayStation	Sony	cloudService	company's own domain
 sonyentertainmentnetwork.com	PlayStation Network	Sony	cloudService	company's own domain
-nintendo.com	Nintendo	Nintendo	cloudService	company's own domain
+nintendo.com	Nintendo	Nintendo	onlineService	company's own domain
 nintendo.net	Nintendo	Nintendo	cloudService	company's own domain
-riotgames.com	Riot Games	Tencent	cloudService	company's own domain
-battle.net	Battle.net	Microsoft	cloudService	company's own domain
-blizzard.com	Blizzard	Microsoft	cloudService	company's own domain
-ea.com	Electronic Arts	Electronic Arts	cloudService	company's own domain
-roblox.com	Roblox	Roblox	cloudService	company's own domain
+riotgames.com	Riot Games	Tencent	onlineService	company's own domain
+battle.net	Battle.net	Microsoft	onlineService	company's own domain
+blizzard.com	Blizzard	Microsoft	onlineService	company's own domain
+ea.com	Electronic Arts	Electronic Arts	onlineService	company's own domain
+roblox.com	Roblox	Roblox	onlineService	company's own domain
 rbxcdn.com	Roblox	Roblox	contentDelivery	company's own delivery network domain
-adobe.com	Adobe	Adobe	cloudService	company's own domain
+adobe.com	Adobe	Adobe	onlineService	company's own domain
 adobe.io	Adobe	Adobe	cloudService	company's own domain
 typekit.net	Adobe Fonts	Adobe	contentDelivery	company's own delivery network domain
-dropbox.com	Dropbox	Dropbox	cloudService	company's own domain
+dropbox.com	Dropbox	Dropbox	onlineService	company's own domain
 dropboxapi.com	Dropbox	Dropbox	cloudService	company's own domain
 dropboxstatic.com	Dropbox	Dropbox	contentDelivery	company's own delivery network domain
-box.com	Box	Box	cloudService	company's own domain
-slack.com	Slack	Salesforce	cloudService	company's own domain
+box.com	Box	Box	onlineService	company's own domain
+slack.com	Slack	Salesforce	onlineService	company's own domain
 slack-edge.com	Slack	Salesforce	contentDelivery	company's own delivery network domain
 salesforce.com	Salesforce	Salesforce	cloudService	company's own domain
 force.com	Salesforce	Salesforce	cloudService	company's own domain
 pardot.com	Pardot	Salesforce	analytics	documented analytics service
-zoom.us	Zoom	Zoom	cloudService	company's own domain
-webex.com	Webex	Cisco	cloudService	company's own domain
-atlassian.com	Atlassian	Atlassian	cloudService	company's own domain
+zoom.us	Zoom	Zoom	onlineService	company's own domain
+webex.com	Webex	Cisco	onlineService	company's own domain
+atlassian.com	Atlassian	Atlassian	onlineService	company's own domain
 atlassian.net	Atlassian	Atlassian	cloudService	company's own domain
-notion.so	Notion	Notion	cloudService	company's own domain
-figma.com	Figma	Figma	cloudService	company's own domain
-canva.com	Canva	Canva	cloudService	company's own domain
+notion.so	Notion	Notion	onlineService	company's own domain
+figma.com	Figma	Figma	onlineService	company's own domain
+canva.com	Canva	Canva	onlineService	company's own domain
 openai.com	OpenAI	OpenAI	cloudService	company's own domain
-chatgpt.com	ChatGPT	OpenAI	cloudService	company's own domain
+chatgpt.com	ChatGPT	OpenAI	onlineService	company's own domain
 oaistatic.com	OpenAI	OpenAI	contentDelivery	company's own delivery network domain
 anthropic.com	Anthropic	Anthropic	cloudService	company's own domain
-claude.ai	Claude	Anthropic	cloudService	company's own domain
+claude.ai	Claude	Anthropic	onlineService	company's own domain
 mozilla.org	Mozilla	Mozilla	cloudService	company's own domain
 mozilla.com	Mozilla	Mozilla	cloudService	company's own domain
 mozilla.net	Mozilla	Mozilla	cloudService	company's own domain
-firefox.com	Mozilla	Mozilla	cloudService	company's own domain
-duckduckgo.com	DuckDuckGo	DuckDuckGo	cloudService	company's own domain
-wikipedia.org	Wikipedia	Wikimedia Foundation	cloudService	company's own domain
+firefox.com	Mozilla	Mozilla	onlineService	company's own domain
+duckduckgo.com	DuckDuckGo	DuckDuckGo	onlineService	company's own domain
+wikipedia.org	Wikipedia	Wikimedia Foundation	onlineService	company's own domain
 wikimedia.org	Wikimedia	Wikimedia Foundation	cloudService	company's own domain
 wordpress.com	WordPress.com	Automattic	cloudService	company's own domain
 wp.com	WordPress.com	Automattic	contentDelivery	company's own delivery network domain
@@ -390,7 +390,7 @@ squarespace.com	Squarespace	Squarespace	cloudService	company's own domain
 shopify.com	Shopify	Shopify	cloudService	company's own domain
 myshopify.com	Shopify	Shopify	cloudService	company's own domain
 godaddy.com	GoDaddy	GoDaddy	cloudService	company's own domain
-ebay.com	eBay	eBay	cloudService	company's own domain
+ebay.com	eBay	eBay	onlineService	company's own domain
 ebaystatic.com	eBay	eBay	contentDelivery	company's own delivery network domain
 ebayimg.com	eBay	eBay	contentDelivery	company's own delivery network domain
 paypal.com	PayPal	PayPal	cloudService	company's own domain
@@ -416,8 +416,8 @@ lencr.org	Let's Encrypt	ISRG	cloudService	company's own domain
 sectigo.com	Sectigo	Sectigo	cloudService	company's own domain
 globalsign.com	GlobalSign	GlobalSign	cloudService	company's own domain
 verisign.com	Verisign	Verisign	cloudService	company's own domain
-uber.com	Uber	Uber	cloudService	company's own domain
-lyft.com	Lyft	Lyft	cloudService	company's own domain
-airbnb.com	Airbnb	Airbnb	cloudService	company's own domain
-booking.com	Booking.com	Booking Holdings	cloudService	company's own domain
-tripadvisor.com	Tripadvisor	Tripadvisor	cloudService	company's own domain
+uber.com	Uber	Uber	onlineService	company's own domain
+lyft.com	Lyft	Lyft	onlineService	company's own domain
+airbnb.com	Airbnb	Airbnb	onlineService	company's own domain
+booking.com	Booking.com	Booking Holdings	onlineService	company's own domain
+tripadvisor.com	Tripadvisor	Tripadvisor	onlineService	company's own domain
