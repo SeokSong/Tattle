@@ -1,6 +1,6 @@
 # Companies
 
-**Status:** Problems 1.1 and 1.2 done: registrable domain from the bundled Public Suffix List, the curated company list and `CompanyClassifier`. Second sources (public tracker list) and the app to company table come later.
+**Status:** Problems 1.1, 1.2 and 1.4 done (1.3 labels at view time; the curated-only coverage baseline is frozen): registrable domain from the bundled Public Suffix List, the curated company list and `CompanyClassifier`. Second sources (public tracker list) and the app to company table come later.
 
 ## Purpose
 
@@ -64,3 +64,37 @@
 - `CompanyLabel.source` says who answered (`curated`, `trackerList`, `appleOwner`, `none`); `rule` says which rung (`curatedHostname`, `curatedRegistrable`, `appleOwner`, `noMatch`); `datasetId` (`tattle-curated`), `datasetVersion` and `datasetSHA256` come from the manifest. The `appleOwner` source returns the report's owner string as `company` with no parent and category `unclassified`, because the report gives neither. `relation` is `unknown` until the app to company table exists
 - To change the list: edit `curated.tsv`, run `scripts/build-curated.sh [version]` (refreshes the manifest hash, row count and the review table), run the tests. Bump the version when the content changes
 - Cost: `lookupCostIsPrinted` prints the per-hostname cost of `classify` (sanity floor 200 microseconds)
+
+## Coverage and the frozen curated-only baseline (Problem 1.4)
+
+`tattle companies coverage <capture> | --db <path> --session <id|latest> [--json] [--bands <file>] [--write-bands <file> --label <text>] [--unmatched-out <file>]` prints how much of a capture the company sources can name. It is computed at read time from saved flows (`Sources/Summary/Coverage.swift`); nothing runs on the packet path. Output is keys and numbers only, so it can be committed as a band file.
+
+| Metric (JSON key) | Numerator | Denominator |
+|---|---|---|
+| `companyCoverage` | Bytes of flows to port 443 whose name was seen in the connection (`sni`, not behind ECH) and has a label other than not matched | Bytes of all flows to port 443 (the base of `hostnameCoverageSniOnly`). Hint-named, ECH, unnamed and midstream flows stay in it |
+| `companyCoverageOfNamedBytes` | Same numerator | Bytes of port 443 flows with a confirmed `sni` name. Answers "of what we could read, how much did the list know" |
+| `domainCoverage` | Distinct registrable domains with every confirmed name under them identified | Distinct registrable domains of the confirmed names |
+| `labelSourceShare.<source>` | Distinct domains identified by that source alone | Distinct domains identified by any allowed source. Recorded in band files, never a floor (it moves when a source is added) |
+| `unmatched.connections` | Count of port 443 flows with no confirmed name, or a confirmed name that is not matched | Plain count, always printed beside `namedCompanies` |
+| `namedCompanies`, `adTrackCompanies`, `possibleCompanies` | Plain counts of distinct parent companies: confirmed, confirmed in advertising or analytics, named only by a hint | Hints never enter the first two |
+
+- Capture only. Coverage of an imported App Privacy Report is deferred to Part 2 (the report parser does not exist yet)
+- The classifier is run with `sources: [.curated]`, the frozen baseline, so a later source (Apple owner, public list) is measured against it. The report records the curated list version and checksum
+- Whole capture, not per app: the per-app form of these metrics belongs to the app summary (Part 3)
+- `--unmatched-out` writes the most frequent unidentified registrable domains (flows, bytes, name; at most 200; mode 600) to a local file for curation. The names go only to that file, never to the screen. Keep it in `~/dev/tattle-fixtures/reports/`, never in the repo
+- Band files: `Tests/Expected/companies-synthetic.json` (hand-built corpus, `CompanyCorpus` in `Tests/TestSupport`, every number worked out by hand) and `Tests/Expected/companies/<scenario>.json` (one per fixture capture, numbers only). They use the quality report's band format. Every coverage ratio is higher-is-better. The floor is the baseline rounded down to three decimals, with no tolerance: coverage on a fixed capture and list is exact, and the target is "baseline minus nothing". Byte ratios under 10,000 bytes and `labelSourceShare.*` are recorded as informational. Each band note records the curated list version and checksum
+- Ratchet: `CoverageRatchet.check`; the CLI exits 3 below a floor. `curatedOnlyCoverageBaselinesHold` runs it on every fixture band (skips without `TATTLE_FIXTURES`). Raising a floor after adding curated rows: re-run `--write-bands` on the fixtures, keep the note
+
+### Curated-only baseline (curated list version 2, 2026-11-22)
+
+| Capture | companyCoverage | companyCoverageOfNamedBytes | domainCoverage | unmatched.connections |
+|---|---|---|---|---|
+| s0-idle | 5,709,032 / 5,838,617 (97.8%) | 5,709,032 / 5,831,431 (97.9%) | 11 / 14 (78.6%) | 19 |
+| s1-safari | 374,666 / 2,005,927 (18.7%) | 374,666 / 1,987,977 (18.8%) | 1 / 5 (20.0%) | 21 |
+| s2-two-apps | 33,966,120 / 45,905,154 (74.0%) | 33,966,120 / 45,901,028 (74.0%) | 6 / 13 (46.2%) | 43 |
+| s3-youtube-quic | 99,482,226 / 99,556,929 (99.9%) | 99,482,226 / 99,554,296 (99.9%) | 11 / 14 (78.6%) | 10 |
+| s4-link-failures | 1,131,257 / 2,544,045 (44.5%) | 1,131,257 / 2,495,754 (45.3%) | 8 / 12 (66.7%) | 11 |
+| s5-midstream | 439,671 / 39,166,929 (1.1%) | 439,671 / 456,994 (96.2%) | 4 / 5 (80.0%) | 10 |
+
+- `s5-midstream` has low `companyCoverage` because most of its bytes are connections that began before the capture and have no name: that part is the unseen share, not a list gap
+- Domain counts are small, so one added row moves `domainCoverage` by several points. Read the byte ratios first

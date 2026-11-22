@@ -49,7 +49,7 @@ let package = Package(
         .testTarget(name: "DomainsTests", dependencies: ["Domains", "TestSupport"]),
         .testTarget(name: "StorageTests", dependencies: ["Storage", "TestSupport"]),
         .testTarget(name: "AttributionTests", dependencies: ["Attribution", "TestSupport"]),
-        .testTarget(name: "ReportTests", dependencies: ["Report", "Attribution", "Pipeline", "PCAPNG", "TestSupport"]),
+        .testTarget(name: "ReportTests", dependencies: ["Report", "Attribution", "Pipeline", "PCAPNG", "Companies", "Summary", "TestSupport"]),
         .testTarget(name: "PipelineTests", dependencies: ["Pipeline", "TestSupport"]),
         .testTarget(name: "CaptureTests", dependencies: ["Capture", "TestSupport"]),
         .testTarget(name: "TattleAppTests", dependencies: ["TattleApp", "Companies", "Summary", "TestSupport"]),

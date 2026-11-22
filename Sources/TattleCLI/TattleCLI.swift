@@ -938,6 +938,122 @@ func runReport(_ args: [String]) async -> Int32 {
     return 0
 }
 
+// MARK: - Companies
+
+let companiesUsage = """
+    usage: tattle companies coverage <file.pcap|pcapng> [options]
+           tattle companies coverage --db <path> --session <id|latest> [options]
+
+      --json              print the coverage report as JSON (numbers and keys only)
+      --bands <file>      compare with a coverage band file; exit 3 when coverage is below its floor
+      --write-bands <file> --label <text>
+                          write a band file from this run (keeps the notes of an existing file)
+      --unmatched-out <file>
+                          write the most frequent unidentified registrable domains to a local file
+                          (tab separated: flows, bytes, domain; mode 600). names go only to that file,
+                          never to the screen, and the file must never be committed
+    sources: the curated list only (the frozen baseline). exit codes: 0 ok, 3 below the floor, 1 error
+    """
+
+/// coverage of a capture or a saved session by the company sources. read-time only: it reads flows and
+/// names already saved and never touches the packet path. returns the exit code
+func runCompanies(_ args: [String]) async -> Int32 {
+    func fail(_ message: String) -> Int32 {
+        FileHandle.standardError.write(Data((message + "\n" + companiesUsage + "\n").utf8))
+        return 1
+    }
+    guard args.first == "coverage" else { return fail("unknown companies command") }
+    var file: String?, db: String?, session: String?
+    var bandsPath: String?, writeBandsPath: String?, label: String?, unmatchedOut: String?
+    var json = false
+    var i = 1
+    while i < args.count {
+        let a = args[i]
+        switch a {
+        case "--json": json = true
+        case "--db", "--session", "--bands", "--write-bands", "--label", "--unmatched-out":
+            guard i + 1 < args.count else { return fail("\(a) needs a value") }
+            i += 1
+            switch a {
+            case "--db": db = args[i]
+            case "--session": session = args[i]
+            case "--bands": bandsPath = args[i]
+            case "--write-bands": writeBandsPath = args[i]
+            case "--unmatched-out": unmatchedOut = args[i]
+            default: label = args[i]
+            }
+        default:
+            guard !a.hasPrefix("--"), file == nil else { return fail("unexpected argument: \(a)") }
+            file = a
+        }
+        i += 1
+    }
+    if writeBandsPath != nil && label == nil { return fail("--write-bands needs --label") }
+    if writeBandsPath != nil && bandsPath != nil { return fail("use --bands or --write-bands, not both") }
+    do {
+        var flows: [Flow] = [], domains: [DomainObservation] = []
+        switch (file, db) {
+        case (let path?, nil):
+            guard session == nil else { return fail("--session needs --db") }
+            let pipeline = CapturePipeline(store: nil, session: newSession(), retainFlows: true, retainDomains: true)
+            _ = try await pipeline.run(FilePacketSource(url: URL(fileURLWithPath: path)))
+            await pipeline.stop(reason: .captureStopped)
+            flows = await pipeline.flowsSnapshot()
+            domains = await pipeline.domainsSnapshot()
+        case (nil, let dbPath?):
+            guard let session else { return fail("--db needs --session <id|latest>") }
+            let store = try Store(path: URL(fileURLWithPath: dbPath))
+            let all = try store.sessions()
+            let chosen: CaptureSession?
+            if session == "latest" {
+                chosen = all.last
+            } else {
+                guard let id = UUID(uuidString: session) else { return fail("not a session id: \(session)") }
+                chosen = all.first { $0.id == id }
+            }
+            guard let chosen else {
+                FileHandle.standardError.write(Data("no such session\n".utf8))
+                return 1
+            }
+            flows = try store.flows(session: chosen.id)
+            domains = try store.domains(session: chosen.id)
+        default:
+            return fail("give either a capture file or --db")
+        }
+        let result = Coverage.build(flows: flows, index: HostnameIndex(domains, flows: flows), sources: [.curated])
+        var regressions: [CoverageRegression]?
+        if let bandsPath {
+            regressions = CoverageRatchet.check(
+                report: result.report, bands: try CoverageBands.load(URL(fileURLWithPath: bandsPath)))
+        }
+        if let writeBandsPath, let label {
+            let url = URL(fileURLWithPath: writeBandsPath)
+            let previous = try? CoverageBands.load(url)
+            let name = previous?.scenario ?? url.deletingPathExtension().lastPathComponent
+            let bands = CoverageBands.make(from: result.report, scenario: name, baselineLabel: label, previous: previous)
+            try Data(bands.json().utf8).write(to: url, options: .atomic)
+            FileHandle.standardError.write(Data("wrote bands to \(writeBandsPath)\n".utf8))
+        }
+        if let unmatchedOut {
+            let url = URL(fileURLWithPath: unmatchedOut)
+            let lines = result.unmatched.prefix(200).map { "\($0.flows)\t\($0.bytes)\t\($0.domain)" }
+            try Data((lines.joined(separator: "\n") + "\n").utf8).write(to: url, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+            FileHandle.standardError.write(Data("wrote \(lines.count) unidentified domains to a local file\n".utf8))
+        }
+        print(json ? try result.report.json() : result.report.text(), terminator: "")
+        if let regressions {
+            if !json { print("\nBands: " + (regressions.isEmpty ? "no regressions" : "REGRESSION")) }
+            for r in regressions { FileHandle.standardError.write(Data((r.description + "\n").utf8)) }
+            if !regressions.isEmpty { return 3 }
+        }
+    } catch {
+        FileHandle.standardError.write(Data("companies coverage failed: \(error)\n".utf8))
+        return 1
+    }
+    return 0
+}
+
 // MARK: - Main
 
 let arguments = CommandLine.arguments
@@ -948,6 +1064,10 @@ if arguments.count >= 2 && arguments[1] == "capture" {
 
 if arguments.count >= 2 && arguments[1] == "metrics" {
     exit(runMetrics(Array(arguments.dropFirst(2))))
+}
+
+if arguments.count >= 2 && arguments[1] == "companies" {
+    exit(await runCompanies(Array(arguments.dropFirst(2))))
 }
 
 if arguments.count >= 2 && arguments[1] == "report" {
