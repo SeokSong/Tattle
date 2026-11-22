@@ -147,8 +147,10 @@ Detail and field types: [FLOWS.md](FLOWS.md), [DOMAINS.md](DOMAINS.md), [STORAGE
 | `Storage` | Gains plain row types for imports | Does not import `Companies` or `PrivacyReport` |
 | `Pipeline` | Gains the import glue (`ReportImporter`) | Keeps parsing and storing apart |
 
-- `PCAPNG`, `PacketDecoder`, `Flows`, `Domains` and `Pipeline` never import `Companies` or `Summary`: classification stays off the packet path
-- `Summary` never imports `Report`, `Storage`, `Capture` or `TattleApp`
+- `PCAPNG`, `PacketDecoder`, `Flows`, `Domains`, `Storage`, `Attribution`, `Report`, `Capture` and `Pipeline` never import `Companies` or `Summary`: classification stays off the packet path and out of storage
+- `Companies` and `PrivacyReport` do not import each other
+- `Summary` never imports `Report`, `Storage`, `Capture`, `PrivacyReport` or `TattleApp`. Its input is its own plain value type (`AppContact`: app, domain, owner name, hits, first and last seen, source). The app maps stored report rows and capture flows into it
+- `Pipeline` adds a dependency on `PrivacyReport` (for the import glue) and keeps its dependency on `Storage`
 - New test targets: `CompaniesTests`, `PrivacyReportTests`, `SummaryTests`; a layering test fails if a rule is broken
 
 ## 7. Alternatives considered and rejected
