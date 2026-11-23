@@ -22,6 +22,15 @@ public enum Fixtures {
         return nil
     }
 
+    /// the newest App Privacy Report export in privacy-reports/ (private, never committed)
+    public static func privacyReport() -> URL? {
+        guard let directory else { return nil }
+        let folder = directory.appendingPathComponent("privacy-reports", isDirectory: true)
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        return names.filter { $0.hasPrefix("App_Privacy_Report_v") && $0.hasSuffix(".ndjson") }
+            .sorted().last.map { folder.appendingPathComponent($0) }
+    }
+
     public static let all = [
         "watch-clean-test.pcap",
         "watch-safari-test.pcap",

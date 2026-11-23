@@ -95,3 +95,15 @@ private func label(_ f: Flow, _ observations: [DomainObservation] = []) -> FlowL
     #expect(result?.label.isMatched == false)
     #expect(result?.label.hostingPlatform != nil)
 }
+
+@Test func flowLabelRelationFollowsTheAppCompany() {
+    let f = flow(name: "securepubads.g.doubleclick.net")
+    let index = HostnameIndex([], flows: [f])
+    var cache = LabelCache()
+    // no app company: unknown, as before
+    #expect(FlowLabels.label(for: f, index: index, cache: &cache)?.label.relation == .unknown)
+    #expect(FlowLabels.label(for: f, index: index, cache: &cache, appCompany: "Alphabet")?.label.relation == .sameCompanyAsApp)
+    #expect(FlowLabels.label(for: f, index: index, cache: &cache, appCompany: "Netflix")?.label.relation == .other)
+    // the cache keeps the plain label: one classification for all three calls
+    #expect(cache.classifications == 1)
+}

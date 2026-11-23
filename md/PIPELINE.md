@@ -133,6 +133,10 @@ Every structure that grows with traffic has a cap, an eviction rule and a counte
 
 - `swift test` green; `bench` multi-app ≥ 1,500 packets/s release (record the number in [TESTING.md](TESTING.md))
 
+## Report import
+
+`ReportImporter.run(file:store:)` (in `Sources/Pipeline/ReportImporter.swift`, the only Pipeline file that imports `PrivacyReport`) imports an App Privacy Report export. It opens the file read-only where the user chose it, parses it in a stream, combines records into one row per app and domain, maps them to storage rows and calls `saveImport` once, so a refused import stores nothing. It makes no copy of the file and keeps no path. The result (`ReportImportSummary`) carries the parser counts, the store outcome (stored, duplicate, empty, older than a stored import) and the newer-format warning, and its `lines` are plain-language counts and dates only. The command is `tattle import-report <file> [--db <path>]`. This path is separate from the packet path and `bench` does not touch it.
+
 ## See also
 
 [DESIGN.md](DESIGN.md) · [FLOWS.md](FLOWS.md) · [DOMAINS.md](DOMAINS.md) · [STORAGE.md](STORAGE.md)

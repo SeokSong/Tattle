@@ -22,7 +22,8 @@ Mockups (made before the app was built):
 | Connect | USB, device link and capture access checks, Start button | F1 |
 | Grant access | Allow once / Always allow / Cancel, what root is used for | N6 |
 | Live capture | Red capture bar with timer and Stop, totals, traffic by process | F2, F3, F4 |
-| Settings | Revoke access, retention, delete all, diagnostic capture | N2, N6 |
+| Import | Setup text for the App Privacy Report, file picker, result of the last import, stored imports with delete | D2 |
+| Settings | Revoke access, retention, delete all, diagnostic capture, stored imports with delete | N2, N6 |
 
 ## Live capture
 
@@ -120,7 +121,17 @@ Target `TattleApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `sw
 
 - The text lives in `HostnameSource.label`, `.shortLabel` and `UnnamedReason.label` (`Attribution/Hostnames.swift`)
 
+### Import screen (`ImportView`, `ImportModel`)
+
+- Sidebar item "Import". It shows the setup text (On your iPhone: Settings > Privacy & Security > App Privacy Report > turn on App Privacy Report; later, Save App Activity at the bottom of that screen, and send the file to this Mac), the fixed notice that Tattle cannot delete the file the user saved, and "Imported reports follow your retention setting (N days)". The iPhone path is to verify on the owner's phone (owner step)
+- "Choose report file..." opens an `NSOpenPanel`; the app keeps no path. The import runs in a detached task with its own store connection, so the main thread is never held; the button is disabled and a progress line shows while it runs, and a second start is ignored
+- The result shows counts and dates only: records kept, apps and domains read, the period, lines that could not be read, records of other kinds skipped, and "Access records (camera, location and similar) were not kept". A duplicate, an empty file and an older overlapping report (with the newer report's end date) each get a plain sentence; a newer format version shows a warning. Failures are plain sentences with no path, app id or domain
+- Dates are shown in the user's time zone and locale ("Nov 18 – Nov 21"), not UTC
+- The stored imports are listed on this screen and in Settings; each has a Delete button with a confirmation, which calls `deleteImport` and refreshes the list. Delete all and the retention setting also refresh it
+
 ### Tests (`TattleAppTests`, no UI)
+
+- `ImportModel`: counts after an import, dates in the local time zone, duplicate, older refused, empty and newer-format cards, a rejected file shows a reason with no values or paths, delete removes the row, the import runs off the main thread, a second start while running does nothing
 
 - `groupByProcess` from hand-built flows: an app with two pids collapses to one row; `.none`-only tally → "Unattributed" row; system process → "System:" row; sorted by bytes; `deviceLink` and `localNetwork` flows go to `setAside` and stay out of the phone total; set-aside labels equal `TrafficCategory.label`; display names replace raw names
 - `topFlows`: `sni` flow says "Seen in connection", a `dns` flow carries the may-differ caveat and its age, unnamed flows show their reason; the index is built once for 100 flows

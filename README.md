@@ -75,6 +75,8 @@ These are deliberate limits, or limits of the platform. They are not bugs.
 | What | Where | Kept | Removed by "Delete all" |
 |---|---|---|---|
 | Sessions, flows, per-app tallies, DNS answers, server names, per-session gap and save counts (numbers only) | `watch.sqlite` and its `-wal` and `-shm` files (0600, in a 0700 folder) | 7 days after a session ends | Yes, and the file is vacuumed so no deleted names remain |
+| Imported App Privacy Report rows: app bundle ids (they reveal which apps you have installed), domains, owners, counts and times. Network records only | Same database | 1, 3 or 7 days (your retention setting) after the report's last record | Yes, and the file is vacuumed |
+| The imported report file itself | Not copied; Tattle only reads your export and never changes or deletes it | Your own file | No: Tattle cannot delete the original you saved |
 | Salted device hash, device name | Same database | Same as sessions | Sessions yes; the install salt is kept so that device hashes stay stable |
 | Raw-packet diagnostic files (opt-in) | App: `diagnostics` folder next to the database. Command line: the file you name with `--diagnostic` | App: 24 hours. Command line: user-managed | App files yes; command-line files no |
 | Retention setting (a number of days) | The app's preferences (UserDefaults) | Until changed | No |

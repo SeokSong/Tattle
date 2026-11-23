@@ -52,11 +52,11 @@ private func makeFlow(_ key: FlowKey, at: TimeInterval = 0) -> Flow {
     var salt1 = ""
     do {
         let s = try Store(path: path)
-        #expect(try s.schemaVersionValue() == 2)
+        #expect(try s.schemaVersionValue() == 3)
         salt1 = try s.deviceHash(udid: "u")
     }
     let s = try Store(path: path)
-    #expect(try s.schemaVersionValue() == 2)
+    #expect(try s.schemaVersionValue() == 3)
     #expect(try s.rowCount(table: "meta") == 2)
     #expect(try s.deviceHash(udid: "u") == salt1)
 }
@@ -178,7 +178,7 @@ private func populate(_ store: Store, _ s: CaptureSession) throws {
     let store = try Store(path: path)
     try populate(store, session())
     try store.deleteAll()
-    for t in ["session", "flow", "flow_process", "domain", "domain_address"] {
+    for t in ["session", "flow", "flow_process", "domain", "domain_address", "report_import", "report_contact"] {
         #expect(try store.rowCount(table: t) == 0)
     }
 }
@@ -381,7 +381,7 @@ private func buildV1Database(_ path: URL, version: String = "1") throws {
     defer { cleanup(path) }
     try buildV1Database(path)
     let s = try Store(path: path)
-    #expect(try s.schemaVersionValue() == 2)
+    #expect(try s.schemaVersionValue() == 3)
     let flows = try s.flows(session: oldSessionID)
     #expect(flows.count == 1)
     #expect(flows[0].id == oldFlowID)
@@ -396,11 +396,11 @@ private func buildV1Database(_ path: URL, version: String = "1") throws {
     #expect(try s.rowCount(table: "meta") == 2)
 }
 
-@Test func freshDatabaseIsVersionTwo() throws {
+@Test func freshDatabaseIsVersionThree() throws {
     let path = tempPath()
     defer { cleanup(path) }
     let s = try Store(path: path)
-    #expect(try s.schemaVersionValue() == 2)
+    #expect(try s.schemaVersionValue() == 3)
     let sess = session()
     try s.beginSession(sess)
     var f = makeFlow(v4Key())
@@ -422,8 +422,8 @@ private func buildV1Database(_ path: URL, version: String = "1") throws {
 @Test func newerSchemaThrows() throws {
     let path = tempPath()
     defer { cleanup(path) }
-    try buildV1Database(path, version: "3")
-    #expect(throws: StorageError.newerSchema(found: 3, supported: 2)) {
+    try buildV1Database(path, version: "4")
+    #expect(throws: StorageError.newerSchema(found: 4, supported: 3)) {
         _ = try Store(path: path)
     }
 }
@@ -458,6 +458,6 @@ private func buildV1Database(_ path: URL, version: String = "1") throws {
     sqlite3_finalize(st)
     sqlite3_close(h)
     let s = try Store(path: path)
-    #expect(try s.schemaVersionValue() == 2)
+    #expect(try s.schemaVersionValue() == 3)
     #expect(try s.flows(session: oldSessionID).count == 1)
 }

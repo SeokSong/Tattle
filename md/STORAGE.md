@@ -112,9 +112,9 @@ Added with `alter table ... add column`; defaults make old rows valid. Category 
 
 - API: `SessionStats`, `Store.setSessionStats(id:_:)`, `Store.sessionStats(id:)`, `FlowStore.recordSessionStats(id:_:)`
 
-### Schema version 3 (planned, Milestone 3)
+### Schema version 3 (Milestone 3)
 
-For review before any code (Milestone 3, problem 0.1). One migration for the whole milestone. Only the App Privacy Report import is stored: company labels, categories and summaries are computed when read, with the current company data, and the data version is printed (no per-session copy).
+Implemented as `migrations[3]` (problem 2.3). One migration for the whole milestone. Only the App Privacy Report import is stored: company labels, categories and summaries are computed when read, with the current company data, and the data version is printed (no per-session copy).
 
 | Table | Column | Type | Meaning |
 |---|---|---|---|
@@ -124,9 +124,10 @@ For review before any code (Milestone 3, problem 0.1). One migration for the who
 | | `period_end` | `real not null` | Latest `timeStamp` in the file |
 | | `imported_at` | `real not null` | When it was imported |
 | | `lines_read`, `records_kept`, `malformed`, `unknown_types` | `integer` | Import counts, shown to the user |
+| | `format_version` | `integer` | The `v<number>` of the export's file name; null when the name has none. The import warns when it is not 4 |
 | `report_contact` | `import_id` | `text not null`, references `report_import(id)`, cascade delete | Which import it came from |
 | | `app_id` | `text not null` | The app's bundle id |
-| | `domain` | `text not null` | Domain the app contacted |
+| | `domain` | `text not null` | Domain the app contacted, lower case, no trailing dot; can be an IP address literal (often, in a real export) |
 | | `domain_owner` | `text` | Apple's owner name for the domain; often empty |
 | | `hits` | `integer not null` | How many times, as counted by iOS |
 | | `first_seen`, `last_seen` | `real` | First and last contact |
@@ -134,6 +135,7 @@ For review before any code (Milestone 3, problem 0.1). One migration for the who
 
 - Primary key of `report_contact`: (`import_id`, `app_id`, `domain`); index on `app_id`
 - **Combining records:** an export lists the same app and domain many times. They become one row: `hits` summed, `first_seen` the earliest, `last_seen` the latest, `domain_owner` the first non-empty value; for the three raw codes the value from the latest record is kept
+- **Field names and rules** come from the verified export: see [PRIVACY_REPORT.md](PRIVACY_REPORT.md). `period_start` and `period_end` are taken from the kept network records only, as absolute times
 - **Not stored** (owner decision): the report's `access` records (camera, location, contacts…) and the `context` field (the website a browser request was made in)
 - **An import must contain at least one network record.** An empty file, or one where every line is malformed, stores nothing and reports why
 - **Same file twice:** a file whose `file_sha256` is already stored is a no-op. Tattle reads the export; it never deletes or moves the user's original file
@@ -142,6 +144,9 @@ For review before any code (Milestone 3, problem 0.1). One migration for the who
 - **Data inventory:** bundle ids reveal which apps are installed, so the inventory and README get a row for imported reports when this ships
 - The report's period is shown with its real dates (an export can cover fewer than 7 days)
 - The migration adds the two tables and the index as `migrations[3]` (`create table`, `create index`); the old-database test builds the version 2 schema literally
+- **API** (`Sources/Storage/ReportImportStore.swift`, plain row structs `ReportImportRow` and `ReportContactRow`; Storage does not import the parser): `saveImport(_:contacts:)` returns `.stored(replaced:)`, `.duplicate`, `.empty` or `.olderThanStored(newestPeriodEnd:)`; `imports()`, `contacts(importId:)`, `contacts(since:)`, `deleteImport(sha256:)`
+- **Overlap rule as built:** inside the one transaction of `saveImport`, every stored import with `period_start <= new.period_end and period_end >= new.period_start` is deleted (contacts cascade), then the new one is inserted. Periods that only touch at one instant count as overlapping, so a record on the boundary is never counted twice. If any overlapping stored import has a later `period_end` than the incoming one, the incoming file is older: nothing is stored and `saveImport` returns `.olderThanStored(newestPeriodEnd:)` (owner decision OD18). An equal `period_end` with a different hash counts as newer and replaces. The order of the checks is: same hash, older than stored, replace and insert
+- A failed insert (for example a repeated app and domain) rolls the whole call back, including the replaced imports
 
 ### Migration rule
 
@@ -183,8 +188,8 @@ public final class Store {
 ### Deleting for real
 
 - `Store.init` sets `pragma secure_delete = on`, so freed pages are overwritten with zeros
-- `deleteAll()`: delete all sessions, `wal_checkpoint(TRUNCATE)`, `vacuum`, checkpoint again. No deleted hostname stays in the `.sqlite` or `-wal` file
-- `expire(olderThan:)`: delete, then `wal_checkpoint(TRUNCATE)` only (no vacuum, to stay fast). The file keeps its size, but freed pages are zeroed
+- `deleteAll()`: delete all sessions and all imports, `wal_checkpoint(TRUNCATE)`, `vacuum`, checkpoint again. No deleted hostname stays in the `.sqlite` or `-wal` file
+- `expire(olderThan:)`: delete sessions by `ended_at` and imports by `period_end`, then `wal_checkpoint(TRUNCATE)` only (no vacuum, to stay fast). The file keeps its size, but freed pages are zeroed
 - The install salt (`meta`) is kept, so device hashes stay stable. Deleting it is out of scope
 
 ### Data inventory
@@ -194,6 +199,8 @@ Every place Tattle keeps data. Each later change that stores something new must 
 | What | Where | Retention | Cleared by Delete all |
 |---|---|---|---|
 | Sessions, flows, per-process tallies, DNS answers, server names, mid-connection and ECH flags, per-session gap count and longest gap, kernel drop and save-failure counts (numbers only, no content) | `watch.sqlite` plus `-wal` and `-shm` (0600, folder 0700) | 7 days after a session ends | Yes (checkpoint and vacuum) |
+| Imported App Privacy Report rows: app bundle ids (these reveal which apps are installed), domains, owners, hit counts, times, import counts and the file's sha-256. Network records only; no access records, no `context`, no file path | Same database | 1, 3 or 7 days (the same setting as sessions) after the report's last record | Yes (checkpoint and vacuum) |
+| Imported report file | Not copied. Tattle reads the user's export and never modifies or deletes it | The user's own file | No: Tattle cannot delete the original the user saved |
 | Salted device hash and device name | Same database | Same as sessions (install salt stays) | Sessions yes; the install salt stays |
 | Diagnostic raw-packet files (opt-in) | App: `diagnostics/` next to the database. CLI: the path given to `--diagnostic` (created new, 0600) | App: 24 hours. CLI: user-managed | App files yes; CLI files no |
 | Retention setting (days, one number) | `UserDefaults` of the app (`AppModel.retentionKey`) | Until changed | No |

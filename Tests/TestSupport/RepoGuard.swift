@@ -10,6 +10,14 @@ public enum RepoGuard {
         "uk", "de", "kr", "fr", "ru", "in", "br", "us", "edu", "gov", "info", "cloud",
     ]
     static let maxTextBytes = 8_000_000
+    // an App Privacy Report export: ndjson files, the file name Apple gives it, or lines holding its
+    // key names. the shape file and docs name the fields without quotes, so they do not match
+    static let reportExtensions: Set<String> = ["ndjson", "jsonl"]
+    static let reportNamePrefix = "app_privacy_report"
+    static let reportKeys = [
+        "bundleID", "domainOwner", "firstTimeStamp", "domainClassification", "contextVerificationType",
+        "accessor", "accessCount", "intervalBegin",
+    ]
 
     nonisolated(unsafe) private static let udid = try! NSRegularExpression(
         pattern: #"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}\b"#)
@@ -48,6 +56,21 @@ public enum RepoGuard {
         return false
     }
 
+    /// true when a line looks like a record of a Privacy Report export: a json object holding at least
+    /// three of the export's quoted key names
+    public static func hasReportRecord(_ text: String) -> Bool {
+        for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("{"), trimmed.hasSuffix("}") else { continue }
+            if reportKeys.filter({ trimmed.contains("\"\($0)\"") }).count >= 3 { return true }
+        }
+        return false
+    }
+
+    /// true when the text holds something shaped like a hostname or an ip address; used to check that
+    /// a shape-only file carries no values
+    public static func hasHostnameOrAddress(_ text: String) -> Bool { matches(hostname, text) || matches(ipv4, text) }
+
     public static func scan(root: URL) -> [String] {
         guard let paths = FileManager.default.enumerator(atPath: root.path) else {
             return ["\(root.lastPathComponent): cannot read folder"]
@@ -64,9 +87,18 @@ public enum RepoGuard {
                 violations.append("\(relative): capture or database file")
                 continue
             }
+            if reportExtensions.contains(url.pathExtension.lowercased())
+                || url.lastPathComponent.lowercased().hasPrefix(reportNamePrefix) {
+                violations.append("\(relative): privacy report export")
+                continue
+            }
             guard let data = try? Data(contentsOf: url), data.count <= maxTextBytes,
                   !data.contains(0), let text = String(data: data, encoding: .utf8) else { continue }
 
+            if hasReportRecord(text) {
+                violations.append("\(relative): privacy report records")
+                continue
+            }
             if hasDeviceIdentifier(text, path: relative) {
                 violations.append("\(relative): device identifier (udid-like or 40 hex characters)")
             }

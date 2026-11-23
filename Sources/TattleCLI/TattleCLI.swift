@@ -953,6 +953,25 @@ let companiesUsage = """
                           (tab separated: flows, bytes, domain; mode 600, new file only). names go only to
                           that file, never to the screen. refused inside a git work tree
     sources: the curated list only (the frozen baseline). exit codes: 0 ok, 3 below the floor, 1 error
+
+    usage: tattle companies agreement --report <App_Privacy_Report.ndjson> [--disagreements-out <file>]
+      classifies every domain of the report with the curated list alone and with Apple's owner string alone
+      (neither sees the other) and prints counts only. IP addresses are excluded and counted
+      --disagreements-out <file>
+                          write every disagreement and every name only Apple named to a local file (tab
+                          separated; mode 600, new file only; refused inside a git work tree)
+
+    usage: tattle companies audit --references <dir> [--report <file>] [--captures <dir>]
+                                  [--contradictions-out <file>] [--domains-out <file>]
+      compares our parent company for every domain we label with two independent references in <dir>
+      (ddg-domain-map.json and cert-orgs.tsv, made by scripts/audit-references.sh) and prints numbers only:
+      per stratum n, confirmed, contradicted, unverifiable and the 95% upper bound of the contradiction rate.
+      strata: the curated list's own entries, the capture folder's confirmed names, the report's named domains
+      --contradictions-out <file>
+                          the contradicted rows for a decision by hand (tab separated; mode 600, new file only;
+                          refused inside a git work tree)
+      --domains-out <file>
+                          the audited registrable domains, one per line, for the certificate fetcher (same rules)
     """
 
 /// coverage of a capture or a saved session by the company sources. read-time only: it reads flows and
@@ -962,6 +981,8 @@ func runCompanies(_ args: [String]) async -> Int32 {
         FileHandle.standardError.write(Data((message + "\n" + companiesUsage + "\n").utf8))
         return 1
     }
+    if args.first == "agreement" { return runAgreement(Array(args.dropFirst()), fail: fail) }
+    if args.first == "audit" { return await runAudit(Array(args.dropFirst()), fail: fail) }
     guard args.first == "coverage" else { return fail("unknown companies command") }
     var file: String?, db: String?, session: String?
     var bandsPath: String?, writeBandsPath: String?, label: String?, unmatchedOut: String?
@@ -1062,12 +1083,321 @@ func runCompanies(_ args: [String]) async -> Int32 {
     return 0
 }
 
+/// the agreement matrix of the curated list and Apple's owner string over one imported report's domains
+func runAgreement(_ args: [String], fail: (String) -> Int32) -> Int32 {
+    var report: String?, out: String?
+    var i = 0
+    while i < args.count {
+        guard ["--report", "--disagreements-out"].contains(args[i]), i + 1 < args.count else { return fail("bad argument: \(args[i])") }
+        if args[i] == "--report" { report = args[i + 1] } else { out = args[i + 1] }
+        i += 2
+    }
+    guard let report else { return fail("agreement needs --report <file>") }
+    // the file holds real domain names: never inside a git work tree, checked before any work is done
+    if let out, FileOwnership.gitWorkTreeRoot(containing: out) != nil {
+        return fail("--disagreements-out must point outside the git work tree: the file holds real domain names")
+    }
+    do {
+        let observations = try ReportImporter.domainOwners(file: URL(fileURLWithPath: report))
+        let (matrix, rows) = Agreement.measure(observations, classifier: CompanyClassifier())
+        if let out {
+            let lines = ["kind\tdomain\tcurated parent\tcurated category\tapple owner\taliased parent"] + rows.map {
+                [$0.kind.rawValue, $0.domain, $0.firstParent ?? "-", $0.firstCategory?.rawValue ?? "-", $0.secondOwner ?? "-", $0.secondParent ?? "-"]
+                    .joined(separator: "\t")
+            }
+            // created 0600 from the first byte; refuses an existing file or a symlink
+            let handle: FileHandle
+            do { handle = try FileOwnership.openForWriting(path: out) } catch {
+                return fail("cannot create the --disagreements-out file (it must be a new file): \(error)")
+            }
+            try handle.write(contentsOf: Data((lines.joined(separator: "\n") + "\n").utf8))
+            try handle.close()
+            FileHandle.standardError.write(Data("wrote \(rows.count) rows to a local file\n".utf8))
+        }
+        print(matrix.text(), terminator: "")
+    } catch {
+        FileHandle.standardError.write(Data("companies agreement failed: \(error)\n".utf8))
+        return 1
+    }
+    return 0
+}
+
+/// the accuracy audit of the company classification against two independent references (OD13)
+func runAudit(_ args: [String], fail: (String) -> Int32) async -> Int32 {
+    var references: String?, report: String?, captures: String?, contradictionsOut: String?, domainsOut: String?
+    var i = 0
+    while i < args.count {
+        guard ["--references", "--report", "--captures", "--contradictions-out", "--domains-out"].contains(args[i]), i + 1 < args.count
+        else { return fail("bad argument: \(args[i])") }
+        switch args[i] {
+        case "--references": references = args[i + 1]
+        case "--report": report = args[i + 1]
+        case "--captures": captures = args[i + 1]
+        case "--contradictions-out": contradictionsOut = args[i + 1]
+        default: domainsOut = args[i + 1]
+        }
+        i += 2
+    }
+    guard let references else { return fail("audit needs --references <dir>") }
+    // the files hold real domain names: never inside a git work tree, checked before any work is done
+    for out in [contradictionsOut, domainsOut].compactMap({ $0 }) where FileOwnership.gitWorkTreeRoot(containing: out) != nil {
+        return fail("output files must point outside the git work tree: they hold real domain names")
+    }
+    do {
+        let dir = URL(fileURLWithPath: references, isDirectory: true)
+        var maps = ReferenceMaps()
+        if let data = try? Data(contentsOf: dir.appendingPathComponent("ddg-domain-map.json")) {
+            maps.entities = try ReferenceMaps.parseEntityMap(data)
+        }
+        if let text = try? String(contentsOf: dir.appendingPathComponent("cert-orgs.tsv"), encoding: .utf8) {
+            maps.certificates = ReferenceMaps.parseCertificateCache(text)
+        }
+        let classifier = CompanyClassifier()
+        let aliases = ReferenceAliases.loadBundled(appleOwners: classifier.appleOwners)
+
+        // our parent for a label: the curated parent, or Apple's owner string made comparable
+        func subject(_ label: CompanyLabel) -> AuditSubject? {
+            guard label.isMatched, let domain = label.registrableDomain, !isIPAddress(label.hostname) else { return nil }
+            guard let parent = label.parent ?? label.company.map(classifier.appleOwners.comparableParent(forOwner:)) else { return nil }
+            return AuditSubject(domain: domain, parent: parent, company: label.company, category: label.category)
+        }
+
+        var strata: [(name: String, subjects: [AuditSubject])] = []
+        strata.append(("curated list entries", classifier.curated.entries.compactMap { entry in
+            guard let domain = registrableDomain(of: entry.domain) else { return nil }
+            return AuditSubject(domain: domain, parent: entry.parent, company: entry.company, category: entry.category)
+        }))
+        var capturesSubjects: [AuditSubject] = [], reportSubjects: [AuditSubject] = []
+        if let captures {
+            let files = try FileManager.default.contentsOfDirectory(atPath: captures).filter { $0.hasSuffix(".pcapng") || $0.hasSuffix(".pcap") }.sorted()
+            for file in files {
+                let pipeline = CapturePipeline(store: nil, session: newSession(), retainFlows: true, retainDomains: true)
+                _ = try await pipeline.run(FilePacketSource(url: URL(fileURLWithPath: captures).appendingPathComponent(file)))
+                await pipeline.stop(reason: .captureStopped)
+                let flows = await pipeline.flowsSnapshot()
+                let index = HostnameIndex(await pipeline.domainsSnapshot(), flows: flows)
+                var cache = LabelCache(classifier: classifier)
+                for flow in flows where flow.key.remotePort == Coverage.port {
+                    // only a name seen in the connection itself counts, never a hint
+                    guard let result = FlowLabels.label(for: flow, index: index, cache: &cache), !result.isPossible,
+                          let found = subject(result.label) else { continue }
+                    capturesSubjects.append(found)
+                }
+            }
+        }
+        if let report {
+            for (domain, owner) in try ReportImporter.domainOwners(file: URL(fileURLWithPath: report)) {
+                if let found = subject(classifier.classify(hostname: domain, appleOwner: owner)) { reportSubjects.append(found) }
+            }
+        }
+        if captures != nil { strata.append(("capture confirmed names", capturesSubjects)) }
+        if report != nil { strata.append(("privacy report named domains", reportSubjects)) }
+        if captures != nil && report != nil { strata.append(("owner data together", capturesSubjects + reportSubjects)) }
+
+        var results: [AuditStratum] = [], allRows: [AuditRow] = [], allSubjects: [AuditSubject] = []
+        for (name, subjects) in strata {
+            let rows = Audit.rows(subjects, references: maps, aliases: aliases)
+            results.append(Audit.summarise(name: name, rows: rows))
+            allRows += rows
+            allSubjects += subjects
+        }
+        func writeLocal(_ path: String, _ lines: [String], what: String) throws -> Int32? {
+            // created 0600 from the first byte; refuses an existing file or a symlink
+            let handle: FileHandle
+            do { handle = try FileOwnership.openForWriting(path: path) } catch {
+                return fail("cannot create the \(what) file (it must be a new file): \(error)")
+            }
+            try handle.write(contentsOf: Data((lines.joined(separator: "\n") + "\n").utf8))
+            try handle.close()
+            return nil
+        }
+        if let domainsOut {
+            let domains = Audit.domains(allSubjects)
+            if let code = try writeLocal(domainsOut, domains, what: "--domains-out") { return code }
+            FileHandle.standardError.write(Data("wrote \(domains.count) domains to a local file\n".utf8))
+        }
+        if let contradictionsOut {
+            let lines = Audit.contradictionLines(allRows)
+            if let code = try writeLocal(contradictionsOut, lines, what: "--contradictions-out") { return code }
+            FileHandle.standardError.write(Data("wrote \(lines.count - 1) contradicted rows to a local file\n".utf8))
+        }
+        print(Audit.report(results), terminator: "")
+    } catch {
+        FileHandle.standardError.write(Data("companies audit failed: \(error)\n".utf8))
+        return 1
+    }
+    return 0
+}
+
+// MARK: - Apps
+
+let appsUsage = """
+    usage: tattle apps coverage <file.pcap|pcapng> [--unmatched-out <file>]
+
+    prints how many distinct process names of the capture the app table knows (counts only).
+      --unmatched-out <file>
+                          write the process names that did not join to a local file (mode 600, new
+                          file only, refused inside a git work tree). names go only to that file
+    """
+
+func runApps(_ args: [String]) async -> Int32 {
+    func fail(_ message: String) -> Int32 {
+        FileHandle.standardError.write(Data((message + "\n" + appsUsage + "\n").utf8))
+        return 2
+    }
+    guard args.first == "coverage" else { return fail("unknown apps command") }
+    var file: String?, unmatchedOut: String?
+    var i = 1
+    while i < args.count {
+        if args[i] == "--unmatched-out" {
+            i += 1
+            guard i < args.count else { return fail("--unmatched-out needs a path") }
+            unmatchedOut = args[i]
+        } else if args[i].hasPrefix("--") || file != nil {
+            return fail("unexpected argument")
+        } else {
+            file = args[i]
+        }
+        i += 1
+    }
+    guard let file else { return fail("give a capture file") }
+    if let unmatchedOut, FileOwnership.gitWorkTreeRoot(containing: unmatchedOut) != nil {
+        return fail("--unmatched-out must point outside the git work tree: the file holds real process names")
+    }
+    do {
+        let pipeline = CapturePipeline(store: nil, session: newSession(), retainFlows: true, retainDomains: false)
+        _ = try await pipeline.run(FilePacketSource(url: URL(fileURLWithPath: (file as NSString).expandingTildeInPath)))
+        await pipeline.stop(reason: .captureStopped)
+        let names = await pipeline.flowsSnapshot().flatMap { appNames($0) }
+        try printJoinRate(
+            AppTable.bundled.joinRate(processNames: names),
+            what: "Capture process names", unjoinedOut: unmatchedOut)
+        return 0
+    } catch {
+        FileHandle.standardError.write(Data("apps coverage failed: \(error)\n".utf8))
+        return 1
+    }
+}
+
+// MARK: - Import report
+
+let importReportUsage = """
+    usage: tattle import-report <file> [--db <path>]
+           tattle import-report <file> --join-rate [--unjoined-out <file>]
+
+      --join-rate         do not import: print how many apps of the report the app table knows
+                          (counts only). nothing is stored
+      --unjoined-out <file>
+                          with --join-rate, write the report's unjoined bundle ids to a local file
+                          (mode 600, new file only, refused inside a git work tree)
+    """
+
+/// counts only: how many distinct ids joined the app table. the ids that did not join go only to `unjoinedOut`
+func printJoinRate(_ rate: JoinRate, what: String, unjoinedOut: String?) throws {
+    print("\(what): \(rate.joined) of \(rate.total) joined the app table (\(rate.total - rate.joined) not joined)")
+    if let unjoinedOut {
+        // created 0600 from the first byte; refuses an existing file or a symlink
+        let handle = try FileOwnership.openForWriting(path: unjoinedOut)
+        try handle.write(contentsOf: Data((rate.notJoined.joined(separator: "\n") + "\n").utf8))
+        try handle.close()
+        FileHandle.standardError.write(Data("wrote \(rate.notJoined.count) unjoined ids to a local file\n".utf8))
+    }
+}
+
+func runImportReport(_ args: [String]) -> Int32 {
+    func fail(_ message: String) -> Int32 {
+        FileHandle.standardError.write(Data((message + "\n" + importReportUsage + "\n").utf8))
+        return 2
+    }
+    var file: String?
+    var db: String?
+    var joinRate = false
+    var unjoinedOut: String?
+    var i = 0
+    while i < args.count {
+        if args[i] == "--db" {
+            i += 1
+            guard i < args.count else { return fail("--db needs a path") }
+            db = args[i]
+        } else if args[i] == "--join-rate" {
+            joinRate = true
+        } else if args[i] == "--unjoined-out" {
+            i += 1
+            guard i < args.count else { return fail("--unjoined-out needs a path") }
+            unjoinedOut = args[i]
+        } else if args[i].hasPrefix("--") {
+            return fail("unknown option")
+        } else if file == nil {
+            file = args[i]
+        } else {
+            return fail("give one file")
+        }
+        i += 1
+    }
+    guard let file else { return fail("give the report file") }
+    if unjoinedOut != nil && !joinRate { return fail("--unjoined-out needs --join-rate") }
+    if joinRate {
+        if db != nil { return fail("--join-rate stores nothing, so --db does not apply") }
+        if let unjoinedOut, FileOwnership.gitWorkTreeRoot(containing: unjoinedOut) != nil {
+            return fail("--unjoined-out must point outside the git work tree: the file holds real app ids")
+        }
+        do {
+            let ids = try ReportImporter.appIds(file: URL(fileURLWithPath: (file as NSString).expandingTildeInPath))
+            try printJoinRate(AppTable.bundled.joinRate(bundleIds: ids), what: "Report apps", unjoinedOut: unjoinedOut)
+            return 0
+        } catch {
+            print("\(error)")
+            return 1
+        }
+    }
+
+    // under sudo, new database files must still belong to the invoking user
+    let sudoUser = FileOwnership.sudoUser(environment: ProcessInfo.processInfo.environment)
+    func resolved(_ path: String) -> String {
+        guard let sudoUser else { return (path as NSString).expandingTildeInPath }
+        return FileOwnership.expandTilde(path, home: sudoUser.home)
+    }
+    let dbPath = db.map(resolved) ?? Store.defaultPath().path
+    let newDirectories = FileOwnership.missingDirectories(of: dbPath)
+    var failedHandBack = 0
+    defer {
+        if let sudoUser {
+            failedHandBack = FileOwnership.giveBack(newDirectories + [dbPath, dbPath + "-wal", dbPath + "-shm"], to: sudoUser).count
+            if failedHandBack > 0 { print("Could not give \(failedHandBack) file(s) back to the user") }
+        }
+    }
+    let store: Store
+    do { store = try Store(path: URL(fileURLWithPath: dbPath)) } catch {
+        print("Unable to open database.")
+        return 1
+    }
+    do {
+        let summary = try ReportImporter.run(file: URL(fileURLWithPath: resolved(file)), store: store)
+        for line in summary.lines { print(line) }
+        switch summary.outcome {
+        case .stored, .duplicate: return 0
+        case .empty, .olderThanStored: return 1
+        }
+    } catch {
+        print("\(error)")
+        return 1
+    }
+}
+
 // MARK: - Main
 
 let arguments = CommandLine.arguments
 
 if arguments.count >= 2 && arguments[1] == "capture" {
     exit(await runCapture(Array(arguments.dropFirst(2))))
+}
+
+if arguments.count >= 2 && arguments[1] == "import-report" {
+    exit(runImportReport(Array(arguments.dropFirst(2))))
+}
+
+if arguments.count >= 2 && arguments[1] == "apps" {
+    exit(await runApps(Array(arguments.dropFirst(2))))
 }
 
 if arguments.count >= 2 && arguments[1] == "metrics" {

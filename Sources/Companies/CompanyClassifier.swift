@@ -4,24 +4,77 @@ import Foundation
 /// hostname with a local dictionary. every answer says which source gave it, and each source can
 /// be run on its own so sources can be compared (milestone 3, decision OD2)
 public struct CompanyClassifier: Sendable {
-    /// the order `classify` tries sources in. provisional: the order is decided by the agreement
-    /// experiment, so callers that compare sources use `label(hostname:from:)` instead
-    public static let provisionalOrder: [LabelSource] = [.curated, .appleOwner]
+    /// the order `classify` tries sources in for the owner field: read from the precedence table, which is
+    /// provisional until the agreement experiment decides it. callers that compare sources use
+    /// `label(hostname:from:)` instead
+    public static var provisionalOrder: [LabelSource] { PrecedenceTable.bundled.order(for: .owner) }
 
     public let curated: CuratedList
+    public let precedence: PrecedenceTable
+    public let appleOwners: AppleOwnerTable
 
-    public init(curated: CuratedList = .bundled) {
+    public init(curated: CuratedList = .bundled, precedence: PrecedenceTable = .bundled, appleOwners: AppleOwnerTable = .bundled) {
         self.curated = curated
+        self.precedence = precedence
+        self.appleOwners = appleOwners
     }
 
-    /// the first source in `order` that matches; an explicit unclassified label (source `.none`)
-    /// when none does. `appleOwner` is the non-empty `domainOwner` of an imported report record
-    public func classify(hostname: String, appleOwner: String? = nil, order: [LabelSource] = CompanyClassifier.provisionalOrder) -> CompanyLabel {
-        for source in order {
-            let label = self.label(hostname: hostname, from: source, appleOwner: appleOwner)
-            if label.isMatched { return label }
+    /// the label by the precedence table (or by `order`, for a caller that fixes its own sources, such as
+    /// the curated-only coverage baseline); an explicit unclassified label (source `.none`) when no source
+    /// matches. `appleOwner` is the non-empty `domainOwner` of an imported report record
+    public func classify(hostname: String, appleOwner: String? = nil, order: [LabelSource]? = nil) -> CompanyLabel {
+        if let order {
+            for source in order {
+                let label = self.label(hostname: hostname, from: source, appleOwner: appleOwner)
+                if label.isMatched { return label }
+            }
+            return unmatched(hostname)
         }
-        return unmatched(hostname)
+        return resolve(hostname: hostname, appleOwner: appleOwner).label
+    }
+
+    /// resolves one name by the precedence table: the owner (company and parent) from the first source of the
+    /// owner row that answers and is not skipped by an exception, the category from the first source of the
+    /// category row that answers. Apple never gives a category
+    public func resolve(hostname: String, appleOwner: String? = nil) -> Resolution {
+        var skipped: [SkippedSource] = []
+        let ownerRow = precedence.row(for: .owner)
+        var winner: CompanyLabel?
+        for source in ownerRow.order {
+            let label = self.label(hostname: hostname, from: source, appleOwner: appleOwner)
+            guard label.isMatched else { continue }
+            if let exception = ownerRow.exceptions.first(where: { $0.skip == source && applies($0.when, to: label) }) {
+                skipped.append(SkippedSource(source: source, condition: exception.when))
+                continue
+            }
+            winner = label
+            break
+        }
+        var categorySource = LabelSource.none
+        var category = CompanyCategory.unclassified
+        for source in precedence.row(for: .category).order {
+            let label = self.label(hostname: hostname, from: source, appleOwner: appleOwner)
+            if label.isMatched, label.category != .unclassified {
+                category = label.category
+                categorySource = source
+                break
+            }
+        }
+        guard let winner else {
+            return Resolution(label: unmatched(hostname), skipped: skipped, categorySource: categorySource)
+        }
+        let label = CompanyLabel(
+            hostname: winner.hostname, registrableDomain: winner.registrableDomain, company: winner.company,
+            parent: winner.parent, category: category, source: winner.source, rule: winner.rule,
+            datasetId: winner.datasetId, datasetVersion: winner.datasetVersion, datasetSHA256: winner.datasetSHA256,
+            hostingPlatform: winner.hostingPlatform, relation: winner.relation)
+        return Resolution(label: label, skipped: skipped, categorySource: categorySource)
+    }
+
+    private func applies(_ condition: PrecedenceCondition, to label: CompanyLabel) -> Bool {
+        switch condition {
+        case .cdnOperator: label.source == .appleOwner && label.company.map(appleOwners.isCDNOperator) == true
+        }
     }
 
     /// what one source alone says. never consults another source. no match gives the

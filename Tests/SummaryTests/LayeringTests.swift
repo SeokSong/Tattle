@@ -78,4 +78,25 @@ private func imports(_ file: URL) -> Set<String> {
         let extra = imports(file).subtracting(["Foundation"])
         #expect(extra.isEmpty, "\(file.lastPathComponent) imports more than Foundation")
     }
+    // PrivacyReport has no dependencies either: Foundation only, so it imports neither Companies nor
+    // Storage, and Companies (Foundation only, above) cannot import it
+    let report = swiftFiles(in: "PrivacyReport")
+    #expect(!report.isEmpty)
+    for file in report {
+        let extra = imports(file).subtracting(["Foundation"])
+        #expect(extra.isEmpty, "\(file.lastPathComponent) imports more than Foundation")
+    }
+    // Storage never imports the parser: the import glue in Pipeline maps between them
+    for file in swiftFiles(in: "Storage") {
+        #expect(!imports(file).contains("PrivacyReport"), "\(file.lastPathComponent) imports PrivacyReport")
+    }
+    // inside Pipeline only the import glue knows the parser; the packet path files do not
+    for file in swiftFiles(in: "Pipeline") where file.lastPathComponent != "ReportImporter.swift" {
+        #expect(!imports(file).contains("PrivacyReport"), "\(file.lastPathComponent) imports PrivacyReport")
+    }
+    #expect(swiftFiles(in: "Pipeline").contains { $0.lastPathComponent == "ReportImporter.swift" })
+    // the command line talks to the importer, not the parser
+    for file in swiftFiles(in: "TattleCLI") {
+        #expect(!imports(file).contains("PrivacyReport"), "\(file.lastPathComponent) imports PrivacyReport")
+    }
 }
