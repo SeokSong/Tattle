@@ -35,7 +35,7 @@ com.microsoft.msedge	Microsoft Edge		Microsoft	Edge is published by Microsoft
 com.skype.skype	Skype	Skype	Microsoft	Skype is owned by Microsoft
 com.linkedin.	LinkedIn	LinkedIn	Microsoft	LinkedIn is owned by Microsoft
 com.burbn.instagram	Instagram	Instagram	Meta Platforms	Instagram is owned by Meta
-com.burbn.barcelona	Threads	Threads	Meta Platforms	Threads is published by Meta
+com.burbn.barcelona	Threads		Meta Platforms	Threads is published by Meta
 net.whatsapp.	WhatsApp	WhatsApp	Meta Platforms	WhatsApp is owned by Meta
 com.facebook.	Facebook app		Meta Platforms	every bundle id starting com.facebook. is Meta's own namespace
 com.facebook.Facebook	Facebook	Facebook	Meta Platforms	Facebook is published by Meta
@@ -48,7 +48,7 @@ com.amazon.Lassen	Kindle		Amazon	Kindle is published by Amazon
 com.audible.iphone	Audible		Amazon	Audible is owned by Amazon
 tv.twitch	Twitch	Twitch	Amazon	Twitch is owned by Amazon
 com.atebits.Tweetie2	X (Twitter)		X Corp.	the X app, formerly Twitter, is published by X Corp.
-com.zhiliaoapp.musically	TikTok	TikTok	ByteDance	TikTok is owned by ByteDance
+com.zhiliaoapp.musically	TikTok		ByteDance	TikTok is owned by ByteDance
 com.toyopagroup.picaboo	Snapchat	Snapchat	Snap	Snapchat is published by Snap
 com.reddit.Reddit	Reddit	Reddit	Reddit	Reddit is published by Reddit
 com.pinterest	Pinterest	Pinterest	Pinterest	Pinterest is published by Pinterest
