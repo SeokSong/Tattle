@@ -153,7 +153,7 @@ private final class Probe: @unchecked Sendable {
     let dir = tempDir()
     let probe = Probe()
     let file = try write(sample, in: dir)
-    let m = model(dir) { url in
+    let m = model(dir) { url, _ in
         probe.record(Thread.isMainThread)
         return try ImportModel.defaultRun(file: url, storePath: dir.appendingPathComponent("db.sqlite"))
     }
@@ -167,7 +167,7 @@ private final class Probe: @unchecked Sendable {
     let probe = Probe()
     let gate = DispatchSemaphore(value: 0)
     let file = try write(sample, in: dir)
-    let m = model(dir) { url in
+    let m = model(dir) { url, _ in
         probe.record(false)
         gate.wait()
         return try ImportModel.defaultRun(file: url, storePath: dir.appendingPathComponent("db.sqlite"))
@@ -199,7 +199,7 @@ private final class Probe: @unchecked Sendable {
 @MainActor @Test func deleteAllWaitsForARunningImport() async throws {
     let dir = tempDir()
     let gate = DispatchSemaphore(value: 0)
-    let m = model(dir) { url in
+    let m = model(dir) { url, _ in
         gate.wait()
         return try ImportModel.defaultRun(file: url, storePath: dir.appendingPathComponent("db.sqlite"))
     }
@@ -213,4 +213,16 @@ private final class Probe: @unchecked Sendable {
     while m.isRunning { await Task.yield() }
     #expect(m.items.count == 1)
     #expect(m.deleteAllUnavailableReason(captureBusy: false) == nil)
+}
+
+@MainActor @Test func reportOlderThanRetentionIsNotImportedAndSaysSo() async throws {
+    let dir = tempDir()
+    let m = model(dir)
+    m.retentionDays = 1
+    let old = [B.network(first: "2020-01-02T09:00:00.000-08:00", last: "2020-01-03T09:00:00.000-08:00")]
+    await m.runImport(file: try write(old, in: dir))
+    let card = try #require(cardOf(m.state))
+    #expect(card.kind == .retentionRefused)
+    #expect(card.headline == "This report ends before your retention period (1 day), so it was not imported.")
+    #expect(m.items.isEmpty)
 }

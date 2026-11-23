@@ -181,3 +181,29 @@ private final class FailingStore: ReportImportStoring {
     }
     #expect(text.contains("This report was already imported"))
 }
+
+@Test func reportEndingBeforeRetentionIsNotStored() throws {
+    let dir = try tempDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = try Store(path: dir.appendingPathComponent("t.db"))
+    let file = try write(B.file([B.network(first: B.stamp(18), last: B.stamp(20))]), in: dir)
+    let later = ISO8601DateFormatter().date(from: "2026-11-30T12:00:00Z")!
+    let refused = try ReportImporter.run(file: file, store: store, now: later, retentionDays: 7)
+    #expect(refused.outcome == .olderThanRetention(days: 7))
+    #expect(refused.lines.first == "This report ends before your retention period (7 days), so it was not imported.")
+    #expect(try store.imports().isEmpty)
+    // a longer window, or no window (the command line), imports it
+    let kept = try ReportImporter.run(file: file, store: store, now: later, retentionDays: 14)
+    #expect(kept.stored)
+    try store.deleteAll()
+    #expect(try ReportImporter.run(file: file, store: store, now: later).stored)
+}
+
+@Test func renamedFileHasNoVersionAndNoWarning() throws {
+    let dir = try tempDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = try Store(path: dir.appendingPathComponent("t.db"))
+    let summary = try ReportImporter.run(file: try write(B.file(sampleLines()), in: dir, name: "export.ndjson"), store: store)
+    #expect(summary.stored && !summary.newerFormatWarning && summary.newerFormatSentence == nil)
+    #expect(try store.imports().first?.formatVersion == nil)
+}

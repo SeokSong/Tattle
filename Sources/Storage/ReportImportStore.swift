@@ -75,6 +75,9 @@ public enum SaveImportOutcome: Equatable, Sendable {
     /// a stored import overlaps this one and ends later, so this file is older: nothing stored.
     /// `newestPeriodEnd` is the latest `period_end` among those overlapping imports
     case olderThanStored(newestPeriodEnd: Date)
+    /// the report ends before the retention window, so the next expire would delete it. decided by the importer
+    /// (the store itself has no retention setting); nothing stored
+    case olderThanRetention(days: Int)
 }
 
 extension Store {

@@ -1396,7 +1396,7 @@ func runImportReport(_ args: [String]) -> Int32 {
         for line in summary.lines { print(line) }
         switch summary.outcome {
         case .stored, .duplicate: return 0
-        case .empty, .olderThanStored: return 1
+        case .empty, .olderThanStored, .olderThanRetention: return 1
         }
     } catch {
         print("\(error)")

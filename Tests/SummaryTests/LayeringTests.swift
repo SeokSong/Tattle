@@ -95,6 +95,10 @@ private func imports(_ file: URL) -> Set<String> {
         #expect(!imports(file).contains("PrivacyReport"), "\(file.lastPathComponent) imports PrivacyReport")
     }
     #expect(swiftFiles(in: "Pipeline").contains { $0.lastPathComponent == "ReportImporter.swift" })
+    // the app talks to the importer in Pipeline too: it never imports the parser
+    for file in swiftFiles(in: "TattleApp") {
+        #expect(!imports(file).contains("PrivacyReport"), "\(file.lastPathComponent) imports PrivacyReport")
+    }
     // the command line talks to the importer, not the parser
     for file in swiftFiles(in: "TattleCLI") {
         #expect(!imports(file).contains("PrivacyReport"), "\(file.lastPathComponent) imports PrivacyReport")

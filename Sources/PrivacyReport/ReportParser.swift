@@ -126,7 +126,7 @@ public enum ReportParser {
             fileSHA256: hasher.finish(), bytesRead: bytesRead, linesRead: lines, kept: kept,
             skippedAccess: access, unknownTypes: unknown, unknownTypeNames: names, malformed: malformed,
             periodStart: start, periodEnd: end, truncatedLastLine: truncated,
-            formatVersion: version, unexpectedFormatVersion: source.fileName != nil && version != supportedFormatVersion)
+            formatVersion: version, unexpectedFormatVersion: version.map { $0 != supportedFormatVersion } ?? false)
     }
 
     /// parses and combines into one row per app and domain; nothing is returned when the import is refused

@@ -37,7 +37,7 @@ let package = Package(
         .executableTarget(name: "TattleCLI", dependencies: ["PCAPNG", "Storage", "Pipeline", "Capture", "Report", "Companies", "Summary"]),
         .executableTarget(
             name: "TattleApp",
-            dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains", "Storage", "Attribution", "Pipeline", "Capture", "Report", "Companies", "Summary", "PrivacyReport"]
+            dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains", "Storage", "Attribution", "Pipeline", "Capture", "Report", "Companies", "Summary"]
         ),
 
         // shared test helpers: fixture lookup and byte builders

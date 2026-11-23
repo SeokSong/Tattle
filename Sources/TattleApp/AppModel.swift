@@ -99,6 +99,7 @@ final class AppModel: ObservableObject {
     @Published var retentionDays: Int {
         didSet {
             UserDefaults.standard.set(retentionDays, forKey: Self.retentionKey)
+            importModel.retentionDays = retentionDays
             applyRetention()
         }
     }
@@ -130,6 +131,7 @@ final class AppModel: ObservableObject {
         importModel = ImportModel(storePath: storePath)
         let saved = UserDefaults.standard.integer(forKey: Self.retentionKey)
         retentionDays = Self.retentionChoices.contains(saved) ? saved : 7
+        importModel.retentionDays = retentionDays
         // views of this model (Settings) also show whether an import is running
         importChange = importModel.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         do {
