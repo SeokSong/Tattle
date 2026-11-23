@@ -75,6 +75,9 @@ public enum SaveImportOutcome: Equatable, Sendable {
     /// a stored import overlaps this one and ends later, so this file is older: nothing stored.
     /// `newestPeriodEnd` is the latest `period_end` among those overlapping imports
     case olderThanStored(newestPeriodEnd: Date)
+    /// the report ends before the retention window, so the next expire would delete it. decided by the importer
+    /// (the store itself has no retention setting); nothing stored
+    case olderThanRetention(days: Int)
 }
 
 extension Store {
@@ -196,7 +199,7 @@ extension Store {
     /// removes one import by its file hash (contacts cascade). false when none matched
     @discardableResult
     public func deleteImport(sha256: String) throws -> Bool {
-        try db.transaction {
+        let removed = try db.transaction {
             let st = try db.statement("delete from report_import where file_sha256 = ?")
             st.bind(1, sha256)
             try st.run()
@@ -206,6 +209,9 @@ extension Store {
             n.reset()
             return changed > 0
         }
+        // secure_delete overwrites freed pages; truncating the wal removes its copies of them
+        if removed { try db.exec("pragma wal_checkpoint(TRUNCATE)") }
+        return removed
     }
 
     private var contactSelect: String {

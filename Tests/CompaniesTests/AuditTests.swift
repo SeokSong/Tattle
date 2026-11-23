@@ -180,3 +180,15 @@ private func entity(_ name: String, _ others: [String] = []) -> EntityEntry { En
     #expect(text.contains("contradicted: 1"))
     #expect(text.contains("upper bound"))
 }
+
+@Test func curatedRowsSharingADomainAndParentCountOnce() {
+    let refs = ReferenceMaps(entities: ["zorblax.com": entity("Zorblax Holdings")])
+    let a = AuditSubject(domain: "zorblax.com", parent: "Zorblax Holdings", company: nil, category: .advertising)
+    let b = AuditSubject(domain: "Zorblax.com", parent: "Zorblax Holdings, Inc.", company: "Zorblax Ads", category: .analytics)
+    let c = AuditSubject(domain: "zorblax.com", parent: "Other Parent", company: nil, category: .advertising)
+    let rows = Audit.rows([a, b, c], references: refs, aliases: aliases)
+    #expect(rows.count == 2)  // a and b merge; a different parent is a different subject
+    let merged = rows.first { $0.subject.parent == "Zorblax Holdings" }
+    #expect(merged?.subject.category == .advertising)  // the first category is kept
+    #expect(merged?.subject.company == "Zorblax Ads")  // a missing company name is filled in
+}

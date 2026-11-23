@@ -1,6 +1,5 @@
 import Foundation
 import Pipeline
-import PrivacyReport
 import Storage
 
 // the state behind the Import screen: pure and testable, no views. the import itself runs off the main thread
@@ -24,7 +23,7 @@ enum ImportText {
 
 /// one shown result of an import
 struct ImportCard: Equatable {
-    enum Kind: Equatable { case stored, duplicate, olderRefused, empty }
+    enum Kind: Equatable { case stored, duplicate, olderRefused, retentionRefused, empty }
     var kind: Kind
     var headline: String
     var details: [String]
@@ -62,11 +61,16 @@ struct ImportRun: Sendable {
 @MainActor
 final class ImportModel: ObservableObject {
     /// does the import work; called on a background thread, never the main one
-    typealias Runner = @Sendable (URL) throws -> ImportRun
+    typealias Runner = @Sendable (URL, Int?) throws -> ImportRun
 
     @Published private(set) var state: ImportState = .idle
     @Published private(set) var items: [ImportItem] = []
     @Published var listError: String?
+
+    /// set by the app model: true while a capture is starting, running or saving. an import then waits
+    @Published var captureBusy = false
+    /// the retention setting in days; an import that ends before it is refused. set by the app model, nil never refuses
+    var retentionDays: Int?
 
     private let storePath: URL
     private let runner: Runner
@@ -77,11 +81,24 @@ final class ImportModel: ObservableObject {
         self.storePath = storePath
         self.timeZone = timeZone
         self.locale = locale
-        self.runner = runner ?? { try Self.defaultRun(file: $0, storePath: storePath) }
+        self.runner = runner ?? { try Self.defaultRun(file: $0, storePath: storePath, retentionDays: $1) }
         refresh()
     }
 
     var isRunning: Bool { state == .running }
+
+    /// why the Import action is off, or nil when it is on
+    var importUnavailableReason: String? {
+        captureBusy ? "Import is unavailable while a capture is running." : nil
+    }
+
+    /// why Delete all data is off, or nil when it is on. an import task that is in flight would store its
+    /// result after the delete, so the two never overlap: this is the one place that enforces it
+    func deleteAllUnavailableReason(captureBusy: Bool) -> String? {
+        if captureBusy { return "Delete all data is unavailable while a capture is running." }
+        if isRunning { return "Wait for the import to finish." }
+        return nil
+    }
 
     // MARK: import
 
@@ -98,15 +115,16 @@ final class ImportModel: ObservableObject {
     }
 
     private func begin() -> Bool {
-        guard !isRunning else { return false }
+        guard !isRunning, importUnavailableReason == nil else { return false }
         state = .running
         return true
     }
 
     private func perform(_ file: URL) async {
         let runner = self.runner
+        let days = retentionDays
         // the work runs in a detached task: nothing here holds the main actor while the file is read
-        let result = await Task.detached { Result { try runner(file) } }.value
+        let result = await Task.detached { Result { try runner(file, days) } }.value
         switch result {
         case .success(let run): state = .done(card(for: run))
         case .failure(let error): state = .failed(Self.sentence(for: error))
@@ -134,6 +152,7 @@ final class ImportModel: ObservableObject {
     }
 
     func delete(sha256: String) {
+        guard !isRunning else { return }
         do {
             try Store(path: storePath).deleteImport(sha256: sha256)
         } catch {
@@ -162,13 +181,7 @@ final class ImportModel: ObservableObject {
     func card(for run: ImportRun) -> ImportCard {
         let summary = run.summary
         let result = summary.result
-        var warning: String?
-        if summary.newerFormatWarning {
-            let version = result.formatVersion.map { "version \($0)" } ?? "an unknown version"
-            warning =
-                "This report is \(version), but \(AppIdentity.name) reads version \(ReportParser.supportedFormatVersion). "
-                + "It was imported as it is, and some fields may be missing."
-        }
+        let warning = summary.newerFormatSentence
         var details: [String] = []
         let kind: ImportCard.Kind
         let headline: String
@@ -193,6 +206,9 @@ final class ImportModel: ObservableObject {
             headline =
                 "A newer report that ends on \(dayText(end)) is already imported and covers this period. "
                 + "This older report was not imported."
+        case .olderThanRetention(let days):
+            kind = .retentionRefused
+            headline = ReportImporter.retentionRefusal(days: days)
         }
         if result.malformed > 0 {
             details.append("\(ImportText.count(result.malformed, "line", "lines")) could not be read.")
@@ -215,12 +231,12 @@ final class ImportModel: ObservableObject {
     // MARK: the real run
 
     /// runs on a background thread with its own store connection, then counts what was stored
-    nonisolated static func defaultRun(file: URL, storePath: URL) throws -> ImportRun {
+    nonisolated static func defaultRun(file: URL, storePath: URL, retentionDays: Int? = nil) throws -> ImportRun {
         let store: Store
         do { store = try Store(path: storePath) } catch {
             throw OpenFailure()
         }
-        let summary = try ReportImporter.run(file: file, store: store)
+        let summary = try ReportImporter.run(file: file, store: store, retentionDays: retentionDays)
         var apps = 0, domains = 0
         if summary.stored,
             let row = try? store.imports().first(where: { $0.fileSHA256 == summary.result.fileSHA256 }),

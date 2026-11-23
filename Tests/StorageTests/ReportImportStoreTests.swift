@@ -381,3 +381,43 @@ private func buildV2Database(_ path: URL) throws {
     #expect(try store.saveImport(b, contacts: contacts(b)) == .stored(replaced: 1))
     #expect(try store.imports().map(\.id) == [b.id])
 }
+
+@Test func deleteImportLeavesNoPlainTextInWalOrDatabase() throws {
+    let host = "marker-delete-import.example"
+    let path = tempPath()
+    defer { cleanup(path) }
+    let store = try Store(path: path)
+    let r = importRow(sha: "del1", start: 0, end: 3)
+    try store.saveImport(r, contacts: contacts(r, domain: host))
+    #expect(try filesContain(path, host))  // the check can see the marker before deleting
+    #expect(try store.deleteImport(sha256: "del1"))
+    #expect(try !filesContain(path, host))
+}
+
+private final class StoreBox: @unchecked Sendable {
+    let store: Store
+    init(_ s: Store) { store = s }
+}
+
+@Test func secondStoreWaitsForTheWriteLockInsteadOfFailingBusy() throws {
+    let path = tempPath()
+    defer { cleanup(path) }
+    let a = StoreBox(try Store(path: path))
+    let b = try Store(path: path)
+    let holding = DispatchSemaphore(value: 0)
+    let done = DispatchSemaphore(value: 0)
+    // the other writer holds its write transaction on another thread for a moment
+    Thread.detachNewThread {
+        try? a.store.db.transaction {
+            holding.signal()
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+        done.signal()
+    }
+    // bounded waits: a failure in the other thread fails the test instead of hanging the suite
+    try #require(holding.wait(timeout: .now() + 10) == .success)
+    let r = importRow(sha: "busy", start: 0, end: 2)
+    #expect(try b.saveImport(r, contacts: contacts(r)) == .stored(replaced: 0))
+    try #require(done.wait(timeout: .now() + 10) == .success)
+    #expect(try a.store.imports().count == 1)
+}

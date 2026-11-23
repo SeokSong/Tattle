@@ -13,10 +13,21 @@
 set -eu
 dir=${TATTLE_REFERENCES:-$HOME/dev/tattle-fixtures/reference}
 rate=${RATE:-2}
-case "$dir" in
-  "$(cd "$(dirname "$0")/.." && pwd)"/*) echo "the references folder must be outside the repo" >&2; exit 1 ;;
-esac
+repo=$(cd "$(dirname "$0")/.." && pwd -P)
 umask 077
+# resolve first (relative paths, symlinks) through the parent folder, so a refused folder is never created;
+# then refuse anything inside this repo or any other git work tree
+parent=$(dirname "$dir")
+[ -d "$parent" ] || { echo "the parent of the references folder must exist" >&2; exit 1; }
+dir="$(cd "$parent" && pwd -P)/$(basename "$dir")"
+[ -L "$dir" ] && dir=$(cd "$dir" && pwd -P)
+case "$dir" in
+  "$repo"|"$repo"/*) echo "the references folder must be outside the repo" >&2; exit 1 ;;
+esac
+if git -C "$(dirname "$dir")" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+  || { [ -d "$dir" ] && git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; }; then
+  echo "the references folder must not be inside a git work tree" >&2; exit 1
+fi
 mkdir -p "$dir"
 chmod 700 "$dir"
 

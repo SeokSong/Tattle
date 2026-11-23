@@ -26,8 +26,16 @@ public struct ReportImportSummary: Sendable, Equatable {
     public let result: ImportResult
     public let outcome: SaveImportOutcome
 
-    /// OD17: the file name did not carry the supported format version; the file was imported anyway
+    /// OD17: the file name carried a format version other than the supported one; the file was imported anyway
     public var newerFormatWarning: Bool { result.unexpectedFormatVersion }
+
+    /// the one sentence for that warning (nil when there is none), shared by the command line and the app
+    public var newerFormatSentence: String? {
+        guard newerFormatWarning else { return nil }
+        let v = result.formatVersion.map { "version \($0)" } ?? "an unknown version"
+        return "This report is \(v), but \(AppIdentity.name) reads version \(ReportImporter.supportedFormatVersion). "
+            + "It was imported as it is, and some fields may be missing."
+    }
 
     public var stored: Bool { if case .stored = outcome { return true } else { return false } }
 
@@ -46,13 +54,10 @@ public struct ReportImportSummary: Sendable, Equatable {
             out.append(
                 "A newer report that ends on \(Self.day(end)) is already imported and covers this period. "
                     + "This older report was not imported.")
+        case .olderThanRetention(let days):
+            out.append(ReportImporter.retentionRefusal(days: days))
         }
-        if newerFormatWarning {
-            let v = result.formatVersion.map { "version \($0)" } ?? "an unknown version"
-            out.append(
-                "Warning: this report is \(v), but Tattle reads version \(ReportParser.supportedFormatVersion). "
-                    + "It was imported as is, and some fields may be missing.")
-        }
+        if let sentence = newerFormatSentence { out.append("Warning: " + sentence) }
         out.append("Lines read: \(result.linesRead)")
         out.append("Network records kept: \(result.kept)")
         out.append("Access records skipped: \(result.skippedAccess)")
@@ -75,26 +80,41 @@ public struct ReportImportSummary: Sendable, Equatable {
 }
 
 public enum ReportImporter {
+    /// the export format version this importer was written for
+    public static var supportedFormatVersion: Int { ReportParser.supportedFormatVersion }
+
+    /// the sentence for a report that ends before the retention window
+    public static func retentionRefusal(days: Int) -> String {
+        "This report ends before your retention period (\(days == 1 ? "1 day" : "\(days) days")), so it was not imported."
+    }
+
     /// imports the file at `file`, opened read-only where the user chose it. a rejected file (limits) or a failed
     /// save stores nothing and throws a `ReportImportFailure`
     public static func run(
-        file: URL, store: any ReportImportStoring, limits: ImportLimits = .standard, now: Date = Date()
+        file: URL, store: any ReportImportStoring, limits: ImportLimits = .standard, now: Date = Date(),
+        retentionDays: Int? = nil
     ) throws -> ReportImportSummary {
         let source: FileLineSource
         do { source = try FileLineSource(url: file) } catch { throw failure(error) }
         defer { source.close() }
-        return try run(source: source, store: store, limits: limits, now: now)
+        return try run(source: source, store: store, limits: limits, now: now, retentionDays: retentionDays)
     }
 
-    /// the same import from any line source (tests count reads with one)
+    /// the same import from any line source (tests count reads with one). `retentionDays` is the capture setting the
+    /// import follows; nil (the command line has none) never refuses on age
     public static func run(
-        source: any LineSource, store: any ReportImportStoring, limits: ImportLimits = .standard, now: Date = Date()
+        source: any LineSource, store: any ReportImportStoring, limits: ImportLimits = .standard, now: Date = Date(),
+        retentionDays: Int? = nil
     ) throws -> ReportImportSummary {
         let parsed: (contacts: [ReportContact], result: ImportResult)
         do { parsed = try ReportParser.parseCombined(source: source, limits: limits) } catch { throw failure(error) }
         let result = parsed.result
         guard let start = result.periodStart, let end = result.periodEnd, !parsed.contacts.isEmpty else {
             return ReportImportSummary(result: result, outcome: .empty)
+        }
+        // the same cut-off as expire: a report that ends before the window would be deleted at once
+        if let days = retentionDays, end < now.addingTimeInterval(-TimeInterval(days) * 86400) {
+            return ReportImportSummary(result: result, outcome: .olderThanRetention(days: days))
         }
         let row = ReportImportRow(
             fileSHA256: result.fileSHA256, periodStart: start, periodEnd: end, importedAt: now,

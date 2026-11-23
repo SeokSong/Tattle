@@ -285,7 +285,8 @@ private enum ReportTimeCheck {
     let newer = try run(data, name: "App_Privacy_Report_v5_2027-01-01T00_00_00.ndjson").0
     #expect(newer.formatVersion == 5 && newer.unexpectedFormatVersion && newer.kept == 1)
     let odd = try run(data, name: "export.ndjson").0
-    #expect(odd.formatVersion == nil && odd.unexpectedFormatVersion)
+    // a renamed export has no version to compare: no version, no warning
+    #expect(odd.formatVersion == nil && !odd.unexpectedFormatVersion)
     // no name, no verdict
     let none = try run(data).0
     #expect(none.formatVersion == nil && !none.unexpectedFormatVersion)

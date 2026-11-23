@@ -199,12 +199,12 @@ Entity map: 38371 domains. Certificates: 27% of the fetched domains had an organ
 
 | Stratum | n | Confirmed | Contradicted | Unverifiable | Agreement among verifiable | 95% upper bound of contradiction rate |
 |---|---|---|---|---|---|---|
-| Curated list entries | 397 | 350 | 29 | 18 | 92.3% | 10.3% |
+| Curated list entries | 385 | 339 | 28 | 18 | 92.4% | 10.3% |
 | Capture confirmed names (six captures) | 32 | 32 | 0 | 0 | 100.0% | 8.9% |
 | App Privacy Report named domains | – | – | – | – | 98.7% | 4.0% |
 | Owner data together | – | – | – | – | 98.7% | 4.0% |
 
 - Counts are not published for the owner's report (–): rates only
-- Of the confirmed rows, both references agreed on 76 curated rows, 14 capture rows and 24% of the report rows; 36 curated rows, no capture rows and 3% of the report rows were confirmed while the other reference named a different company
-- 29 distinct contradicted rows go to the owner for a decision by hand. Until they are decided, the contradiction rates above are upper estimates of disagreement, not of error
+- Of the confirmed rows, both references agreed on 72 curated rows, 14 capture rows and 24% of the report rows; 34 curated rows, no capture rows and 3% of the report rows were confirmed while the other reference named a different company
+- 28 distinct contradicted rows go to the owner for a decision by hand. Until they are decided, the contradiction rates above are upper estimates of disagreement, not of error
 - The owner-data strata have too few distinct rows for the bound to be under 5% in the captures (0 of 32 gives 8.9%)
