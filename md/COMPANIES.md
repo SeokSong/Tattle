@@ -168,3 +168,42 @@ Command: `tattle companies agreement --report <file> [--disagreements-out <file>
 Before the alias table the same run gave 5 same and 48 different: every one of the 48 was a legal-name difference, none a real disagreement. The CDN exception changed no answer on this report (no CDN operator appears as an owner), so it is kept as a guard for other reports. With these numbers the two possible orders give the same label wherever both answer; they differ only in whether an owner string beats a curated name, which never changes the parent here.
 
 Golden synthetic conflict set: `Tests/CompaniesTests/ConflictSetTests.swift`, 25 made-up names with made-up owners, each with an expected winner and rule; a coverage test checks that every source of every order and every exception of the bundled table is used by a case.
+
+## Accuracy audit against two independent references (OD13)
+
+Replaces the hand audit of Problem 1.5. Our classification is compared automatically with two references that we did not build; rows where a reference agrees with us are confirmed, and only the contradictions go to the owner by hand.
+
+### References
+
+- DuckDuckGo Tracker Radar domain-to-entity map (`build-data/generated/domain_map.json` of github.com/duckduckgo/tracker-radar, pinned at commit 815b4d9, recorded in full with the URL and SHA-256 in `ddg-provenance.txt`). Licence CC BY-NC-SA 4.0: used only as a reference for this audit, never bundled and never committed. `scripts/audit-references.sh entities` downloads it into `~/dev/tattle-fixtures/reference/` (folder mode 700, files 600)
+- The organisation (`O=`) of the subject of the server's TLS certificate. `scripts/audit-references.sh certs <domains-file>` fetches each audited registrable domain's certificate once with `openssl s_client` (8 second timeout, 2 per second, results cached in `cert-orgs.tsv`, a failed fetch is cached as a failure and retried only with `RETRY_FAILED=1`). A certificate without an organisation (domain validated) is recorded as "no organisation"
+- The app never fetches anything; only the script does. `Audit` in `Sources/Companies/Audit.swift` is pure and takes both references as values
+
+### Method
+
+1. Frame: the strata below. Bare IP addresses are excluded. Each row is a registrable domain, the parent company we name for it (curated first, then Apple's owner string by the decided order) and its category
+2. Names are compared after normalisation (case, punctuation and legal words such as Inc, LLC, Ltd, GmbH removed), against our parent and our company name. The entity map's entity name, display name and aliases all count. A reference name also matches through an alias table: `Resources/reference-aliases.tsv` (header `referenceName parent note`, public company names only) together with the rows of `apple-owner-aliases.tsv`. Every alias parent is a curated parent (a test checks it)
+3. Outcomes: confirmed (at least one reference names the same company), contradicted (no reference agrees and one names a different company), unverifiable (no reference answered). "No organisation" and a failed fetch are no answer, never a disagreement
+4. Per stratum: n, confirmed, contradicted, unverifiable and the one-sided 95% upper bound (exact Clopper-Pearson, computed by bisection on the binomial distribution; 0 of 200 gives 1.49%, 0 of 50 gives 5.8%) of the contradiction rate among verifiable rows (confirmed plus contradicted)
+5. Contradictions are written to a local file only, with the domain, our parent and category, the entity map's entity and the certificate organisation, so the owner can decide row by row. Mode 600, new file only, refused inside a git work tree
+
+Command: `tattle companies audit --references <dir> [--report <file>] [--captures <dir>] [--contradictions-out <file>] [--domains-out <file>]` prints numbers only. `--domains-out` writes the audited domains for the certificate fetcher.
+
+### The claim it supports
+
+"Our company names agree with at least one of two independent sources on X% of the domains where a source gave an answer; every contradiction is checked by hand." It is not a measure of the category, and a confirmed row is only as good as the references: a reference can be wrong or out of date, and a certificate organisation can name the host rather than the site, which is why contradictions are read by the owner and not counted as errors until then. The bound is an upper limit on the contradiction rate, not on the error rate.
+
+### Measured (2026-11-22, numbers only)
+
+Entity map: 38371 domains. Certificate cache: 424 domains fetched, 116 with an organisation, 218 with no organisation, 90 failed.
+
+| Stratum | n | Confirmed | Contradicted | Unverifiable | Agreement among verifiable | 95% upper bound of contradiction rate |
+|---|---|---|---|---|---|---|
+| Curated list entries | 397 | 350 | 29 | 18 | 92.3% | 10.3% |
+| Capture confirmed names (six captures) | 32 | 32 | 0 | 0 | 100.0% | 8.9% |
+| App Privacy Report named domains | 159 | 154 | 2 | 3 | 98.7% | 4.0% |
+| Owner data together | 159 | 154 | 2 | 3 | 98.7% | 4.0% |
+
+- Of the confirmed rows, both references agreed on 76, 14, 37 and 37 rows respectively, and 36, 0, 5 and 5 were confirmed while the other reference named a different company
+- 29 distinct contradicted rows go to the owner for a decision by hand. Until they are decided, the contradiction rates above are upper estimates of disagreement, not of error
+- The owner-data strata have too few distinct rows for the bound to be under 5% in the captures (0 of 32 gives 8.9%)

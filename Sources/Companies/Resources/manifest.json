@@ -59,6 +59,18 @@
       "sha256": "db93b12ef6603b336ed66c6bd6883657eea1bc09e095e1fb80484a1ad1fe87a2",
       "sourceSHA256": "db93b12ef6603b336ed66c6bd6883657eea1bc09e095e1fb80484a1ad1fe87a2",
       "rules": 36
+    },
+    {
+      "name": "Tattle audit reference aliases",
+      "file": "reference-aliases.tsv",
+      "version": "1",
+      "commit": "",
+      "sourceURL": "",
+      "licence": "MIT (own data, public knowledge)",
+      "fetched": "2026-11-22",
+      "sha256": "38ffb6efd9145591aa208b04ba127c4e561fbb3431f51ea405b8101c5c4fc145",
+      "sourceSHA256": "38ffb6efd9145591aa208b04ba127c4e561fbb3431f51ea405b8101c5c4fc145",
+      "rules": 9
     }
   ]
 }
