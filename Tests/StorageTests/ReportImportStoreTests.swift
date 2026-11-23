@@ -414,9 +414,10 @@ private final class StoreBox: @unchecked Sendable {
         }
         done.signal()
     }
-    holding.wait()
+    // bounded waits: a failure in the other thread fails the test instead of hanging the suite
+    try #require(holding.wait(timeout: .now() + 10) == .success)
     let r = importRow(sha: "busy", start: 0, end: 2)
     #expect(try b.saveImport(r, contacts: contacts(r)) == .stored(replaced: 0))
-    done.wait()
+    try #require(done.wait(timeout: .now() + 10) == .success)
     #expect(try a.store.imports().count == 1)
 }

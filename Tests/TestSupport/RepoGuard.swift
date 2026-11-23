@@ -3,8 +3,9 @@ import Foundation
 // scans a source tree for personal data that must never be committed. violation
 // descriptions name the path and the rule, never the text that matched.
 public enum RepoGuard {
-    // md-notes is the owner's private notes folder (git-excluded, never committed); it holds commit ids
-    static let skippedFolders: Set<String> = [".build", ".git", "img", "md-notes"]
+    static let skippedFolders: Set<String> = [".build", ".git", "img"]
+    // the owner's private notes (top level, git-ignored) hold commit ids: file-type rules still apply, text rules do not
+    static let privateNotesFolder = "md-notes"
     static let forbiddenExtensions: Set<String> = ["pcap", "pcapng", "sqlite", "sqlite-wal", "sqlite-shm"]
     static let topLevelDomains = [
         "com", "net", "org", "io", "co", "app", "dev", "me", "tv", "ai", "apple", "cn", "jp",
@@ -97,6 +98,7 @@ public enum RepoGuard {
                 violations.append("\(relative): privacy report export")
                 continue
             }
+            if parts.first == privateNotesFolder { continue }
             guard let data = try? Data(contentsOf: url), data.count <= maxTextBytes,
                   !data.contains(0), let text = String(data: data, encoding: .utf8) else { continue }
 

@@ -104,6 +104,7 @@ struct ImportListView: View {
                     }
                     Spacer()
                     Button("Delete...", role: .destructive) { pending = item }
+                        .disabled(model.isRunning)
                 }
             }
         }

@@ -439,7 +439,7 @@ final class AppModel: ObservableObject {
     // MARK: settings
 
     private func applyRetention() {
-        guard !isBusy else { return }
+        guard !isBusy, !importModel.isRunning else { return }
         try? store?.expire(olderThan: TimeInterval(retentionDays) * 86400)
         refreshSessions()
         importModel.refresh()

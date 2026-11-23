@@ -1150,7 +1150,7 @@ func runAudit(_ args: [String], fail: (String) -> Int32) async -> Int32 {
     }
     guard isFolder(references) else { return fail("the references folder is missing or not a folder") }
     if let captures, !isFolder(captures) { return fail("the captures folder is missing or not a folder") }
-    enum AuditStep { case entityMap, captures, report }
+    enum AuditStep { case entityMap, captures, report, output }
     var step = AuditStep.entityMap
     do {
         let dir = URL(fileURLWithPath: references, isDirectory: true)
@@ -1221,6 +1221,7 @@ func runAudit(_ args: [String], fail: (String) -> Int32) async -> Int32 {
             try handle.close()
             return nil
         }
+        step = .output
         if let domainsOut {
             let domains = Audit.domains(allSubjects)
             if let code = try writeLocal(domainsOut, domains, what: "--domains-out") { return code }
@@ -1241,6 +1242,7 @@ func runAudit(_ args: [String], fail: (String) -> Int32) async -> Int32 {
             case .entityMap: reason = "the entity map in the references folder could not be read"
             case .captures: reason = "a capture in the captures folder could not be read"
             case .report: reason = "the report file could not be read"
+            case .output: reason = "a local output file could not be written"
             }
         }
         FileHandle.standardError.write(Data("companies audit failed: \(reason)\n".utf8))

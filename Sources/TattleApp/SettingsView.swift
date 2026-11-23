@@ -19,6 +19,8 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 320)
+                // the import reads retention when it starts, and expire would wait on its write lock
+                .disabled(model.importModel.isRunning)
                 Button("Delete all data...", role: .destructive) { confirmDelete = true }
                     .disabled(model.deleteAllUnavailableReason != nil)
                 if let reason = model.deleteAllUnavailableReason {

@@ -28,3 +28,6 @@ cert-orgs.tsv
 domain_map.json
 ddg-provenance.txt
 reference/
+
+# the owner's private notes: never commit them
+/md-notes/

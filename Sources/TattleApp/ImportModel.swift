@@ -152,6 +152,7 @@ final class ImportModel: ObservableObject {
     }
 
     func delete(sha256: String) {
+        guard !isRunning else { return }
         do {
             try Store(path: storePath).deleteImport(sha256: sha256)
         } catch {
