@@ -87,6 +87,10 @@ public enum RepoGuard {
                 violations.append("\(relative): capture or database file")
                 continue
             }
+            if url.lastPathComponent.lowercased().hasPrefix("schema-shape") && url.pathExtension.lowercased() == "txt" {
+                violations.append("\(relative): schema shape output (belongs in the private fixtures folder)")
+                continue
+            }
             if reportExtensions.contains(url.pathExtension.lowercased())
                 || url.lastPathComponent.lowercased().hasPrefix(reportNamePrefix) {
                 violations.append("\(relative): privacy report export")

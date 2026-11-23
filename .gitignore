@@ -22,3 +22,9 @@ DerivedData/
 *.ndjson
 *.jsonl
 App_Privacy_Report*
+
+# audit references are licensed for reference only: never commit them (scripts/audit-references.sh)
+cert-orgs.tsv
+domain_map.json
+ddg-provenance.txt
+reference/

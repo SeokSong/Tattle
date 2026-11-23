@@ -4,6 +4,9 @@
 # type, line count, file size, longest line. small closed vocabularies (the record type, the kind
 # and the category of an access record, the initiated type) are listed because they are format
 # words, not user data; every other string is reported by length only.
+# the output still describes a real phone. it belongs in ~/dev/tattle-fixtures and must never be committed
+# or pasted anywhere shared. access records list their vocabulary words without counts, and time zone
+# offsets are masked (<tz>), because a count per offset or per camera or location kind is personal.
 # needs jq (brew install jq). usage: scripts/privacy-report-schema.sh [file.ndjson]
 # default file: the newest export in $TATTLE_FIXTURES/privacy-reports (or ~/dev/tattle-fixtures)
 set -eu
@@ -55,9 +58,9 @@ jq -R -n -r '
           | ( "  \($k): present \($vals | length)/\($group | length), types \($types)"
               + (if ($v | map(type) | unique) == ["string"] then
                    ", length \($v | map(length) | min) to \($v | map(length) | max), empty \($v | map(select(. == "")) | length), distinct \($v | unique | length)"
-                   + (if ($k | IN(vocab[])) and ($v | unique | length) <= 12 then ", words \($v | group_by(.) | map("\(.[0]) \(length)") | join("; "))" else "" end)
+                   + (if ($k | IN(vocab[])) and ($v | unique | length) <= 12 then ", words \(if $t == "access" then ($v | unique | join("; ")) else ($v | group_by(.) | map("\(.[0]) \(length)") | join("; ")) end)" else "" end)
                    + (if ($k | test("[Tt]ime[Ss]tamp")) then
-                        ", formats \($v | map(mask | sub("[+-]99:99$|Z$"; "<tz>")) | group_by(.) | map("\(.[0]) x\(length)") | join("; ")), offsets \($v | map(capture("(?<o>[+-][0-9]{2}:[0-9]{2}|Z)$").o? // "none") | group_by(.) | map("\(.[0]) x\(length)") | join("; "))"
+                        ", formats \($v | map(mask | sub("[+-]99:99$|Z$"; "<tz>")) | group_by(.) | map("\(.[0]) x\(length)") | join("; ")), offsets <tz>"
                       else "" end)
                  elif ($v | map(type) | unique) == ["number"] then
                    ", min \($v | min), max \($v | max), sum \($v | add), distinct \($v | unique | length)"
