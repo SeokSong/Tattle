@@ -270,9 +270,24 @@ public enum Audit {
         return AuditRow(subject: subject, entity: entityVerdict, certificate: certVerdict, entityName: entityName, organisation: organisation)
     }
 
-    /// scores each subject once (the same domain and parent twice counts once), in domain order
+    /// scores each subject once, in domain order. subjects count once per (registrable domain lower-cased, normalised
+    /// parent): the first one's category wins, and a later one only fills in a missing company name
     public static func rows(_ subjects: [AuditSubject], references: ReferenceMaps, aliases: ReferenceAliases) -> [AuditRow] {
-        Set(subjects).sorted { ($0.domain, $0.parent) < ($1.domain, $1.parent) }
+        var merged: [String: AuditSubject] = [:]
+        var order: [String] = []
+        for s in subjects {
+            let key = s.domain.lowercased() + "\u{0}" + normalise(s.parent)
+            if let first = merged[key] {
+                if first.company == nil, let company = s.company {
+                    merged[key] = AuditSubject(domain: first.domain, parent: first.parent, company: company, category: first.category)
+                }
+            } else {
+                merged[key] = s
+                order.append(key)
+            }
+        }
+        return order.compactMap { merged[$0] }
+            .sorted { ($0.domain.lowercased(), $0.parent) < ($1.domain.lowercased(), $1.parent) }
             .map { score($0, references: references, aliases: aliases) }
     }
 

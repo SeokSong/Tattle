@@ -1143,12 +1143,22 @@ func runAudit(_ args: [String], fail: (String) -> Int32) async -> Int32 {
     for out in [contradictionsOut, domainsOut].compactMap({ $0 }) where FileOwnership.gitWorkTreeRoot(containing: out) != nil {
         return fail("output files must point outside the git work tree: they hold real domain names")
     }
+    // fixed messages, never the path or the system's error text (both can carry a path)
+    func isFolder(_ path: String) -> Bool {
+        var isDir: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
+    }
+    guard isFolder(references) else { return fail("the references folder is missing or not a folder") }
+    if let captures, !isFolder(captures) { return fail("the captures folder is missing or not a folder") }
+    enum AuditStep { case entityMap, captures, report }
+    var step = AuditStep.entityMap
     do {
         let dir = URL(fileURLWithPath: references, isDirectory: true)
         var maps = ReferenceMaps()
         if let data = try? Data(contentsOf: dir.appendingPathComponent("ddg-domain-map.json")) {
             maps.entities = try ReferenceMaps.parseEntityMap(data)
         }
+        step = .captures
         if let text = try? String(contentsOf: dir.appendingPathComponent("cert-orgs.tsv"), encoding: .utf8) {
             maps.certificates = ReferenceMaps.parseCertificateCache(text)
         }
@@ -1185,6 +1195,7 @@ func runAudit(_ args: [String], fail: (String) -> Int32) async -> Int32 {
                 }
             }
         }
+        step = .report
         if let report {
             for (domain, owner) in try ReportImporter.domainOwners(file: URL(fileURLWithPath: report)) {
                 if let found = subject(classifier.classify(hostname: domain, appleOwner: owner)) { reportSubjects.append(found) }
@@ -1203,9 +1214,8 @@ func runAudit(_ args: [String], fail: (String) -> Int32) async -> Int32 {
         }
         func writeLocal(_ path: String, _ lines: [String], what: String) throws -> Int32? {
             // created 0600 from the first byte; refuses an existing file or a symlink
-            let handle: FileHandle
-            do { handle = try FileOwnership.openForWriting(path: path) } catch {
-                return fail("cannot create the \(what) file (it must be a new file): \(error)")
+            guard let handle = try? FileOwnership.openForWriting(path: path) else {
+                return fail("cannot create the \(what) file (it must be a new file)")
             }
             try handle.write(contentsOf: Data((lines.joined(separator: "\n") + "\n").utf8))
             try handle.close()
@@ -1223,7 +1233,17 @@ func runAudit(_ args: [String], fail: (String) -> Int32) async -> Int32 {
         }
         print(Audit.report(results), terminator: "")
     } catch {
-        FileHandle.standardError.write(Data("companies audit failed: \(error)\n".utf8))
+        let reason: String
+        if let failure = error as? ReportImportFailure {
+            reason = failure.message  // counts only, never a path
+        } else {
+            switch step {
+            case .entityMap: reason = "the entity map in the references folder could not be read"
+            case .captures: reason = "a capture in the captures folder could not be read"
+            case .report: reason = "the report file could not be read"
+            }
+        }
+        FileHandle.standardError.write(Data("companies audit failed: \(reason)\n".utf8))
         return 1
     }
     return 0

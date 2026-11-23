@@ -102,3 +102,11 @@ private func makeTree(_ files: [String: String]) throws -> URL {
     let root = try #require(RepoGuard.repoRoot())
     #expect(RepoGuard.scan(root: root) == [])
 }
+
+@Test func guardRejectsSchemaShapeOutput() throws {
+    let root = try makeTree(["Tests/Resources/schema-shape.txt": "shape", "notes/readme.txt": "plain"])
+    defer { try? FileManager.default.removeItem(at: root) }
+    let violations = RepoGuard.scan(root: root)
+    #expect(violations.count == 1)
+    #expect(violations.first?.hasPrefix("Tests/Resources/schema-shape.txt:") == true)
+}
