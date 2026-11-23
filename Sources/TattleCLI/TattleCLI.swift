@@ -960,6 +960,18 @@ let companiesUsage = """
       --disagreements-out <file>
                           write every disagreement and every name only Apple named to a local file (tab
                           separated; mode 600, new file only; refused inside a git work tree)
+
+    usage: tattle companies audit --references <dir> [--report <file>] [--captures <dir>]
+                                  [--contradictions-out <file>] [--domains-out <file>]
+      compares our parent company for every domain we label with two independent references in <dir>
+      (ddg-domain-map.json and cert-orgs.tsv, made by scripts/audit-references.sh) and prints numbers only:
+      per stratum n, confirmed, contradicted, unverifiable and the 95% upper bound of the contradiction rate.
+      strata: the curated list's own entries, the capture folder's confirmed names, the report's named domains
+      --contradictions-out <file>
+                          the contradicted rows for a decision by hand (tab separated; mode 600, new file only;
+                          refused inside a git work tree)
+      --domains-out <file>
+                          the audited registrable domains, one per line, for the certificate fetcher (same rules)
     """
 
 /// coverage of a capture or a saved session by the company sources. read-time only: it reads flows and
@@ -970,6 +982,7 @@ func runCompanies(_ args: [String]) async -> Int32 {
         return 1
     }
     if args.first == "agreement" { return runAgreement(Array(args.dropFirst()), fail: fail) }
+    if args.first == "audit" { return await runAudit(Array(args.dropFirst()), fail: fail) }
     guard args.first == "coverage" else { return fail("unknown companies command") }
     var file: String?, db: String?, session: String?
     var bandsPath: String?, writeBandsPath: String?, label: String?, unmatchedOut: String?
@@ -1104,6 +1117,113 @@ func runAgreement(_ args: [String], fail: (String) -> Int32) -> Int32 {
         print(matrix.text(), terminator: "")
     } catch {
         FileHandle.standardError.write(Data("companies agreement failed: \(error)\n".utf8))
+        return 1
+    }
+    return 0
+}
+
+/// the accuracy audit of the company classification against two independent references (OD13)
+func runAudit(_ args: [String], fail: (String) -> Int32) async -> Int32 {
+    var references: String?, report: String?, captures: String?, contradictionsOut: String?, domainsOut: String?
+    var i = 0
+    while i < args.count {
+        guard ["--references", "--report", "--captures", "--contradictions-out", "--domains-out"].contains(args[i]), i + 1 < args.count
+        else { return fail("bad argument: \(args[i])") }
+        switch args[i] {
+        case "--references": references = args[i + 1]
+        case "--report": report = args[i + 1]
+        case "--captures": captures = args[i + 1]
+        case "--contradictions-out": contradictionsOut = args[i + 1]
+        default: domainsOut = args[i + 1]
+        }
+        i += 2
+    }
+    guard let references else { return fail("audit needs --references <dir>") }
+    // the files hold real domain names: never inside a git work tree, checked before any work is done
+    for out in [contradictionsOut, domainsOut].compactMap({ $0 }) where FileOwnership.gitWorkTreeRoot(containing: out) != nil {
+        return fail("output files must point outside the git work tree: they hold real domain names")
+    }
+    do {
+        let dir = URL(fileURLWithPath: references, isDirectory: true)
+        var maps = ReferenceMaps()
+        if let data = try? Data(contentsOf: dir.appendingPathComponent("ddg-domain-map.json")) {
+            maps.entities = try ReferenceMaps.parseEntityMap(data)
+        }
+        if let text = try? String(contentsOf: dir.appendingPathComponent("cert-orgs.tsv"), encoding: .utf8) {
+            maps.certificates = ReferenceMaps.parseCertificateCache(text)
+        }
+        let classifier = CompanyClassifier()
+        let aliases = ReferenceAliases.loadBundled(appleOwners: classifier.appleOwners)
+
+        // our parent for a label: the curated parent, or Apple's owner string made comparable
+        func subject(_ label: CompanyLabel) -> AuditSubject? {
+            guard label.isMatched, let domain = label.registrableDomain, !isIPAddress(label.hostname) else { return nil }
+            guard let parent = label.parent ?? label.company.map(classifier.appleOwners.comparableParent(forOwner:)) else { return nil }
+            return AuditSubject(domain: domain, parent: parent, company: label.company, category: label.category)
+        }
+
+        var strata: [(name: String, subjects: [AuditSubject])] = []
+        strata.append(("curated list entries", classifier.curated.entries.compactMap { entry in
+            guard let domain = registrableDomain(of: entry.domain) else { return nil }
+            return AuditSubject(domain: domain, parent: entry.parent, company: entry.company, category: entry.category)
+        }))
+        var capturesSubjects: [AuditSubject] = [], reportSubjects: [AuditSubject] = []
+        if let captures {
+            let files = try FileManager.default.contentsOfDirectory(atPath: captures).filter { $0.hasSuffix(".pcapng") || $0.hasSuffix(".pcap") }.sorted()
+            for file in files {
+                let pipeline = CapturePipeline(store: nil, session: newSession(), retainFlows: true, retainDomains: true)
+                _ = try await pipeline.run(FilePacketSource(url: URL(fileURLWithPath: captures).appendingPathComponent(file)))
+                await pipeline.stop(reason: .captureStopped)
+                let flows = await pipeline.flowsSnapshot()
+                let index = HostnameIndex(await pipeline.domainsSnapshot(), flows: flows)
+                var cache = LabelCache(classifier: classifier)
+                for flow in flows where flow.key.remotePort == Coverage.port {
+                    // only a name seen in the connection itself counts, never a hint
+                    guard let result = FlowLabels.label(for: flow, index: index, cache: &cache), !result.isPossible,
+                          let found = subject(result.label) else { continue }
+                    capturesSubjects.append(found)
+                }
+            }
+        }
+        if let report {
+            for (domain, owner) in try ReportImporter.domainOwners(file: URL(fileURLWithPath: report)) {
+                if let found = subject(classifier.classify(hostname: domain, appleOwner: owner)) { reportSubjects.append(found) }
+            }
+        }
+        if captures != nil { strata.append(("capture confirmed names", capturesSubjects)) }
+        if report != nil { strata.append(("privacy report named domains", reportSubjects)) }
+        if captures != nil && report != nil { strata.append(("owner data together", capturesSubjects + reportSubjects)) }
+
+        var results: [AuditStratum] = [], allRows: [AuditRow] = [], allSubjects: [AuditSubject] = []
+        for (name, subjects) in strata {
+            let rows = Audit.rows(subjects, references: maps, aliases: aliases)
+            results.append(Audit.summarise(name: name, rows: rows))
+            allRows += rows
+            allSubjects += subjects
+        }
+        func writeLocal(_ path: String, _ lines: [String], what: String) throws -> Int32? {
+            // created 0600 from the first byte; refuses an existing file or a symlink
+            let handle: FileHandle
+            do { handle = try FileOwnership.openForWriting(path: path) } catch {
+                return fail("cannot create the \(what) file (it must be a new file): \(error)")
+            }
+            try handle.write(contentsOf: Data((lines.joined(separator: "\n") + "\n").utf8))
+            try handle.close()
+            return nil
+        }
+        if let domainsOut {
+            let domains = Audit.domains(allSubjects)
+            if let code = try writeLocal(domainsOut, domains, what: "--domains-out") { return code }
+            FileHandle.standardError.write(Data("wrote \(domains.count) domains to a local file\n".utf8))
+        }
+        if let contradictionsOut {
+            let lines = Audit.contradictionLines(allRows)
+            if let code = try writeLocal(contradictionsOut, lines, what: "--contradictions-out") { return code }
+            FileHandle.standardError.write(Data("wrote \(lines.count - 1) contradicted rows to a local file\n".utf8))
+        }
+        print(Audit.report(results), terminator: "")
+    } catch {
+        FileHandle.standardError.write(Data("companies audit failed: \(error)\n".utf8))
         return 1
     }
     return 0
