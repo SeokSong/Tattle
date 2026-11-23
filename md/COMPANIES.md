@@ -59,8 +59,9 @@
 - Every row has source `curated`. Rows are built from public knowledge of widely known companies only; they are never chosen from anyone's captures or reports. A domain whose owner is not certain is left out, not guessed
 - Load is strict: an unknown category, a duplicate key, a key that is not registrable (or not lowercase), an empty field or a wrong column count fails the whole load. The error names the line number only, never a value
 - Lookup ladder: the full hostname, then each parent suffix down to and including the registrable domain; the most specific row wins (`ads.example.com` can differ from `example.com`). Names are matched whole, never by substring. No match gives an explicit label with category `unclassified` and source `none`
-- Categories (raw value, label, meaning): `advertising` (Advertising), `analytics` (Analytics), `social` (Social media), `contentDelivery` (Content delivery: servers rented to deliver files and video), `cloudService` (Cloud or app service: behind-the-scenes infrastructure only, such as hosting, storage, payments, sign-in, APIs, certificates, email delivery used by other companies), `appleSystem` (Apple system), `onlineService` (Online service: a company's own product people use directly, such as video and music sites, games, email, office apps, maps, search; decision OD11), `unclassified` (Not matched). Only advertising and analytics count as advertising or tracking
-- A domain used both as a product and as an API stays `cloudService`; the generated review table lists every row so the owner can move it
+- Categories (raw value, label, meaning): `advertising` (Advertising), `analytics` (Analytics), `social` (Social media), `contentDelivery` (Content delivery: servers rented to deliver files and video), `cloudService` (Cloud or app service: behind-the-scenes infrastructure only, such as hosting, storage, payment gateways, sign-in, APIs, certificates, email delivery used by other companies), `appleSystem` (Apple system), `onlineService` (Online service: a company's own product people use directly, such as video and music sites, games, email, office apps, maps, search; decision OD11), `unclassified` (Not matched). Only advertising and analytics count as advertising or tracking
+- A domain used both as a product and as an API stays `cloudService`, except where the owner moved it; the generated review table lists every row so the owner can move it
+- Owner moves (2026-11-23, curated version 5): `google.com` and `microsoft.com` (the consumer sites) and `alipay.com` and `klarna.com` (payment services people use directly) are `onlineService`. Infrastructure domains such as `googleapis.com` and payment gateways such as `stripe.com` stay `cloudService`. Hostname rows keep the sign-in hosts `accounts.google.com` and `login.microsoft.com` in `cloudService` (curated version 6); any other host under the two domains takes the parent row's `onlineService`
 - API: `CompanyClassifier(curated:)` (immutable, `Sendable`). `classify(hostname:appleOwner:order:)` tries sources in `order` (provisional `[.curated, .appleOwner]`; precedence is decided later by the agreement experiment). `label(hostname:from:appleOwner:)` runs exactly one source and never looks at another. `labelsBySource(hostname:appleOwner:)` returns every source's answer for comparison
 - `CompanyLabel.source` says who answered (`curated`, `trackerList`, `appleOwner`, `none`); `rule` says which rung (`curatedHostname`, `curatedRegistrable`, `appleOwner`, `noMatch`); `datasetId` (`tattle-curated`), `datasetVersion` and `datasetSHA256` come from the manifest. The `appleOwner` source returns the report's owner string as `company` with no parent and category `unclassified`, because the report gives neither. `relation` is `unknown` until the app's company is known (see the app table section below)
 - To change the list: edit `curated.tsv`, run `scripts/build-curated.sh [version]` (refreshes the manifest hash, row count and the review table), run the tests. Bump the version when the content changes
@@ -123,6 +124,9 @@ Frozen again after OD14 and OD15. Before = curated version 3 (OD14 only, no oper
 - API (`AppTable`, in `Sources/Companies/AppIdentity.swift`; named `AppTable` because Storage already has an `AppIdentity` enum): `row(forBundleId:)`, `row(forProcessName:)`, `company(for:)` (a raw process name), `company(forBundleId:)`, `joinRate(bundleIds:)`, `joinRate(processNames:)`
 - `relation` (OD12): `AppTable.relation(appCompany:labelParent:)` gives `unknown` when the app's company is unknown or the label has no parent (an unmatched domain, or an Apple owner string), `sameCompanyAsApp` when the two parents are equal ignoring case, otherwise `other`. `CompanyLabel.relative(toAppCompany:)` applies it, and `FlowLabels.label(for:index:cache:appCompany:)` passes the company of the app that made the flow
 - Join rate: `tattle import-report <file> --join-rate [--unjoined-out <file>]` (nothing is stored) and `tattle apps coverage <capture> [--unmatched-out <file>]` print counts only; the id lists go to a local mode 600 file outside the work tree
+- Join-rate floor: the local report test fails when the table joins under 65% of the report's distinct bundle ids (owner decision 2026-11-23, just under the rate measured then). Raise it as the table grows
+- Owner decisions on process names (2026-11-23, app table version 2): `Maps`, `Music`, `News`, `Weather` and `MobileSlideShow` are Apple's built-in apps and stay mapped to Apple: they ship on every iPhone, and a third-party app is not known to use those exact executable names (if one does, it is counted as Apple; a known limit). TikTok and Threads have no process name, so they are matched only by bundle id (a report), never by a capture's process name, because other apps could use the same name
+- Apple system processes (owner decision 2026-11-23, planned for the summary builder in 3.1, not built yet): a capture flow in the `system` traffic category (iOS system) will use Apple as the app's company, so Apple servers it contacts are `sameCompanyAsApp`. The app table will not be used for this, because Companies does not depend on Attribution. Until 3.1, `relation` stays `unknown` for those flows. A report bundle id under `com.apple.` already joins to Apple through the prefix row
 - The table is a starting set. Capture names are mostly system daemons, which are not apps and are not in the table
 
 ## Source precedence and the agreement matrix (Problem 1.7)
@@ -193,18 +197,21 @@ Command: `tattle companies audit --references <dir> [--report <file>] [--capture
 
 "Our company names agree with at least one of two independent sources on X% of the domains where a source gave an answer; every contradiction is checked by hand." It is not a measure of the category, and a confirmed row is only as good as the references: a reference can be wrong or out of date, and a certificate organisation can name the host rather than the site, which is why contradictions are read by the owner and not counted as errors until then. The bound is an upper limit on the contradiction rate, not on the error rate.
 
-### Measured (2026-11-22, numbers only)
+### Measured (2026-11-23, numbers only)
+
+After the owner's review of the contradictions: 20 public company names were added to `reference-aliases.tsv` (former names, legal names and group companies of a curated parent), and four curated rows changed category (curated version 5; categories are not audited, so this does not change the numbers). Before (2026-11-22): curated 92.4% agreement, 28 contradicted.
 
 Entity map: 38371 domains. Certificates: 27% of the fetched domains had an organisation, 51% had none and 21% failed.
 
 | Stratum | n | Confirmed | Contradicted | Unverifiable | Agreement among verifiable | 95% upper bound of contradiction rate |
 |---|---|---|---|---|---|---|
-| Curated list entries | 385 | 339 | 28 | 18 | 92.4% | 10.3% |
+| Curated list entries | 385 | 365 | 2 | 18 | 99.5% | 1.7% |
 | Capture confirmed names (six captures) | 32 | 32 | 0 | 0 | 100.0% | 8.9% |
-| App Privacy Report named domains | – | – | – | – | 98.7% | 4.0% |
-| Owner data together | – | – | – | – | 98.7% | 4.0% |
+| App Privacy Report named domains | – | – | – | – | 100.0% | under 5% |
+| Owner data together | – | – | – | – | 100.0% | under 5% |
 
-- Counts are not published for the owner's report (–): rates only
-- Of the confirmed rows, both references agreed on 72 curated rows, 14 capture rows and 24% of the report rows; 34 curated rows, no capture rows and 3% of the report rows were confirmed while the other reference named a different company
-- 28 distinct contradicted rows go to the owner for a decision by hand. Until they are decided, the contradiction rates above are upper estimates of disagreement, not of error
+- Counts are not published for the owner's report (–): rates only. Its upper bound is given only as "under 5%", because an exact bound with zero contradictions gives away the number of rows
+- Of the confirmed rows, both references agreed on 79 curated rows and 14 capture rows; 32 curated rows and no capture rows were confirmed while the other reference named a different company
+- The 2 remaining contradictions were reviewed by the owner and kept: the brand is listed as its own parent, while the reference names a part owner (owner decision 2026-11-23). They stay counted as contradictions
+- Owner rule (2026-11-23): show the brand, count the parent. A brand whose parent fully owns it (YouTube, Hulu, Blizzard) is counted as the parent; a separately listed company that another company only partly owns keeps its own name
 - The owner-data strata have too few distinct rows for the bound to be under 5% in the captures (0 of 32 gives 8.9%)
