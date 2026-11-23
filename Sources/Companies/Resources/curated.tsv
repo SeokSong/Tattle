@@ -14,6 +14,7 @@ googletagmanager.com	Google Tag Manager	Alphabet	analytics	documented analytics 
 app-measurement.com	Google Analytics for Firebase	Alphabet	analytics	documented analytics service
 crashlytics.com	Firebase Crashlytics	Alphabet	analytics	documented analytics service
 google.com	Google	Alphabet	onlineService	company's own domain
+accounts.google.com	Google	Alphabet	cloudService	hostname of the company's own sign-in service
 gstatic.com	Google	Alphabet	contentDelivery	company's own delivery network domain
 googleusercontent.com	Google	Alphabet	contentDelivery	company's own delivery network domain
 googlevideo.com	YouTube	Alphabet	contentDelivery	company's own delivery network domain
@@ -54,6 +55,7 @@ twitch.tv	Twitch	Amazon	social	company's own domain
 ttvnw.net	Twitch	Amazon	contentDelivery	company's own delivery network domain
 jtvnw.net	Twitch	Amazon	contentDelivery	company's own delivery network domain
 microsoft.com	Microsoft	Microsoft	onlineService	company's own domain
+login.microsoft.com	Microsoft	Microsoft	cloudService	hostname of the company's own sign-in service
 microsoftonline.com	Microsoft	Microsoft	cloudService	company's own domain
 live.com	Microsoft	Microsoft	cloudService	company's own domain
 office.com	Microsoft 365	Microsoft	onlineService	company's own domain

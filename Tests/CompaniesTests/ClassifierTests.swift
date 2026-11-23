@@ -42,6 +42,10 @@ private func classifier(_ rows: String...) throws -> CompanyClassifier {
     let c = CompanyClassifier()
     #expect(c.classify(hostname: "analytics.google.com").category == .analytics)
     #expect(c.classify(hostname: "mail.google.com").category == .onlineService)  // google.com is an online service (owner, 2026-11-23)
+    // sign-in hosts stay infrastructure under the online-service parent row (owner, 2026-11-23)
+    #expect(c.classify(hostname: "accounts.google.com").category == .cloudService)
+    #expect(c.classify(hostname: "login.microsoft.com").category == .cloudService)
+    #expect(c.classify(hostname: "www.microsoft.com").category == .onlineService)
     #expect(c.classify(hostname: "iadsdk.apple.com").category == .advertising)
     #expect(c.classify(hostname: "gsp-ssl.ls.apple.com").category == .appleSystem)
 }

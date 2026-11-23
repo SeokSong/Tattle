@@ -13,18 +13,6 @@
       "rules": 10469
     },
     {
-      "name": "Tattle curated company list",
-      "file": "curated.tsv",
-      "version": "5",
-      "commit": "",
-      "sourceURL": "",
-      "licence": "MIT (own data, public knowledge)",
-      "fetched": "2026-11-23",
-      "sha256": "0ea18919c679936ad8f3afd6cd9206a3a8c81750b7460dc3dda04a6fc99e24e7",
-      "sourceSHA256": "0ea18919c679936ad8f3afd6cd9206a3a8c81750b7460dc3dda04a6fc99e24e7",
-      "rules": 401
-    },
-    {
       "name": "Tattle source precedence table",
       "file": "precedence.tsv",
       "version": "1",
@@ -71,6 +59,18 @@
       "sha256": "ad36b0e5a830f9380d4f376e16df850da223ead3544b788bacf778fe4217e50a",
       "sourceSHA256": "ad36b0e5a830f9380d4f376e16df850da223ead3544b788bacf778fe4217e50a",
       "rules": 79
+    },
+    {
+      "name": "Tattle curated company list",
+      "file": "curated.tsv",
+      "version": "6",
+      "commit": "",
+      "sourceURL": "",
+      "licence": "MIT (own data, public knowledge)",
+      "fetched": "2026-11-23",
+      "sha256": "9e2f044428579437e4a3a1f9768f1c105ca680817760deb8a323a5b9db536080",
+      "sourceSHA256": "9e2f044428579437e4a3a1f9768f1c105ca680817760deb8a323a5b9db536080",
+      "rules": 403
     }
   ]
 }
