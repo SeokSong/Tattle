@@ -15,7 +15,7 @@ let reportJoinRateFloor = 0.65
     let ids = try ReportImporter.appIds(file: url)
     let rate = AppTable.bundled.joinRate(bundleIds: ids)
     print("app table coverage (local): report bundle ids joined \(rate.joined) of \(rate.total), table rows \(AppTable.bundled.count)")
-    #expect(rate.total > 0)
+    try #require(rate.total > 0)
     #expect(rate.joined + rate.notJoined.count == rate.total)
     let share = Double(rate.joined) / Double(rate.total)
     #expect(share >= reportJoinRateFloor, "report join rate \(String(format: "%.3f", share)) is under the floor \(reportJoinRateFloor)")

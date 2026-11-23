@@ -126,7 +126,7 @@ Frozen again after OD14 and OD15. Before = curated version 3 (OD14 only, no oper
 - Join rate: `tattle import-report <file> --join-rate [--unjoined-out <file>]` (nothing is stored) and `tattle apps coverage <capture> [--unmatched-out <file>]` print counts only; the id lists go to a local mode 600 file outside the work tree
 - Join-rate floor: the local report test fails when the table joins under 65% of the report's distinct bundle ids (owner decision 2026-11-23, just under the rate measured then). Raise it as the table grows
 - Owner decisions on process names (2026-11-23, app table version 2): `Maps`, `Music`, `News`, `Weather` and `MobileSlideShow` are Apple's built-in apps and stay mapped to Apple. TikTok and Threads have no process name, so they are matched only by bundle id (a report), never by a capture's process name, because other apps could use the same name
-- Apple system processes (owner decision 2026-11-23): a capture flow in the `system` traffic category (iOS system) uses Apple as the app's company, so Apple servers it contacts are `sameCompanyAsApp`. The app table is not used for this; the summary builder (3.1) applies it from the traffic category, because Companies does not depend on Attribution. A report bundle id under `com.apple.` already joins to Apple through the prefix row
+- Apple system processes (owner decision 2026-11-23, planned for the summary builder in 3.1, not built yet): a capture flow in the `system` traffic category (iOS system) will use Apple as the app's company, so Apple servers it contacts are `sameCompanyAsApp`. The app table will not be used for this, because Companies does not depend on Attribution. Until 3.1, `relation` stays `unknown` for those flows. A report bundle id under `com.apple.` already joins to Apple through the prefix row
 - The table is a starting set. Capture names are mostly system daemons, which are not apps and are not in the table
 
 ## Source precedence and the agreement matrix (Problem 1.7)
@@ -199,7 +199,7 @@ Command: `tattle companies audit --references <dir> [--report <file>] [--capture
 
 ### Measured (2026-11-23, numbers only)
 
-After the owner's review of the contradictions: 20 public company names were added to `reference-aliases.tsv` (former names, legal names and group companies of a curated parent), and four curated rows changed category (curated version 5; categories are not audited, so this does not change the numbers). Before (2026-11-22): curated 92.4% agreement, 28 contradicted; owner data 98.7%, upper bound 4.0%.
+After the owner's review of the contradictions: 20 public company names were added to `reference-aliases.tsv` (former names, legal names and group companies of a curated parent), and four curated rows changed category (curated version 5; categories are not audited, so this does not change the numbers). Before (2026-11-22): curated 92.4% agreement, 28 contradicted.
 
 Entity map: 38371 domains. Certificates: 27% of the fetched domains had an organisation, 51% had none and 21% failed.
 
@@ -207,10 +207,10 @@ Entity map: 38371 domains. Certificates: 27% of the fetched domains had an organ
 |---|---|---|---|---|---|---|
 | Curated list entries | 385 | 365 | 2 | 18 | 99.5% | 1.7% |
 | Capture confirmed names (six captures) | 32 | 32 | 0 | 0 | 100.0% | 8.9% |
-| App Privacy Report named domains | – | – | – | – | 100.0% | 2.0% |
-| Owner data together | – | – | – | – | 100.0% | 2.0% |
+| App Privacy Report named domains | – | – | – | – | 100.0% | under 5% |
+| Owner data together | – | – | – | – | 100.0% | under 5% |
 
-- Counts are not published for the owner's report (–): rates only
+- Counts are not published for the owner's report (–): rates only. Its upper bound is given only as "under 5%", because an exact bound with zero contradictions gives away the number of rows
 - Of the confirmed rows, both references agreed on 79 curated rows and 14 capture rows; 32 curated rows and no capture rows were confirmed while the other reference named a different company
 - The 2 remaining contradictions were reviewed by the owner and kept: the brand is listed as its own parent, while the reference names a part owner (owner decision 2026-11-23). They stay counted as contradictions
 - Owner rule (2026-11-23): show the brand, count the parent. A brand whose parent fully owns it (YouTube, Hulu, Blizzard) is counted as the parent; a separately listed company that another company only partly owns keeps its own name
