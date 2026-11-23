@@ -13,7 +13,7 @@ analytics.google.com	Google Analytics	Alphabet	analytics	hostname of the company
 googletagmanager.com	Google Tag Manager	Alphabet	analytics	documented analytics service
 app-measurement.com	Google Analytics for Firebase	Alphabet	analytics	documented analytics service
 crashlytics.com	Firebase Crashlytics	Alphabet	analytics	documented analytics service
-google.com	Google	Alphabet	cloudService	company's own domain
+google.com	Google	Alphabet	onlineService	company's own domain
 gstatic.com	Google	Alphabet	contentDelivery	company's own delivery network domain
 googleusercontent.com	Google	Alphabet	contentDelivery	company's own delivery network domain
 googlevideo.com	YouTube	Alphabet	contentDelivery	company's own delivery network domain
@@ -53,7 +53,7 @@ amazontrust.com	Amazon Trust Services	Amazon	cloudService	company's own domain
 twitch.tv	Twitch	Amazon	social	company's own domain
 ttvnw.net	Twitch	Amazon	contentDelivery	company's own delivery network domain
 jtvnw.net	Twitch	Amazon	contentDelivery	company's own delivery network domain
-microsoft.com	Microsoft	Microsoft	cloudService	company's own domain
+microsoft.com	Microsoft	Microsoft	onlineService	company's own domain
 microsoftonline.com	Microsoft	Microsoft	cloudService	company's own domain
 live.com	Microsoft	Microsoft	cloudService	company's own domain
 office.com	Microsoft 365	Microsoft	onlineService	company's own domain
@@ -212,7 +212,7 @@ aliyun.com	Alibaba Cloud	Alibaba	cloudService	company's own domain
 aliyuncs.com	Alibaba Cloud	Alibaba	cloudService	company's own domain
 taobao.com	Taobao	Alibaba	onlineService	company's own domain
 tmall.com	Tmall	Alibaba	onlineService	company's own domain
-alipay.com	Alipay	Ant Group	cloudService	company's own domain
+alipay.com	Alipay	Ant Group	onlineService	company's own domain
 umeng.com	Umeng	Alibaba	analytics	documented analytics service
 yahoo.com	Yahoo	Yahoo	onlineService	company's own domain
 yimg.com	Yahoo	Yahoo	contentDelivery	company's own delivery network domain
@@ -377,7 +377,7 @@ braintreegateway.com	Braintree	PayPal	cloudService	company's own domain
 stripe.com	Stripe	Stripe	cloudService	company's own domain
 adyen.com	Adyen	Adyen	cloudService	company's own domain
 squareup.com	Square	Block	cloudService	company's own domain
-klarna.com	Klarna	Klarna	cloudService	company's own domain
+klarna.com	Klarna	Klarna	onlineService	company's own domain
 plaid.com	Plaid	Plaid	cloudService	company's own domain
 twilio.com	Twilio	Twilio	cloudService	company's own domain
 sendgrid.net	SendGrid	Twilio	cloudService	company's own domain

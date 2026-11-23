@@ -15,26 +15,14 @@
     {
       "name": "Tattle curated company list",
       "file": "curated.tsv",
-      "version": "4",
+      "version": "5",
       "commit": "",
       "sourceURL": "",
       "licence": "MIT (own data, public knowledge)",
-      "fetched": "2026-11-22",
-      "sha256": "3350dbee0beee132400d007966c83e6aa670d4032b5b462eccd5fd9995b6f72e",
-      "sourceSHA256": "3350dbee0beee132400d007966c83e6aa670d4032b5b462eccd5fd9995b6f72e",
+      "fetched": "2026-11-23",
+      "sha256": "0ea18919c679936ad8f3afd6cd9206a3a8c81750b7460dc3dda04a6fc99e24e7",
+      "sourceSHA256": "0ea18919c679936ad8f3afd6cd9206a3a8c81750b7460dc3dda04a6fc99e24e7",
       "rules": 401
-    },
-    {
-      "name": "Tattle app table",
-      "file": "apps.tsv",
-      "version": "1",
-      "commit": "",
-      "sourceURL": "",
-      "licence": "MIT (own data, public knowledge)",
-      "fetched": "2026-11-22",
-      "sha256": "0c6a7b21fb8728a9b2729d016d8c4750119914dbf52bcd5d76e335a9d7d51228",
-      "sourceSHA256": "0c6a7b21fb8728a9b2729d016d8c4750119914dbf52bcd5d76e335a9d7d51228",
-      "rules": 79
     },
     {
       "name": "Tattle source precedence table",
@@ -43,7 +31,7 @@
       "commit": "",
       "sourceURL": "",
       "licence": "MIT (own data, public knowledge)",
-      "fetched": "2026-11-22",
+      "fetched": "2026-11-23",
       "sha256": "9741728ed4328dfb40a8339077c6cd37c60f65ac12debbbd0a8361e0d1d427c3",
       "sourceSHA256": "9741728ed4328dfb40a8339077c6cd37c60f65ac12debbbd0a8361e0d1d427c3",
       "rules": 2
@@ -55,7 +43,7 @@
       "commit": "",
       "sourceURL": "",
       "licence": "MIT (own data, public knowledge)",
-      "fetched": "2026-11-22",
+      "fetched": "2026-11-23",
       "sha256": "db93b12ef6603b336ed66c6bd6883657eea1bc09e095e1fb80484a1ad1fe87a2",
       "sourceSHA256": "db93b12ef6603b336ed66c6bd6883657eea1bc09e095e1fb80484a1ad1fe87a2",
       "rules": 36
@@ -67,10 +55,22 @@
       "commit": "",
       "sourceURL": "",
       "licence": "MIT (own data, public knowledge)",
-      "fetched": "2026-11-22",
-      "sha256": "38ffb6efd9145591aa208b04ba127c4e561fbb3431f51ea405b8101c5c4fc145",
-      "sourceSHA256": "38ffb6efd9145591aa208b04ba127c4e561fbb3431f51ea405b8101c5c4fc145",
-      "rules": 9
+      "fetched": "2026-11-23",
+      "sha256": "a45828d55c84f24b8a1a33db76e922921785a7dbb1edc08b9b1b9670fb0ef7b3",
+      "sourceSHA256": "a45828d55c84f24b8a1a33db76e922921785a7dbb1edc08b9b1b9670fb0ef7b3",
+      "rules": 29
+    },
+    {
+      "name": "Tattle app table",
+      "file": "apps.tsv",
+      "version": "2",
+      "commit": "",
+      "sourceURL": "",
+      "licence": "MIT (own data, public knowledge)",
+      "fetched": "2026-11-23",
+      "sha256": "ad36b0e5a830f9380d4f376e16df850da223ead3544b788bacf778fe4217e50a",
+      "sourceSHA256": "ad36b0e5a830f9380d4f376e16df850da223ead3544b788bacf778fe4217e50a",
+      "rules": 79
     }
   ]
 }
