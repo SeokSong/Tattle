@@ -95,6 +95,8 @@ final class Database {
             sqlite3_close_v2(handle)
             throw e
         }
+        // wait for another writer instead of failing with SQLITE_BUSY
+        sqlite3_busy_timeout(handle, 5000)
     }
 
     deinit {

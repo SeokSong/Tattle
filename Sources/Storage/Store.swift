@@ -164,6 +164,8 @@ public final class Store {
         if exists {
             guard let found = try schemaVersionValue() else { throw StorageError.invalidData("schema version") }
             if found > schemaVersion { throw StorageError.newerSchema(found: found, supported: schemaVersion) }
+            // already current: no write transaction, so a second process opening the file never contends
+            if found == schemaVersion { return }
         }
         try db.transaction {
             var version = 1

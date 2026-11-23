@@ -196,7 +196,7 @@ extension Store {
     /// removes one import by its file hash (contacts cascade). false when none matched
     @discardableResult
     public func deleteImport(sha256: String) throws -> Bool {
-        try db.transaction {
+        let removed = try db.transaction {
             let st = try db.statement("delete from report_import where file_sha256 = ?")
             st.bind(1, sha256)
             try st.run()
@@ -206,6 +206,9 @@ extension Store {
             n.reset()
             return changed > 0
         }
+        // secure_delete overwrites freed pages; truncating the wal removes its copies of them
+        if removed { try db.exec("pragma wal_checkpoint(TRUNCATE)") }
+        return removed
     }
 
     private var contactSelect: String {
