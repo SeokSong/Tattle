@@ -1,5 +1,6 @@
 import Attribution
 import Capture
+import Combine
 import Domains
 import Flows
 import Foundation
@@ -81,7 +82,9 @@ final class AppModel: ObservableObject {
 
     @Published var selection: SidebarItem = .connect
     @Published var deviceStatus: DeviceStatus?
-    @Published var captureState: CaptureState = .idle
+    @Published var captureState: CaptureState = .idle {
+        didSet { importModel.captureBusy = isBusy }
+    }
     @Published var showAccess = false
     @Published var liveStats = PipelineStats()
     @Published var liveFlows: [Flow] = []
@@ -108,6 +111,7 @@ final class AppModel: ObservableObject {
     /// the App Privacy Report import screen and list; views observe it directly
     let importModel: ImportModel
 
+    private var importChange: AnyCancellable?
     private let storePath: URL
     private var store: Store?
     private var wiredDevice: DeviceSummary?
@@ -126,6 +130,8 @@ final class AppModel: ObservableObject {
         importModel = ImportModel(storePath: storePath)
         let saved = UserDefaults.standard.integer(forKey: Self.retentionKey)
         retentionDays = Self.retentionChoices.contains(saved) ? saved : 7
+        // views of this model (Settings) also show whether an import is running
+        importChange = importModel.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         do {
             let opened = try Store(path: storePath)
             store = opened
@@ -437,8 +443,11 @@ final class AppModel: ObservableObject {
         importModel.refresh()
     }
 
+    /// why Delete all data is off, or nil
+    var deleteAllUnavailableReason: String? { importModel.deleteAllUnavailableReason(captureBusy: isBusy) }
+
     func deleteAll() {
-        guard !isBusy else { return }
+        guard deleteAllUnavailableReason == nil else { return }
         DiagnosticFiles.purgeAll(in: diagnosticDirectory)
         do {
             try store?.deleteAll()

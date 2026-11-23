@@ -68,6 +68,9 @@ final class ImportModel: ObservableObject {
     @Published private(set) var items: [ImportItem] = []
     @Published var listError: String?
 
+    /// set by the app model: true while a capture is starting, running or saving. an import then waits
+    @Published var captureBusy = false
+
     private let storePath: URL
     private let runner: Runner
     let timeZone: TimeZone
@@ -82,6 +85,19 @@ final class ImportModel: ObservableObject {
     }
 
     var isRunning: Bool { state == .running }
+
+    /// why the Import action is off, or nil when it is on
+    var importUnavailableReason: String? {
+        captureBusy ? "Import is unavailable while a capture is running." : nil
+    }
+
+    /// why Delete all data is off, or nil when it is on. an import task that is in flight would store its
+    /// result after the delete, so the two never overlap: this is the one place that enforces it
+    func deleteAllUnavailableReason(captureBusy: Bool) -> String? {
+        if captureBusy { return "Delete all data is unavailable while a capture is running." }
+        if isRunning { return "Wait for the import to finish." }
+        return nil
+    }
 
     // MARK: import
 
@@ -98,7 +114,7 @@ final class ImportModel: ObservableObject {
     }
 
     private func begin() -> Bool {
-        guard !isRunning else { return false }
+        guard !isRunning, importUnavailableReason == nil else { return false }
         state = .running
         return true
     }

@@ -182,3 +182,35 @@ private final class Probe: @unchecked Sendable {
     #expect(probe.all.count == 1)
     #expect(cardOf(m.state)?.kind == .stored)
 }
+
+@MainActor @Test func importIsOffWhileACaptureIsBusy() async throws {
+    let dir = tempDir()
+    let m = model(dir)
+    m.captureBusy = true
+    #expect(m.importUnavailableReason == "Import is unavailable while a capture is running.")
+    await m.runImport(file: try write(sample, in: dir))
+    #expect(m.state == .idle && m.items.isEmpty)
+    m.captureBusy = false
+    #expect(m.importUnavailableReason == nil)
+    await m.runImport(file: try write(sample, in: dir))
+    #expect(m.items.count == 1)
+}
+
+@MainActor @Test func deleteAllWaitsForARunningImport() async throws {
+    let dir = tempDir()
+    let gate = DispatchSemaphore(value: 0)
+    let m = model(dir) { url in
+        gate.wait()
+        return try ImportModel.defaultRun(file: url, storePath: dir.appendingPathComponent("db.sqlite"))
+    }
+    #expect(m.deleteAllUnavailableReason(captureBusy: false) == nil)
+    #expect(m.deleteAllUnavailableReason(captureBusy: true) == "Delete all data is unavailable while a capture is running.")
+    let file = try write(sample, in: dir)
+    m.start(file: file)
+    #expect(m.isRunning)
+    #expect(m.deleteAllUnavailableReason(captureBusy: false) == "Wait for the import to finish.")
+    gate.signal()
+    while m.isRunning { await Task.yield() }
+    #expect(m.items.count == 1)
+    #expect(m.deleteAllUnavailableReason(captureBusy: false) == nil)
+}

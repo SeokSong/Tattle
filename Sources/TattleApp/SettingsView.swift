@@ -19,8 +19,11 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 320)
-                Button("Delete all sessions...", role: .destructive) { confirmDelete = true }
-                    .disabled(model.isBusy)
+                Button("Delete all data...", role: .destructive) { confirmDelete = true }
+                    .disabled(model.deleteAllUnavailableReason != nil)
+                if let reason = model.deleteAllUnavailableReason {
+                    Text(reason).font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section("Imported reports") {
                 Text(ImportText.retention(days: model.retentionDays)).font(.caption).foregroundStyle(.secondary)
@@ -38,11 +41,11 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .sheet(isPresented: $showAbout) { AboutView() }
-        .confirmationDialog("Delete all sessions?", isPresented: $confirmDelete) {
+        .confirmationDialog("Delete all data?", isPresented: $confirmDelete) {
             Button("Delete all", role: .destructive) { model.deleteAll() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes every stored flow and domain, and any saved raw packet files. It cannot be undone.")
+            Text("This deletes all capture sessions and every imported App Privacy Report, and any saved raw packet files. It cannot be undone.")
         }
     }
 }

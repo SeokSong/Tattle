@@ -18,11 +18,15 @@ struct ImportView: View {
 
                 HStack(spacing: 10) {
                     Button("Choose report file...") { choose() }
-                        .disabled(model.isRunning)
+                        .disabled(model.isRunning || model.importUnavailableReason != nil)
                     if model.isRunning {
                         ProgressView().controlSize(.small)
                         Text("Reading the report...").foregroundStyle(.secondary)
                     }
+                }
+
+                if let reason = model.importUnavailableReason {
+                    Text(reason).font(.callout).foregroundStyle(.secondary)
                 }
 
                 switch model.state {
