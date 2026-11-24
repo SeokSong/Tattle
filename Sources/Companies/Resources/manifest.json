@@ -13,42 +13,6 @@
       "rules": 10469
     },
     {
-      "name": "Tattle source precedence table",
-      "file": "precedence.tsv",
-      "version": "1",
-      "commit": "",
-      "sourceURL": "",
-      "licence": "MIT (own data, public knowledge)",
-      "fetched": "2026-11-23",
-      "sha256": "9741728ed4328dfb40a8339077c6cd37c60f65ac12debbbd0a8361e0d1d427c3",
-      "sourceSHA256": "9741728ed4328dfb40a8339077c6cd37c60f65ac12debbbd0a8361e0d1d427c3",
-      "rules": 2
-    },
-    {
-      "name": "Tattle Apple owner aliases",
-      "file": "apple-owner-aliases.tsv",
-      "version": "1",
-      "commit": "",
-      "sourceURL": "",
-      "licence": "MIT (own data, public knowledge)",
-      "fetched": "2026-11-23",
-      "sha256": "db93b12ef6603b336ed66c6bd6883657eea1bc09e095e1fb80484a1ad1fe87a2",
-      "sourceSHA256": "db93b12ef6603b336ed66c6bd6883657eea1bc09e095e1fb80484a1ad1fe87a2",
-      "rules": 36
-    },
-    {
-      "name": "Tattle audit reference aliases",
-      "file": "reference-aliases.tsv",
-      "version": "1",
-      "commit": "",
-      "sourceURL": "",
-      "licence": "MIT (own data, public knowledge)",
-      "fetched": "2026-11-23",
-      "sha256": "a45828d55c84f24b8a1a33db76e922921785a7dbb1edc08b9b1b9670fb0ef7b3",
-      "sourceSHA256": "a45828d55c84f24b8a1a33db76e922921785a7dbb1edc08b9b1b9670fb0ef7b3",
-      "rules": 29
-    },
-    {
       "name": "Tattle app table",
       "file": "apps.tsv",
       "version": "2",
@@ -71,6 +35,78 @@
       "sha256": "9e2f044428579437e4a3a1f9768f1c105ca680817760deb8a323a5b9db536080",
       "sourceSHA256": "9e2f044428579437e4a3a1f9768f1c105ca680817760deb8a323a5b9db536080",
       "rules": 403
+    },
+    {
+      "name": "AdGuard companiesdb tracker list",
+      "file": "tracker/tracker.tsv",
+      "version": "2026-11-23",
+      "commit": "5e8e0ca41b1509d1c6081add15942b078ee692f4",
+      "sourceURL": "https://github.com/AdguardTeam/companiesdb",
+      "licence": "CC-BY-SA-4.0",
+      "fetched": "2026-11-23",
+      "sha256": "68be165a19bdeb5893f1313236a64d157471d156548c9051003bfc25ea3f6500",
+      "sourceSHA256": "dc0c321e1483080fdbdffc8ee5ac4e3ba30795ceca4fac88b066ca6553a608dc",
+      "rules": 5126
+    },
+    {
+      "name": "Tattle source precedence table",
+      "file": "precedence.tsv",
+      "version": "1",
+      "commit": "",
+      "sourceURL": "",
+      "licence": "MIT (own data, public knowledge)",
+      "fetched": "2026-11-24",
+      "sha256": "9741728ed4328dfb40a8339077c6cd37c60f65ac12debbbd0a8361e0d1d427c3",
+      "sourceSHA256": "9741728ed4328dfb40a8339077c6cd37c60f65ac12debbbd0a8361e0d1d427c3",
+      "rules": 2
+    },
+    {
+      "name": "Tattle Apple owner aliases",
+      "file": "apple-owner-aliases.tsv",
+      "version": "1",
+      "commit": "",
+      "sourceURL": "",
+      "licence": "MIT (own data, public knowledge)",
+      "fetched": "2026-11-24",
+      "sha256": "db93b12ef6603b336ed66c6bd6883657eea1bc09e095e1fb80484a1ad1fe87a2",
+      "sourceSHA256": "db93b12ef6603b336ed66c6bd6883657eea1bc09e095e1fb80484a1ad1fe87a2",
+      "rules": 36
+    },
+    {
+      "name": "Tattle audit reference aliases",
+      "file": "reference-aliases.tsv",
+      "version": "1",
+      "commit": "",
+      "sourceURL": "",
+      "licence": "MIT (own data, public knowledge)",
+      "fetched": "2026-11-24",
+      "sha256": "a45828d55c84f24b8a1a33db76e922921785a7dbb1edc08b9b1b9670fb0ef7b3",
+      "sourceSHA256": "a45828d55c84f24b8a1a33db76e922921785a7dbb1edc08b9b1b9670fb0ef7b3",
+      "rules": 29
+    },
+    {
+      "name": "Tattle tracker category map",
+      "file": "tracker-categories.tsv",
+      "version": "1",
+      "commit": "",
+      "sourceURL": "",
+      "licence": "MIT (own data, public knowledge)",
+      "fetched": "2026-11-24",
+      "sha256": "c37640dff4573ccfc12afcc211560c1f963831f4e2c77655512590d0d085492f",
+      "sourceSHA256": "c37640dff4573ccfc12afcc211560c1f963831f4e2c77655512590d0d085492f",
+      "rules": 17
+    },
+    {
+      "name": "Tattle tracker owner aliases",
+      "file": "tracker-owner-aliases.tsv",
+      "version": "1",
+      "commit": "",
+      "sourceURL": "",
+      "licence": "MIT (own data, public knowledge)",
+      "fetched": "2026-11-24",
+      "sha256": "5fc00319208c96539e23346e3e5570d4074bddc940f46af0132fb062c64af03f",
+      "sourceSHA256": "5fc00319208c96539e23346e3e5570d4074bddc940f46af0132fb062c64af03f",
+      "rules": 46
     }
   ]
 }
