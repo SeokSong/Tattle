@@ -38,6 +38,16 @@ public enum ReportSummaryCorpus {
         public let hits: Int
         public let firstSeen: Date
         public let lastSeen: Date
+
+        public init(importId: String, appId: String, domain: String, domainOwner: String?, hits: Int, firstSeen: Date, lastSeen: Date) {
+            self.importId = importId
+            self.appId = appId
+            self.domain = domain
+            self.domainOwner = domainOwner
+            self.hits = hits
+            self.firstSeen = firstSeen
+            self.lastSeen = lastSeen
+        }
     }
 
     public static let curatedTSV = [
@@ -97,7 +107,7 @@ public enum ReportSummaryCorpus {
 
     /// the hand-worked answers: domains are distinct per entry; contacts are Apple's hit counts, summed
     public enum Expected {
-        /// non-Apple apps, sorted by name (fixed locale, case-insensitive): "com.example.unjoined" before "Zappy"
+        /// non-Apple apps, sorted by name (non-localized, case-insensitive): "com.example.unjoined" before "Zappy"
         public static let appKeys = [unjoined, zappy]
 
         public enum Zappy {

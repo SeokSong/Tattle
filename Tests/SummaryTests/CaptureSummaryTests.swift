@@ -150,9 +150,20 @@ private func asTraffic(_ t: (connections: Int, bytes: Int)) -> TrafficCount {
 }
 
 @Test func appOrderIgnoresCase() throws {
-    // a lower-case name must not sort after every capitalised one (Foundation ignores .caseInsensitive with the
-    // en_US_POSIX locale, which an earlier version used)
-    let names = ["Zappy", "bobber", "Quill"]
-    let sorted = names.sorted { $0.compare($1, options: [.caseInsensitive, .numeric]) == .orderedAscending }
-    #expect(sorted == ["bobber", "Quill", "Zappy"])
+    // a lower-case app name must not sort after every capitalised one (Foundation ignores .caseInsensitive with
+    // the en_US_POSIX locale, which an earlier version used). runs the builder, not a local sort
+    let t0 = SummaryCorpus.t0
+    func flow(_ n: UInt32, _ process: String) -> Flow {
+        let key = FlowKey(transport: .tcp, localAddress: .v4(0xCB00_7102), localPort: UInt16(40000 + n),
+                          remoteAddress: .v4(0xC000_0200 + n), remotePort: 443)
+        var f = Flow(key: key, interface: "en0", at: t0)
+        f.serverName = "cdn.test"
+        f.ipBytesIn = 10
+        f.tally[ProcessPair(process, n, nil, nil)] = 3
+        return f
+    }
+    let flows = [flow(1, "Zappyy"), flow(2, "bobberx"), flow(3, "Quillx")]
+    let s = SummaryBuilder.build(flows: flows, index: HostnameIndex([], flows: flows),
+        apps: try AppTable(parsing: "bundleId\tdisplayName\tprocessName\tcompany\tnote\n"))
+    #expect(s.apps.map(\.name) == ["bobberx", "Quillx", "Zappyy"])
 }

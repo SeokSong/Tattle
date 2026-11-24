@@ -152,3 +152,74 @@ private func asCount(_ t: (domains: Int, contacts: Int)) -> DomainCount {
     #expect(s.apps.isEmpty)
     #expect(s.appleApps == nil)
 }
+
+private func row(_ app: String, _ domain: String, _ owner: String? = nil, _ hits: Int) -> ReportSummaryCorpus.Row {
+    ReportSummaryCorpus.Row(importId: "imp1", appId: app, domain: domain, domainOwner: owner, hits: hits,
+        firstSeen: ReportSummaryCorpus.t0, lastSeen: ReportSummaryCorpus.t0)
+}
+
+@Test func trailingDotAndCaseMakeOneDomainAndOneApp() throws {
+    // review of PR #8: "ads.test." and "ADS.test" are the domain "ads.test"; app ids compare ignoring case
+    let s = try corpusSummary([
+        row(ReportSummaryCorpus.zappy, "ads.test", nil, 3),
+        row(ReportSummaryCorpus.zappy, "ADS.test.", nil, 2),
+        row("TEST.ZAPPY.APP", "a.ads.test", nil, 1),
+    ])
+    #expect(s.apps.count == 1)
+    let z = try #require(s.apps.first)
+    #expect(z.name == "Zappy" && z.key == ReportSummaryCorpus.zappy)
+    #expect(z.identified == DomainCount(domains: 2, contacts: 6))
+    #expect(z.companies.map(\.parent) == ["AdCo Holdings"])
+}
+
+@Test func ownerDifferingOnlyInCaseIsOneCompany() throws {
+    // an Apple owner string that differs from the curated parent only in case is the same company, shown with
+    // the list's spelling
+    let s = try corpusSummary([
+        row(ReportSummaryCorpus.zappy, "other-zappy.test", "ZAPPY INC", 4),
+        row(ReportSummaryCorpus.zappy, "www.video.test", nil, 1),
+    ])
+    let z = try #require(s.apps.first)
+    #expect(z.companies.map(\.parent) == ["Zappy Inc"])
+    #expect(z.companies.first?.count == DomainCount(domains: 2, contacts: 5))
+    #expect(z.companies.first?.relation == .sameCompanyAsApp)
+    #expect(z.companies.first?.brands == ["ZAPPY INC", "Zappy Video"])
+}
+
+@Test func reportAppOrderIgnoresCase() throws {
+    let s = try corpusSummary([row("Bobber.example", "cdn.test", nil, 1), row("apple-not.example", "cdn.test", nil, 1),
+                               row("Quill.example", "cdn.test", nil, 1)])
+    #expect(s.apps.map(\.name) == ["apple-not.example", "Bobber.example", "Quill.example"])
+}
+
+@Test func reportOf100kContactsUnderOneSecond() {
+    // 300 apps, 100,000 distinct (app, domain) rows over 5,000 distinct domains (a real report has a few thousand),
+    // some curated names and some AdGuard category-only names so every path runs. each distinct domain is classified
+    // once. the 1 s budget is checked in release builds only; debug checks a 30 s sanity floor. worst case measured
+    // 2026-11-24: 100,000 distinct domains take about 2.9 s release (about 29 µs to classify one domain)
+    let inputs = (0..<100_000).map { i -> ReportContactInput in
+        let domain: String
+        switch i % 10 {
+        case 1: domain = "a\(i % 500).doubleclick.net"
+        case 3: domain = "x\(i % 500).adworxs.net"
+        case 5: domain = "198.18.\(i % 250).\(i / 250 % 2)"
+        default: domain = "h\(i % 3500).week\(i % 300).test"
+        }
+        return ReportContactInput(appId: "com.week.app\((i / 10) % 300)", domain: domain, domainOwner: nil, hits: 1 + i % 7,
+                                  firstSeen: nil, lastSeen: nil)
+    }
+    _ = CompanyClassifier().classify(hostname: "warm.example.test")
+    _ = AppTable.bundled.count
+    let start = Date()
+    let s = ReportSummaryBuilder.build(contacts: inputs)
+    let seconds = Date().timeIntervalSince(start)
+    #if DEBUG
+    let configuration = "debug", limit = 30.0
+    #else
+    let configuration = "release", limit = 1.0
+    #endif
+    print("report summary: 100000 contacts in \(Int(seconds * 1000)) ms (\(configuration))")
+    #expect(seconds < limit)
+    #expect(s.apps.count == 300)
+    #expect(s.apps.allSatisfy { $0.companies.map(\.parent) == ["Alphabet"] && $0.unnamedCategories[.advertising] != nil })
+}

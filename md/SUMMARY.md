@@ -64,4 +64,6 @@ Each entry has:
 - Bare IP addresses are never shown and no type holds a domain. An address Apple's owner names is identified under that company; any other address is not identified and stays in the denominator (OD16 revised by the owner, 2026-11-24)
 - Several imports: the store never holds overlapping imports (OD18), so hits for the same app and domain are summed and the domain counts once
 - The same rules as captures: the distinct parent company is the unit, the app's own company is counted, marked and first, AdGuard category-only names are counted apart
+- Domains are compared lowercased without a trailing dot, and app ids ignoring case, so one domain or one app is never counted twice. Parents compare ignoring case too; a list's spelling is shown over an Apple owner string that differs only in case
+- Timing: 100,000 contact rows over 5,000 distinct domains build in 390 ms release (budget 1 s); 100,000 distinct domains, far more than a real report, take about 2.9 s
 - Proof: `Tests/TestSupport/ReportSummaryCorpus.swift` (17 rows, every number by hand, every domain checked against the real classifier first) and `Tests/SummaryTests/ReportSummaryTests.swift` (11 tests, including one that no field holds bytes or a list of domains)

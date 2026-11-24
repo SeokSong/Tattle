@@ -135,6 +135,9 @@ public enum ReportSummaryBuilder {
     }
 
     private struct ParentAcc {
+        /// the spelling shown: a list's spelling wins over an Apple owner string that differs only in case
+        var name: String
+        var fromList: Bool
         var brands = Set<String>()
         var categories = Set<CompanyCategory>()
         var relation: LabelRelation = .unknown
@@ -149,19 +152,24 @@ public enum ReportSummaryBuilder {
     public static func build(
         contacts: [ReportContactInput], classifier: CompanyClassifier = CompanyClassifier(), apps: AppTable = .bundled
     ) -> ReportSummary {
-        // 1. combine by (app id, domain lowercased), keeping input order
+        // 1. combine by (app id, domain), keeping input order. the app id is compared lowercased (the app table
+        // does the same) and shown as first written; the domain is lowercased without a trailing dot, the form the
+        // classifier uses, so "ads.test" and "ads.test." are one domain
         var order: [String] = []
+        var spelling: [String: String] = [:]
         var byApp: [String: [String: Combined]] = [:]
         var domainOrder: [String: [String]] = [:]
         for c in contacts {
-            if byApp[c.appId] == nil { order.append(c.appId) }
-            let d = c.domain.lowercased()
-            var rows = byApp[c.appId] ?? [:]
-            if rows[d] == nil { domainOrder[c.appId, default: []].append(d) }
+            let app = c.appId.lowercased()
+            if byApp[app] == nil { order.append(app); spelling[app] = c.appId }
+            var d = c.domain.lowercased()
+            if d.hasSuffix(".") { d.removeLast() }
+            var rows = byApp[app] ?? [:]
+            if rows[d] == nil { domainOrder[app, default: []].append(d) }
             var row = rows[d] ?? Combined(domain: d)
             row.add(owner: c.domainOwner, hits: c.hits, first: c.firstSeen, last: c.lastSeen)
             rows[d] = row
-            byApp[c.appId] = rows
+            byApp[app] = rows
         }
 
         var cache: [LabelKey: CompanyLabel] = [:]
@@ -188,13 +196,17 @@ public enum ReportSummaryBuilder {
                 if l.isMatched, let parent {
                     identified.domains += 1
                     identified.contacts += row.hits
-                    var p = parents[parent] ?? ParentAcc()
+                    // one company per parent ignoring case, as `comparableParent` and `AppTable.relation` compare
+                    let key = parent.lowercased()
+                    let fromList = l.source != .appleOwner
+                    var p = parents[key] ?? ParentAcc(name: parent, fromList: fromList)
+                    if fromList && !p.fromList { p.name = parent; p.fromList = true }
                     if let brand = l.company { p.brands.insert(brand) }
                     if l.category != .unclassified { p.categories.insert(l.category) }
                     p.relation = AppTable.relation(appCompany: company, labelParent: parent)
                     p.count.domains += 1
                     p.count.contacts += row.hits
-                    parents[parent] = p
+                    parents[key] = p
                 } else {
                     notIdentified.domains += 1
                     notIdentified.contacts += row.hits
@@ -204,9 +216,9 @@ public enum ReportSummaryBuilder {
                     }
                 }
             }
-            let companies = parents.map { parent, p in
+            let companies = parents.values.map { p in
                 ReportCompanyEntry(
-                    parent: parent, brands: p.brands.sorted(),
+                    parent: p.name, brands: p.brands.sorted(),
                     categories: CompanyCategory.allCases.filter { p.categories.contains($0) },
                     relation: p.relation, count: p.count)
             }.sorted { a, b in
@@ -236,9 +248,10 @@ public enum ReportSummaryBuilder {
         var appleDomainOrder: [String] = []
         for id in order {
             let rows = (domainOrder[id] ?? []).compactMap { byApp[id]?[$0] }
+            let shown = spelling[id] ?? id
             let row = apps.row(forBundleId: id)
-            let name = row.flatMap { $0.bundleId.hasSuffix(".") ? nil : $0.displayName } ?? id
-            let summary = summarize(key: id, name: name, company: row?.company, rows: rows, members: [])
+            let name = row.flatMap { $0.bundleId.hasSuffix(".") ? nil : $0.displayName } ?? shown
+            let summary = summarize(key: shown, name: name, company: row?.company, rows: rows, members: [])
             if id.lowercased().hasPrefix(ReportSummary.applePrefix) {
                 appleMembers.append(summary)
                 for r in rows {
