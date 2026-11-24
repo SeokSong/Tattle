@@ -121,7 +121,7 @@ The report prints bytes, packets, flows and share per category, bytes per rule a
 Precedence, first match wins:
 
 1. `deviceLink.process`: the winning row's process is in `deviceLinkProcesses` (`heartbeatd`, `lockdownd`), compared in cut form
-2. `app.process` or `helper.eproc`: the winning group is an app. `helper.eproc` when the winning row has a process and a different effective process, or a system process works for an app
+2. `app.process` or `helper.eproc`: the winning group is an app. `helper.eproc` when the winning row has a process and a different effective process, or a system process works for an app. A system process working for another system process (nsurlsessiond for trustd) is not a helper: it takes the system rule (fix of 2026-11-24, from the PR #7 review; every fixture capture had 3 to 22 such flows, a few KB each, and every Milestone 2 band still holds)
 3. `deviceLink.linkLocal`: no app evidence and both addresses are link-local (169.254.0.0/16, fe80::/10)
 4. `localNetwork.address`: no app evidence and the remote address is local-only
 5. `system.process`: the winning group is a system process
