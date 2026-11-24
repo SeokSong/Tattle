@@ -1,6 +1,6 @@
 # Companies
 
-**Status:** Problems 1.1, 1.2, 1.4 and 1.7 (curated and Apple owner sources; the order is provisional, the owner decides it) done (1.3 labels at view time; the curated-only coverage baseline is frozen; OD14 and OD15 applied): registrable domain from the bundled Public Suffix List (both sections), the curated company list and `CompanyClassifier`. Second sources (public tracker list) and the app to company table come later.
+**Status:** Problems 1.1, 1.2, 1.4, 1.6 (AdGuard list) and 1.7 (curated, Apple owner and AdGuard sources, in the owner's order) done (1.3 labels at view time; the curated-only coverage baseline is frozen; OD14 and OD15 applied): registrable domain from the bundled Public Suffix List (both sections), the curated company list and `CompanyClassifier`. The app to company table is Problem 2.6 (below).
 
 ## Purpose
 
@@ -30,10 +30,11 @@
 | Dataset | File | Source | Licence |
 |---|---|---|---|
 | Public Suffix List | `Resources/psl.dat` | https://publicsuffix.org/list/public_suffix_list.dat | MPL 2.0 |
+| AdGuard companiesdb tracker list | `Resources/tracker/tracker.tsv` | https://github.com/AdguardTeam/companiesdb (based on Whotracks.me) | CC BY-SA 4.0, this folder only |
 
 - `psl.dat` is the list's licence header plus the rules of both sections (private blocks carry a `// PLATFORM:` line instead of the list's comments, which hold contact addresses), built by the script; never edit it by hand. The manifest holds the SHA-256 of both the shipped file and the downloaded original, and a test checks the shipped hash
 - `NOTICES.txt` holds the full MPL 2.0 text and the source URL; the licence header stays in the data file
-- Tattle's own code is MIT (`LICENSE`)
+- Tattle's own code is MIT (`LICENSE`). The `Resources/tracker/` folder is CC BY-SA 4.0 with its own `LICENSE` and `README.md`; NOTICES and the About sheet credit AdGuard and Whotracks.me
 - To update: download the list by hand, run `scripts/build-companies-data.sh path/to/public_suffix_list.dat [YYYY-MM-DD]`, run the tests
 - The repo guard allows a 40-hex value only on a labelled commit line in the file that carries it: `// COMMIT:` in `Sources/Companies/Resources/psl.dat`, a `"commit"` key in `Sources/Companies/Resources/manifest.json`. Anywhere else it is a violation
 
@@ -63,7 +64,7 @@
 - A domain used both as a product and as an API stays `cloudService`, except where the owner moved it; the generated review table lists every row so the owner can move it
 - Owner moves (2026-11-23, curated version 5): `google.com` and `microsoft.com` (the consumer sites) and `alipay.com` and `klarna.com` (payment services people use directly) are `onlineService`. Infrastructure domains such as `googleapis.com` and payment gateways such as `stripe.com` stay `cloudService`. Hostname rows keep the sign-in hosts `accounts.google.com` and `login.microsoft.com` in `cloudService` (curated version 6); any other host under the two domains takes the parent row's `onlineService`
 - API: `CompanyClassifier(curated:)` (immutable, `Sendable`). `classify(hostname:appleOwner:order:)` tries sources in `order` (provisional `[.curated, .appleOwner]`; precedence is decided later by the agreement experiment). `label(hostname:from:appleOwner:)` runs exactly one source and never looks at another. `labelsBySource(hostname:appleOwner:)` returns every source's answer for comparison
-- `CompanyLabel.source` says who answered (`curated`, `trackerList`, `appleOwner`, `none`); `rule` says which rung (`curatedHostname`, `curatedRegistrable`, `appleOwner`, `noMatch`); `datasetId` (`tattle-curated`), `datasetVersion` and `datasetSHA256` come from the manifest. The `appleOwner` source returns the report's owner string as `company` with no parent and category `unclassified`, because the report gives neither. `relation` is `unknown` until the app's company is known (see the app table section below)
+- `CompanyLabel.source` says who answered (`curated`, `trackerList`, `appleOwner`, `none`); `rule` says which rung (`curatedHostname`, `curatedRegistrable`, `curatedOperatedSuffix`, `trackerHostname`, `trackerRegistrable`, `appleOwner`, `noMatch`); `datasetId` (`tattle-curated`, `adguard-companiesdb`), `datasetVersion` and `datasetSHA256` come from the manifest. The `appleOwner` source returns the report's owner string as `company` with no parent and category `unclassified`, because the report gives neither. `relation` is `unknown` until the app's company is known (see the app table section below)
 - To change the list: edit `curated.tsv`, run `scripts/build-curated.sh [version]` (refreshes the manifest hash, row count and the review table), run the tests. Bump the version when the content changes
 - Cost: `lookupCostIsPrinted` prints the per-hostname cost of `classify` (sanity floor 200 microseconds)
 
@@ -135,10 +136,10 @@ Precedence is data: `Resources/precedence.tsv`, tab separated, header `field ord
 
 | Field | Order | Exception |
 |---|---|---|
-| owner (company and parent) | curated, then appleOwner (the public tracker list joins when problem 1.6 is unblocked) | `skip:appleOwner:cdnOperator`: an Apple owner that is a CDN operator is set aside |
-| category | curated (the tracker list later) | none |
+| owner (company and parent) | curated, then appleOwner, then trackerList | `skip:appleOwner:cdnOperator`: an Apple owner that is a CDN operator is set aside |
+| category | curated, then trackerList | none |
 
-- The order is provisional. The owner sets the final order after seeing the agreement numbers (OD2)
+- Order set by the owner: curated then Apple (OD2), the AdGuard list last (1.6, decision D: the curated list always wins). Precedence table version 2
 - Apple's `domainOwner` exists only for an imported report: `classify(hostname:appleOwner:)` takes it as a plain String (Companies never imports PrivacyReport). Capture flows pass no owner, so Apple plays no part there
 - The category never comes from Apple, which gives none: the category row cannot list `appleOwner` (the load fails) and an Apple-only label has category `unclassified` and no parent
 - `CompanyClassifier.resolve(hostname:appleOwner:)` returns the label plus which answers an exception skipped; `classify` returns its label. Passing an explicit `order:` still fixes the sources (the curated-only coverage baseline does)
@@ -173,6 +174,47 @@ Before the alias table most of the same-parent answers showed as different: ever
 
 Golden synthetic conflict set: `Tests/CompaniesTests/ConflictSetTests.swift`, 25 made-up names with made-up owners, each with an expected winner and rule; a coverage test checks that every source of every order and every exception of the bundled table is used by a case.
 
+## AdGuard tracker list (Problem 1.6)
+
+The second company source, after the curated list and Apple's owner string. Owner decisions 2026-11-23 (picks A2, B1, C, D).
+
+- Data: `Resources/tracker/tracker.tsv` (header `domain company adguardCategory`, sorted, one row per AdGuard tracker domain, 5,126 rows), built by `scripts/build-tracker-list.sh` from a pinned copy that `scripts/fetch-tracker-list.sh` downloads into `~/dev/tattle-fixtures/tracker-list/` (outside the repo, with a provenance file). The app never downloads it. The manifest holds the commit, the shipped hash and the source hash
+- Licence: CC BY-SA 4.0 (AdGuard), based on Whotracks.me (CC BY 4.0). Only the `tracker/` folder is under it; it has its own `LICENSE` and `README.md`. Check the licence's no-DRM rule before any App Store release
+- Company: AdGuard's company name, trimmed. A tracker with no company keeps its tracker name as the company, unless that name is only a domain (237 rows): then the company is empty
+- Parent (B1): `Resources/tracker-owner-aliases.tsv` (MIT, header `adguardCompany parent note`, 56 rows) maps an AdGuard company name to a curated parent, exact whole-string match only ("Meta Network" and "Twitter Counter" are different companies). Every parent is a curated parent (a test). The rows were taken from names that already match curated companies and from a comparison of the two public lists, never from the owner's data. Any other company is its own parent
+- Category (C): `Resources/tracker-categories.tsv` (MIT, 17 rows, one per AdGuard category): advertising and pornvertising are advertising; site_analytics, mobile_analytics and telemetry are analytics; social_media is social; cdn is content delivery; hosting, customer_interaction, essential, consent and email are cloud service; audio_video_player and comments are online service; misc, unknown and extensions are unclassified. A category missing from the table fails the build script and the load
+- Public suffixes: 31 AdGuard domains are themselves public suffixes (for example a CDN's shared domain). The loader skips and counts them, so a customer site under a hosting platform is never named after the platform (OD14)
+- Lookup (A2): loaded once into memory, walks from the hostname up to the registrable domain like the curated list (rules `trackerHostname`, `trackerRegistrable`, dataset id `adguard-companiesdb`)
+- A row with no company is not identified in 1.6 (source `none`, no category). Part 3 decides how its category is shown
+- The app's tooltip uses the same words as for the curated list: "Company list version <date>" (owner, 2026-11-23); the source is in the label (`source: trackerList`)
+- Commands: `tattle companies coverage ... --sources curated,trackerList` and `tattle companies agreement --report <file> --second trackerList`
+
+### Budgets (measured 2026-11-23, debug build, the test alone)
+
+| Budget | Limit | Measured |
+|---|---|---|
+| Added memory | at most 5 MB | about 4.5 MB |
+| Load | (no limit set) | about 80 ms |
+| Lookup | under 1 ms | about 6 µs |
+
+- `bundledTrackerLoadIsCheapAndFast` prints the numbers and asserts only load under 5 s and lookup under 1 ms. Memory is not asserted: with other tests in parallel it reads about 20 MB. Read it with `swift test --filter bundledTrackerLoadIsCheapAndFast`. If memory grows past 5 MB, the fallback is the sorted file searched in place (A1)
+
+### Coverage gain (fixture captures, domain coverage, curated alone then with the AdGuard list)
+
+| Capture | Curated | Curated + AdGuard |
+|---|---|---|
+| s0-idle | 71.4% | 85.7% |
+| s1-safari | 20.0% | 40.0% |
+| s2-two-apps | 46.2% | 61.5% |
+| s3-youtube-quic | 84.2% | 94.7% |
+| s4-link-failures | 66.7% | 75.0% |
+| s5-midstream | 80.0% | 100.0% |
+
+- Byte coverage changes by less than 2 points in every capture: the large flows were already named by the curated list
+- The band files stay curated-only (the frozen baseline)
+- On the owner's App Privacy Report (rates only): the curated list identifies about 57% of the named domains alone; the AdGuard list adds about 8 points. Where both answer, they name the same parent on about 95% of domains; the curated list wins the rest. Owner-data rates are rounded to whole percents, so several rates together cannot give away the number of rows
+- Public comparison of the two lists: of the 275 domains both list exactly, 231 name the same parent. The differences are name variants (now aliases) and AdGuard naming an earlier owner or a part owner (eBay for PayPal, Verizon for Yahoo, SoftBank for Alibaba). Owner decisions: Chartboost and Tapjoy stay their own companies; an investment firm is never the parent (Yahoo, not Apollo)
+
 ## Accuracy audit against two independent references (OD13)
 
 Replaces the hand audit of Problem 1.5. Our classification is compared automatically with two references that we did not build; rows where a reference agrees with us are confirmed, and only the contradictions go to the owner by hand.
@@ -197,21 +239,21 @@ Command: `tattle companies audit --references <dir> [--report <file>] [--capture
 
 "Our company names agree with at least one of two independent sources on X% of the domains where a source gave an answer; every contradiction is checked by hand." It is not a measure of the category, and a confirmed row is only as good as the references: a reference can be wrong or out of date, and a certificate organisation can name the host rather than the site, which is why contradictions are read by the owner and not counted as errors until then. The bound is an upper limit on the contradiction rate, not on the error rate.
 
-### Measured (2026-11-23, numbers only)
+### Measured (2026-11-23, with the AdGuard list, numbers only)
 
-After the owner's review of the contradictions: 20 public company names were added to `reference-aliases.tsv` (former names, legal names and group companies of a curated parent), and four curated rows changed category (curated version 5; categories are not audited, so this does not change the numbers). Before (2026-11-22): curated 92.4% agreement, 28 contradicted.
+Before the AdGuard list (2026-11-23, after the owner's review): curated 99.5%, captures 100.0% (0 of 32), owner data 100%. Before the review (2026-11-22): curated 92.4%, 28 contradicted.
 
 Entity map: 38371 domains. Certificates: 27% of the fetched domains had an organisation, 51% had none and 21% failed.
 
 | Stratum | n | Confirmed | Contradicted | Unverifiable | Agreement among verifiable | 95% upper bound of contradiction rate |
 |---|---|---|---|---|---|---|
 | Curated list entries | 385 | 365 | 2 | 18 | 99.5% | 1.7% |
-| Capture confirmed names (six captures) | 32 | 32 | 0 | 0 | 100.0% | 8.9% |
-| App Privacy Report named domains | – | – | – | – | 100.0% | under 5% |
-| Owner data together | – | – | – | – | 100.0% | under 5% |
+| Capture confirmed names (six captures) | 38 | 37 | 1 | 0 | 97.4% | 11.9% |
+| App Privacy Report named domains | – | – | – | – | about 97% | under 10% |
+| Owner data together | – | – | – | – | about 97% | under 10% |
 
-- Counts are not published for the owner's report (–): rates only. Its upper bound is given only as "under 5%", because an exact bound with zero contradictions gives away the number of rows
-- Of the confirmed rows, both references agreed on 79 curated rows and 14 capture rows; 32 curated rows and no capture rows were confirmed while the other reference named a different company
-- The 2 remaining contradictions were reviewed by the owner and kept: the brand is listed as its own parent, while the reference names a part owner (owner decision 2026-11-23). They stay counted as contradictions
-- Owner rule (2026-11-23): show the brand, count the parent. A brand whose parent fully owns it (YouTube, Hulu, Blizzard) is counted as the parent; a separately listed company that another company only partly owns keeps its own name
-- The owner-data strata have too few distinct rows for the bound to be under 5% in the captures (0 of 32 gives 8.9%)
+- Counts are not published for the owner's report (–): rates only, rounded to whole percents, and the bound only as a round "under" value, because exact rates with an exact bound give away the number of rows
+- Of the confirmed rows, both references agreed on 79 curated rows and 14 capture rows
+- The 2 curated contradictions were reviewed by the owner and kept: the brand is listed as its own parent, while the reference names a part owner. They stay counted
+- The new contradictions come from AdGuard labels: AdGuard's company name against the company's legal name, and one old brand name (Millward Brown, now part of Kantar). The owner reviewed them on 2026-11-23 as name noise and kept the labels. They stay counted. They cannot become aliases, because an alias parent must be a curated parent
+- Owner rule (2026-11-23): show the brand, count the parent. A brand whose parent fully owns it (YouTube, Hulu, Blizzard) is counted as the parent; a separately listed company that another company only partly owns keeps its own name; an investment firm is never the parent
