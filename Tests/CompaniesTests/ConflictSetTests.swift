@@ -2,7 +2,7 @@ import Foundation
 import Testing
 import Companies
 
-// the golden synthetic conflict set: made-up names and made-up source answers, committed. every case says who
+// the golden synthetic conflict set: made-up names and made-up source answers (curated, Apple owner and AdGuard rows), committed. every case says who
 // must win and by which rule. changing the precedence table is a data edit and changes some of these on purpose
 
 private let curatedText = """
@@ -25,6 +25,15 @@ private let aliasText = """
     Wexford Systems Corp\talias\tWexford\tn
 
     """
+
+private let trackerMapText = "adguardCategory\tcategory\tnote\nads\tadvertising\tn\nstats\tanalytics\tn\nmisc\tunclassified\tn\n"
+private let trackerAliasText = "adguardCompany\tparent\tnote\nZorblax Holdings Inc.\tZorblax Holdings\tn\n"
+private let trackerText = "domain\tcompany\tadguardCategory\n"
+    + "apple-and-tracker.test\tWexford Trackers\tads\n"
+    + "quillnet-edge-only.test\tQuillnet Edge Trackers\tstats\n"
+    + "trk-only.test\tBlinkerly\tads\n"
+    + "zorblax.com\tZorblax Holdings Inc.\tstats\n"
+    + "zz-nocompany.test\t\tads\n"
 
 private struct Case {
     let name: String
@@ -64,10 +73,19 @@ private let cases: [Case] = [
     Case(name: "no substring match on a list name", host: "notzorblax.com", owner: nil, source: .none, company: nil, parent: nil, category: .unclassified, rule: .noMatch),
     Case(name: "list name inside another name", host: "zorblax.com.example.test", owner: nil, source: .none, company: nil, parent: nil, category: .unclassified, rule: .noMatch),
     Case(name: "hostname row only below its own name", host: "pipwick.com.au", owner: "Pipwick Pty", source: .appleOwner, company: "Pipwick Pty", parent: nil, category: .unclassified, rule: .appleOwner),
+    Case(name: "AdGuard fills a name curated and Apple lack", host: "trk-only.test", owner: nil, source: .trackerList, company: "Blinkerly", parent: "Blinkerly", category: .advertising, rule: .trackerRegistrable),
+    Case(name: "curated beats AdGuard on the same domain", host: "www.zorblax.com", owner: nil, source: .curated, company: "Zorblax Ads", parent: "Zorblax Holdings", category: .advertising, rule: .curatedRegistrable),
+    Case(name: "Apple owner beats AdGuard, AdGuard gives the category", host: "apple-and-tracker.test", owner: "Wexford Systems Corp", source: .appleOwner, company: "Wexford Systems Corp", parent: nil, category: .advertising, rule: .appleOwner),
+    Case(name: "AdGuard row without a company is not identified", host: "zz-nocompany.test", owner: nil, source: .none, company: nil, parent: nil, category: .unclassified, rule: .noMatch),
+    Case(name: "CDN owner skipped, AdGuard answers", host: "quillnet-edge-only.test", owner: "Quillnet Edge Inc", source: .trackerList, company: "Quillnet Edge Trackers", parent: "Quillnet Edge Trackers", category: .analytics, rule: .trackerRegistrable, skipped: true),
 ]
 
 private func classifier() throws -> CompanyClassifier {
-    CompanyClassifier(curated: try CuratedList(parsing: curatedText), appleOwners: try AppleOwnerTable(parsing: aliasText))
+    let trackers = try TrackerList(
+        parsing: trackerText, categories: TrackerCategoryMap(parsing: trackerMapText),
+        aliases: TrackerOwnerAliases(parsing: trackerAliasText))
+    return CompanyClassifier(
+        curated: try CuratedList(parsing: curatedText), appleOwners: try AppleOwnerTable(parsing: aliasText), trackers: trackers)
 }
 
 @Test func goldenConflictsResolveAsExpected() throws {

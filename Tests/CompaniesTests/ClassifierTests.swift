@@ -4,7 +4,7 @@ import Companies
 
 private func classifier(_ rows: String...) throws -> CompanyClassifier {
     let text = "domain\tcompany\tparent\tcategory\tnote\n" + rows.joined()
-    return CompanyClassifier(curated: try CuratedList(parsing: text, version: "7", sha256: "abc"))
+    return CompanyClassifier(curated: try CuratedList(parsing: text, version: "7", sha256: "abc"), trackers: .empty)
 }
 
 @Test func knownAdDomainIsAdvertising() {
@@ -100,10 +100,12 @@ private func classifier(_ rows: String...) throws -> CompanyClassifier {
     #expect(apple.category == .unclassified && apple.parent == nil)
     #expect(c.label(hostname: "doubleclick.net", from: .appleOwner).source == .none)
     #expect(c.label(hostname: "doubleclick.net", from: .appleOwner, appleOwner: "  ").source == .none)
-    #expect(c.label(hostname: "doubleclick.net", from: .trackerList).source == .none)
+    // the AdGuard list alone answers from its own row and ignores the owner string
+    let tracker = c.label(hostname: "doubleclick.net", from: .trackerList, appleOwner: "Someone Else")
+    #expect(tracker.source == .trackerList && tracker.company == "Google" && tracker.parent == "Alphabet")
     #expect(c.label(hostname: "unknown.example", from: .curated).source == .none)
     let all = c.labelsBySource(hostname: "doubleclick.net", appleOwner: "Someone Else")
-    #expect(all[.curated]?.source == .curated && all[.appleOwner]?.source == .appleOwner && all[.trackerList]?.source == LabelSource.none)
+    #expect(all[.curated]?.source == .curated && all[.appleOwner]?.source == .appleOwner && all[.trackerList]?.source == .trackerList)
 }
 
 @Test func classifyOrderIsTheCallersChoice() {

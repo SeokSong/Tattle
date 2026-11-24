@@ -12,11 +12,13 @@ public struct CompanyClassifier: Sendable {
     public let curated: CuratedList
     public let precedence: PrecedenceTable
     public let appleOwners: AppleOwnerTable
+    public let trackers: TrackerList
 
-    public init(curated: CuratedList = .bundled, precedence: PrecedenceTable = .bundled, appleOwners: AppleOwnerTable = .bundled) {
+    public init(curated: CuratedList = .bundled, precedence: PrecedenceTable = .bundled, appleOwners: AppleOwnerTable = .bundled, trackers: TrackerList = .bundled) {
         self.curated = curated
         self.precedence = precedence
         self.appleOwners = appleOwners
+        self.trackers = trackers
     }
 
     /// the label by the precedence table (or by `order`, for a caller that fixes its own sources, such as
@@ -78,7 +80,7 @@ public struct CompanyClassifier: Sendable {
     }
 
     /// what one source alone says. never consults another source. no match gives the
-    /// unclassified label. `.trackerList` has no data yet and never matches
+    /// unclassified label. `.trackerList` answers only for a row with a company
     public func label(hostname: String, from source: LabelSource, appleOwner: String? = nil) -> CompanyLabel {
         let name = Self.normalise(hostname)
         let registrable = registrableDomain(of: name)
@@ -97,7 +99,16 @@ public struct CompanyClassifier: Sendable {
                 hostname: name, registrableDomain: registrable, company: String(owner.prefix(200)), parent: nil,
                 category: .unclassified, source: .appleOwner, rule: .appleOwner, datasetId: nil,
                 datasetVersion: nil, datasetSHA256: nil, hostingPlatform: nil, relation: .unknown)
-        case .trackerList, .none:
+        case .trackerList:
+            // a row with no company (its tracker name is only a domain) is not an answer yet: Part 3 decides how
+            // its category is shown. until then it is not identified, like no match
+            guard let registrable, let (entry, rule) = trackers.lookup(name, registrable: registrable, companyOnly: true),
+                  let company = entry.company else { break }
+            return CompanyLabel(
+                hostname: name, registrableDomain: registrable, company: company, parent: entry.parent ?? company,
+                category: entry.category, source: .trackerList, rule: rule, datasetId: TrackerList.datasetId,
+                datasetVersion: trackers.version, datasetSHA256: trackers.sha256, hostingPlatform: nil, relation: .unknown)
+        case .none:
             break
         }
         return unmatched(name)

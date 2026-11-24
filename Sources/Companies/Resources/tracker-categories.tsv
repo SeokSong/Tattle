@@ -1,0 +1,18 @@
+adguardCategory	category	note
+advertising	advertising	ads
+pornvertising	advertising	ads on adult sites
+site_analytics	analytics	website analytics
+mobile_analytics	analytics	app analytics
+telemetry	analytics	usage and diagnostic reports (owner, 2026-11-23)
+social_media	social	social network widgets and logins
+cdn	contentDelivery	content delivery networks
+hosting	cloudService	hosting
+customer_interaction	cloudService	chat, support and feedback widgets (owner, 2026-11-23)
+essential	cloudService	tag managers and similar site plumbing
+consent	cloudService	cookie consent tools
+email	cloudService	email services
+audio_video_player	onlineService	embedded video and audio players
+comments	onlineService	comment services
+misc	unclassified	too broad to place
+unknown	unclassified	AdGuard does not know
+extensions	unclassified	browser extension traffic

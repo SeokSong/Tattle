@@ -1,5 +1,5 @@
 #!/bin/sh
-# after editing precedence.tsv, apple-owner-aliases.tsv or reference-aliases.tsv in Sources/Companies/Resources: refreshes their
+# after editing precedence.tsv, apple-owner-aliases.tsv, reference-aliases.tsv, tracker-categories.tsv or tracker-owner-aliases.tsv in Sources/Companies/Resources: refreshes their
 # entries in manifest.json (hash, row count, optional new version). it never downloads anything.
 # usage: scripts/build-precedence.sh [version]   (the version applies to all files; default: keep each one's)
 set -eu
@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.." || exit 1
 res=Sources/Companies/Resources
 manifest=$res/manifest.json
 today=$(date -u +%Y-%m-%d)
-for spec in "precedence.tsv|Tattle source precedence table" "apple-owner-aliases.tsv|Tattle Apple owner aliases" "reference-aliases.tsv|Tattle audit reference aliases"; do
+for spec in "precedence.tsv|Tattle source precedence table" "apple-owner-aliases.tsv|Tattle Apple owner aliases" "reference-aliases.tsv|Tattle audit reference aliases" "tracker-categories.tsv|Tattle tracker category map" "tracker-owner-aliases.tsv|Tattle tracker owner aliases"; do
   file=${spec%%|*}; name=${spec#*|}
   tsv=$res/$file
   [ -f "$tsv" ] || { echo "no $tsv" >&2; exit 1; }

@@ -952,13 +952,15 @@ let companiesUsage = """
                           write the most frequent unidentified registrable domains to a local file
                           (tab separated: flows, bytes, domain; mode 600, new file only). names go only to
                           that file, never to the screen. refused inside a git work tree
-    sources: the curated list only (the frozen baseline). exit codes: 0 ok, 3 below the floor, 1 error
+      --sources <list>   curated (default, the frozen baseline) or curated,trackerList; --write-bands needs curated
+    sources: the curated list only unless --sources is given (the frozen baseline). exit codes: 0 ok, 3 below the floor, 1 error
 
-    usage: tattle companies agreement --report <App_Privacy_Report.ndjson> [--disagreements-out <file>]
-      classifies every domain of the report with the curated list alone and with Apple's owner string alone
+    usage: tattle companies agreement --report <App_Privacy_Report.ndjson> [--disagreements-out <file>] [--second <source>]
+      classifies every domain of the report with the curated list alone and with the second source alone
       (neither sees the other) and prints counts only. IP addresses are excluded and counted
+      --second <source>   appleOwner (default) or trackerList: the source compared with the curated list
       --disagreements-out <file>
-                          write every disagreement and every name only Apple named to a local file (tab
+                          write every disagreement and every name only the second source named to a local file (tab
                           separated; mode 600, new file only; refused inside a git work tree)
 
     usage: tattle companies audit --references <dir> [--report <file>] [--captures <dir>]
@@ -987,12 +989,13 @@ func runCompanies(_ args: [String]) async -> Int32 {
     var file: String?, db: String?, session: String?
     var bandsPath: String?, writeBandsPath: String?, label: String?, unmatchedOut: String?
     var json = false
+    var sources: [LabelSource] = [.curated]
     var i = 1
     while i < args.count {
         let a = args[i]
         switch a {
         case "--json": json = true
-        case "--db", "--session", "--bands", "--write-bands", "--label", "--unmatched-out":
+        case "--db", "--session", "--bands", "--write-bands", "--label", "--unmatched-out", "--sources":
             guard i + 1 < args.count else { return fail("\(a) needs a value") }
             i += 1
             switch a {
@@ -1001,6 +1004,13 @@ func runCompanies(_ args: [String]) async -> Int32 {
             case "--bands": bandsPath = args[i]
             case "--write-bands": writeBandsPath = args[i]
             case "--unmatched-out": unmatchedOut = args[i]
+            case "--sources":
+                // only the frozen baseline or the bundled order: the AdGuard list never comes before the curated list (1.6 D)
+                switch args[i] {
+                case "curated": sources = [.curated]
+                case "curated,trackerList": sources = [.curated, .trackerList]
+                default: return fail("--sources takes curated or curated,trackerList")
+                }
             default: label = args[i]
             }
         default:
@@ -1011,6 +1021,8 @@ func runCompanies(_ args: [String]) async -> Int32 {
     }
     if writeBandsPath != nil && label == nil { return fail("--write-bands needs --label") }
     if writeBandsPath != nil && bandsPath != nil { return fail("use --bands or --write-bands, not both") }
+    // band files are the curated-only baseline: a floor raised by another source would fail the next curated run
+    if writeBandsPath != nil && sources != [LabelSource.curated] { return fail("--write-bands works only with the curated list (the frozen baseline)") }
     // the file holds real domain names: never inside a git work tree, checked before any work is done
     if let unmatchedOut, FileOwnership.gitWorkTreeRoot(containing: unmatchedOut) != nil {
         return fail("--unmatched-out must point outside the git work tree: the file holds real domain names")
@@ -1045,7 +1057,7 @@ func runCompanies(_ args: [String]) async -> Int32 {
         default:
             return fail("give either a capture file or --db")
         }
-        let result = Coverage.build(flows: flows, index: HostnameIndex(domains, flows: flows), sources: [.curated])
+        let result = Coverage.build(flows: flows, index: HostnameIndex(domains, flows: flows), sources: sources)
         var regressions: [CoverageRegression]?
         if let bandsPath {
             regressions = CoverageRatchet.check(
@@ -1086,10 +1098,19 @@ func runCompanies(_ args: [String]) async -> Int32 {
 /// the agreement matrix of the curated list and Apple's owner string over one imported report's domains
 func runAgreement(_ args: [String], fail: (String) -> Int32) -> Int32 {
     var report: String?, out: String?
+    var second = LabelSource.appleOwner
     var i = 0
     while i < args.count {
-        guard ["--report", "--disagreements-out"].contains(args[i]), i + 1 < args.count else { return fail("bad argument: \(args[i])") }
-        if args[i] == "--report" { report = args[i + 1] } else { out = args[i + 1] }
+        guard ["--report", "--disagreements-out", "--second"].contains(args[i]), i + 1 < args.count else { return fail("bad argument: \(args[i])") }
+        switch args[i] {
+        case "--report": report = args[i + 1]
+        case "--second":
+            guard args[i + 1] == "appleOwner" || args[i + 1] == "trackerList", let source = LabelSource(rawValue: args[i + 1]) else {
+                return fail("--second takes appleOwner or trackerList")
+            }
+            second = source
+        default: out = args[i + 1]
+        }
         i += 2
     }
     guard let report else { return fail("agreement needs --report <file>") }
@@ -1099,9 +1120,12 @@ func runAgreement(_ args: [String], fail: (String) -> Int32) -> Int32 {
     }
     do {
         let observations = try ReportImporter.domainOwners(file: URL(fileURLWithPath: report))
-        let (matrix, rows) = Agreement.measure(observations, classifier: CompanyClassifier())
+        let (matrix, rows) = Agreement.measure(observations, classifier: CompanyClassifier(), second: second)
         if let out {
-            let lines = ["kind\tdomain\tcurated parent\tcurated category\tapple owner\taliased parent"] + rows.map {
+            let header = second == .trackerList
+                ? "kind\tdomain\tcurated parent\tcurated category\ttracker company\ttracker parent"
+                : "kind\tdomain\tcurated parent\tcurated category\tapple owner\taliased parent"
+            let lines = [header] + rows.map {
                 [$0.kind.rawValue, $0.domain, $0.firstParent ?? "-", $0.firstCategory?.rawValue ?? "-", $0.secondOwner ?? "-", $0.secondParent ?? "-"]
                     .joined(separator: "\t")
             }

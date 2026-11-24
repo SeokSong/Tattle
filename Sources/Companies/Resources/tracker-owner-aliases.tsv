@@ -1,0 +1,61 @@
+adguardCompany	parent	note
+Adobe Inc.	Adobe	legal name of the curated parent
+AdRoll	NextRoll	brand or group company of the curated parent, as in curated.tsv
+Apple Inc.	Apple	legal name of the curated parent
+Braze, Inc.	Braze	legal name of the curated parent
+Bugsnag	SmartBear	brand or group company of the curated parent, as in curated.tsv
+ByteDance Ltd.	ByteDance	legal name of the curated parent
+Cloudflare, Inc.	Cloudflare	legal name of the curated parent
+comScore, Inc.	Comscore	legal name of the curated parent
+Digicert	DigiCert	legal name of the curated parent
+Digital Turbine, Inc.	Digital Turbine	legal name of the curated parent
+Facebook	Meta Platforms	brand or group company of the curated parent, as in curated.tsv
+fullstory	FullStory	legal name of the curated parent
+Fyber	Digital Turbine	brand or group company of the curated parent, as in curated.tsv
+GitHub, Inc.	Microsoft	brand or group company of the curated parent, as in curated.tsv
+Google	Alphabet	brand or group company of the curated parent, as in curated.tsv
+Index Exchange, Inc.	Index Exchange	legal name of the curated parent
+Integral Ad Science, Inc.	Integral Ad Science	legal name of the curated parent
+iQiyi	iQIYI	legal name of the curated parent
+Line	LY Corporation	brand or group company of the curated parent, as in curated.tsv
+MailChimp	Intuit	brand or group company of the curated parent, as in curated.tsv
+MGID Inc.	MGID	legal name of the curated parent
+Meta Platforms, Inc.	Meta Platforms	legal name of the curated parent
+Microsoft Corporation	Microsoft	legal name of the curated parent
+Netflix, Inc.	Netflix	legal name of the curated parent
+Oracle Corporation	Oracle	legal name of the curated parent
+Pardot	Salesforce	brand or group company of the curated parent, as in curated.tsv
+PubMatic, Inc.	PubMatic	legal name of the curated parent
+Revcontent, LLC	Revcontent	legal name of the curated parent
+Sectigo Limited	Sectigo	legal name of the curated parent
+Segment	Twilio	brand or group company of the curated parent, as in curated.tsv
+Sharethrough, Inc	Sharethrough	legal name of the curated parent
+Snap Inc.	Snap	legal name of the curated parent
+SpringServe, LLC	Magnite	brand or group company of the curated parent, as in curated.tsv
+TripleLift, Inc.	TripleLift	legal name of the curated parent
+Umeng	Alibaba	brand or group company of the curated parent, as in curated.tsv
+Yieldmo, Inc.	Yieldmo	legal name of the curated parent
+Youku	Alibaba	brand or group company of the curated parent, as in curated.tsv
+Zemanta, Inc.	Outbrain	brand or group company of the curated parent, as in curated.tsv
+X (formerly Twitter)	X Corp.	former and current name of the curated parent
+Akamai Technologies	Akamai	legal name of the curated parent
+The Rubicon Project, Limited	Magnite	former name of the curated parent
+The Walt Disney Company	Disney	legal name of the curated parent
+Quantcast International Limited	Quantcast	legal name of the curated parent
+Comcast Technology Solutions	Comcast	group company of the curated parent
+Branch Metrics	Branch	legal name of the curated parent
+Yahoo! Japan	LY Corporation	former name of the curated parent
+Connatix Native Exchange Inc.	Connatix	legal name of the curated parent
+ID5 Sync	ID5	product name of the curated parent
+Internet Security Research Group	ISRG	full name of the curated parent
+Media.net Advertising FZ-LLC	Media.net	legal name of the curated parent
+Mozilla Foundation	Mozilla	the foundation that owns the curated parent
+Notion Labs Inc.	Notion	legal name of the curated parent
+OpenX Software Ltd.	OpenX	legal name of the curated parent
+Smart Adserver	Equativ	former name of the curated parent
+Sovrn Holdings Inc	Sovrn	legal name of the curated parent
+Urban Airship, Inc.	Airship	former name of the curated parent
+SoftBank Group Corp.	Alibaba	AdGuard names an investor; the rows are Alibaba businesses (owner, 2026-11-23)
+Apollo Global Management, Inc.	Yahoo	an investment firm is never the parent (owner, 2026-11-23)
+Blackstone, Inc.	Liftoff	an investment firm is never the parent (owner, 2026-11-23)
+Verizon	Yahoo	the former Verizon Media businesses became Yahoo in 2021 (owner, 2026-11-23)

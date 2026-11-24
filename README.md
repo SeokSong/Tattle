@@ -187,3 +187,7 @@ Design notes for each part are in [md/](md/). Start with [OVERVIEW.md](md/OVERVI
 ## Status
 
 Milestone 2 is done: capture and analysis on the Mac work end to end, every byte is put in a stated category, hostnames carry their source, and a quality report with committed bands catches regressions. Next (Milestone 3): company and tracker classification, a destination map, an App Privacy Report import (the phone's own 7-day log, shown next to Mac captures), and a signed helper. See the roadmap in [OVERVIEW.md](md/OVERVIEW.md#current-status).
+
+## Licence
+
+Tattle's code is MIT ([LICENSE](LICENSE)). Bundled data keeps its own licence: the Public Suffix List (MPL 2.0) and the AdGuard companiesdb tracker list (CC BY-SA 4.0, based on Whotracks.me), which lives in its own folder, [Sources/Companies/Resources/tracker/](Sources/Companies/Resources/tracker/). Credits and licence texts are in [NOTICES.txt](Sources/Companies/Resources/NOTICES.txt).
