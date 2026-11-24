@@ -1,6 +1,6 @@
 # Summary
 
-**Status:** Problems 3.1 (captures, `SummaryBuilder`) and 3.2 (App Privacy Report, `ReportSummaryBuilder`) done. The sentences and glossary (3.3) and the summary screen (3.4) come next.
+**Status:** Problems 3.1 (captures, `SummaryBuilder`), 3.2 (App Privacy Report, `ReportSummaryBuilder`) and 3.3 (sentences, glossary, wording lint) done. The summary screen (3.4) comes next.
 
 ## Purpose
 
@@ -67,3 +67,28 @@ Each entry has:
 - Domains are compared lowercased without a trailing dot, and app ids ignoring case, so one domain or one app is never counted twice. Parents compare ignoring case too; a list's spelling is shown over an Apple owner string that differs only in case
 - Timing: 100,000 contact rows over 5,000 distinct domains build in 390 ms release (budget 1 s); 100,000 distinct domains, far more than a real report, take about 2.9 s
 - Proof: `Tests/TestSupport/ReportSummaryCorpus.swift` (17 rows, every number by hand, every domain checked against the real classifier first) and `Tests/SummaryTests/ReportSummaryTests.swift` (11 tests, including one that no field holds bytes or a list of domains)
+
+## Sentences and glossary (Problem 3.3)
+
+`SummaryText` turns plain numbers into the sentences the screen shows; `Glossary` holds the six terms, the "How to read this" lines and the banned words. The strings were approved by the owner on 2026-11-24 and are frozen; `Tests/SummaryTests/WordingTests.swift` checks them exactly and lints every sentence.
+
+Rules the owner chose:
+- No speaker: never "Tattle", "we", "our" or "us" ("3 more destinations couldn't be identified")
+- The unit word is "destinations"
+- Each app's headline is always the company count, the advertising or tracking count and the unknown part together, in that order; zero is written, never dropped
+- An app with no advertising or tracking company found says "No advertising or tracking companies found." ("found", because part of the traffic may be unidentified; the owner first wanted "This app doesn't track")
+- Each source has one coverage line: the percent identified and the main reason for the rest. Percentages round down, so a number never overstates
+- Rating: shown as "Rated on 82% identified traffic."; hidden below 70% as "Not enough data to rate: 55% of this app's traffic was identified. A rating needs at least 70%." A hidden rating hides only the band; every company and count is still shown
+- Never used: sells, sold, shared your data, spying, safe, unsafe, stops, blocks, even when not in use, privacy score
+
+| Where | Example |
+|---|---|
+| Overview | In your captures and App Privacy Report (14 to 21 November): 12 apps contacted 31 companies. 9 do advertising or tracking. 40 destinations couldn't be identified. |
+| App headline | Zappy contacted 3 companies. 1 does advertising or tracking. 3 more destinations couldn't be identified. Plus 2 advertising services that couldn't be named. |
+| Company row | AdCo Holdings · Advertising, Analytics / Zappy Inc · the app's own company / YouTube (owned by Alphabet) |
+| Possible | Possible (not counted): A lookup for this name was seen, but the server is shared, so it may be a different service. |
+| Captures | Captures (14 to 21 November): 77% of this app's traffic was identified. Most of the rest was hidden by the app. |
+| Report | App Privacy Report (18 to 21 November): 6 of 9 destinations were identified. The report doesn't show how much data was sent. |
+| Data amounts | In the capture from 14 November, most of the data went to Alphabet. (captures only, with the toggle on) |
+
+- Open for 3.4: the capture summary counts unidentified connections, the wording says destinations, and one card per app (OD8) needs distinct destinations across both sources. How the card combines the two is decided with the owner in 3.4
