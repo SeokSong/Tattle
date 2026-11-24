@@ -1,6 +1,6 @@
 # Summary
 
-**Status:** Problem 3.1 done: the per-app summary of captures (`SummaryBuilder`). The App Privacy Report summary (3.2), the sentences and glossary (3.3) and the summary screen (3.4) come next.
+**Status:** Problems 3.1 (captures, `SummaryBuilder`) and 3.2 (App Privacy Report, `ReportSummaryBuilder`) done. The sentences and glossary (3.3) and the summary screen (3.4) come next.
 
 ## Purpose
 
@@ -10,7 +10,7 @@ Turn a capture into one entry per app that a non-technical reader can follow: wh
 
 `SummaryBuilder.build(flows:index:classifier:apps:) -> CaptureSummary`, at read time only, never on the packet path. Inputs are the flows and the hostname index of one capture, or several captures merged by the caller. One pass, one label per distinct hostname.
 
-- `apps`: one `CaptureAppSummary` per app, sorted by name (fixed locale, the same on every Mac)
+- `apps`: one `CaptureAppSummary` per app, sorted by name (case-insensitive and non-localized, the same on every Mac)
 - `system`: one "iOS system" entry for every system process (company Apple)
 - `noProcess`: connections iOS did not tag with any process (counts only)
 - `excluded`: the Mac link (`deviceLink`) and local network (`localNetwork`) traffic, left out as in the quality report
@@ -53,3 +53,17 @@ Each entry has:
 - `Tests/ReportTests/SummaryHonestyTests.swift`: on the scenario and on every fixture capture, the apps' unseen bytes per reason equal the quality report's `unnamedShare` numerators, the apps' coverage base equals its app-traffic denominator, and apps + system + no process + excluded equals `hostnameCoverageSniOnly`'s denominator. Measured 2026-11-24: equal on all six fixture captures
 - The one deliberate difference: a connection whose name was seen only in a handshake with ECH (the flow itself has no server name) is named in the quality report but counted as hidden in the summary, because the visible name is the public outer name. A test pins it
 - `Tests/SummaryTests/SummaryTimingTests.swift`: 100,000 synthetic flows, some with curated names and some with AdGuard category-only names, build in 289 ms release (budget 1 s, checked in release only; 2026-11-24)
+
+## App Privacy Report summary (Problem 3.2)
+
+`ReportSummaryBuilder.build(contacts:classifier:apps:) -> ReportSummary`. The app reads the stored contacts and passes them in as `ReportContactInput` values (Summary does not import Storage). There are no bytes: the report counts contacts (Apple's hit counts) and distinct domains.
+
+- One entry per app, sorted by name; `appleApps` is one merged "Apple apps" entry for every bundle id under `com.apple.`, with `members` holding each Apple app's own summary for a drop-down (owner, 2026-11-24). A domain two Apple apps contacted counts once in the merged entry
+- Names: the app table's display name for an exact row; otherwise the bundle id (an app the table does not know, or knows only by a prefix such as `com.google.`). The company comes from the row, exact or prefix (owner, 2026-11-24)
+- Labels: the precedence table (curated, then Apple's `domainOwner`, then the AdGuard list; category from curated, then AdGuard). An Apple owner string counts under the curated parent it stands for (`apple-owner-aliases.tsv`), with the owner string as the brand
+- Bare IP addresses are never shown and no type holds a domain. An address Apple's owner names is identified under that company; any other address is not identified and stays in the denominator (OD16 revised by the owner, 2026-11-24)
+- Several imports: the store never holds overlapping imports (OD18), so hits for the same app and domain are summed and the domain counts once
+- The same rules as captures: the distinct parent company is the unit, the app's own company is counted, marked and first, AdGuard category-only names are counted apart
+- Domains are compared lowercased without a trailing dot, and app ids ignoring case, so one domain or one app is never counted twice. Parents compare ignoring case too; a list's spelling is shown over an Apple owner string that differs only in case
+- Timing: 100,000 contact rows over 5,000 distinct domains build in 390 ms release (budget 1 s); 100,000 distinct domains, far more than a real report, take about 2.9 s
+- Proof: `Tests/TestSupport/ReportSummaryCorpus.swift` (17 rows, every number by hand, every domain checked against the real classifier first) and `Tests/SummaryTests/ReportSummaryTests.swift` (11 tests, including one that no field holds bytes or a list of domains)
