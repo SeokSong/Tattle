@@ -24,6 +24,10 @@ printf '%s' "$commit" | grep -Eq '^[0-9a-f]{40}$' || { echo "provenance commit i
 
 actual=$(shasum -a 256 "$src/trackers.json" | cut -d' ' -f1)
 [ "$actual" = "$srcsha" ] || { echo "trackers.json does not match its provenance" >&2; exit 1; }
+# company names come from companies.json, so it must be the pinned copy too
+compsha=$(awk -F'\t' '$1 == "file" && $2 == "companies.json" { print $4 }' "$prov")
+[ -n "$compsha" ] && [ "$(shasum -a 256 "$src/companies.json" | cut -d' ' -f1)" = "$compsha" ] \
+  || { echo "companies.json does not match its provenance" >&2; exit 1; }
 
 mkdir -p "$out"
 raw=$(mktemp "$out/raw.XXXXXX")

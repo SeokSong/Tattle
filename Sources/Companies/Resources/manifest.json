@@ -104,9 +104,9 @@
       "sourceURL": "",
       "licence": "MIT (own data, public knowledge)",
       "fetched": "2026-11-24",
-      "sha256": "a05f2078d7e0701f93ab49b6987fcbdbdbc26562f1066ac88893cf775a5e44a7",
-      "sourceSHA256": "a05f2078d7e0701f93ab49b6987fcbdbdbc26562f1066ac88893cf775a5e44a7",
-      "rules": 56
+      "sha256": "ef2b5ee7e8f3895a02d6e78bf91d7d7774f0322954315166a0bb3c09b2d9d42e",
+      "sourceSHA256": "ef2b5ee7e8f3895a02d6e78bf91d7d7774f0322954315166a0bb3c09b2d9d42e",
+      "rules": 60
     }
   ]
 }

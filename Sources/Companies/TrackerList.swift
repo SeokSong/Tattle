@@ -138,10 +138,11 @@ public struct TrackerList: Sendable {
 
     /// the full name, then each parent suffix down to and including the registrable domain; the most
     /// specific row wins. never matches above the registrable domain. returns rows with no company too
-    public func lookup(_ name: String, registrable: String) -> (TrackerEntry, LabelRule)? {
+    /// `companyOnly` skips rows with no company and keeps walking up, so such a row never hides its parent's row
+    public func lookup(_ name: String, registrable: String, companyOnly: Bool = false) -> (TrackerEntry, LabelRule)? {
         var candidate = Substring(name)
         while true {
-            if let row = table[String(candidate)] {
+            if let row = table[String(candidate)], !companyOnly || row.company != nil {
                 return (row, candidate.count == registrable.count ? .trackerRegistrable : .trackerHostname)
             }
             if candidate.count <= registrable.count { return nil }

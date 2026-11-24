@@ -222,3 +222,19 @@ private func residentBytes() -> UInt64? {
     #expect(loadSeconds < 5)
     #expect(meanMicros < 1000)
 }
+
+@Test func trackerRowWithoutCompanyDoesNotHideItsParentRow() throws {
+    let list = try TrackerList(
+        parsing: "domain\tcompany\tadguardCategory\nads.example.com\t\tads\nexample.com\tExample Co\tads\n",
+        categories: try TrackerCategoryMap(parsing: mapText), aliases: try TrackerOwnerAliases(parsing: aliasText))
+    let c = CompanyClassifier(curated: try CuratedList(parsing: "domain\tcompany\tparent\tcategory\tnote\n"), trackers: list)
+    let label = c.classify(hostname: "x.ads.example.com")
+    #expect(label.source == .trackerList && label.company == "Example Co" && label.rule == .trackerRegistrable)
+    // the plain lookup still returns the companyless row, for Part 3
+    #expect(list.lookup("x.ads.example.com", registrable: "example.com")?.0.company == nil)
+}
+
+@Test func bundledTrackerListIsLoadedForTheApp() {
+    // the lazy list the classifier uses: empty would silently turn the AdGuard source off
+    #expect(TrackerList.bundled.count > 5000)
+}

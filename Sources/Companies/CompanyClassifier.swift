@@ -102,7 +102,7 @@ public struct CompanyClassifier: Sendable {
         case .trackerList:
             // a row with no company (its tracker name is only a domain) is not an answer yet: Part 3 decides how
             // its category is shown. until then it is not identified, like no match
-            guard let registrable, let (entry, rule) = trackers.lookup(name, registrable: registrable),
+            guard let registrable, let (entry, rule) = trackers.lookup(name, registrable: registrable, companyOnly: true),
                   let company = entry.company else { break }
             return CompanyLabel(
                 hostname: name, registrableDomain: registrable, company: company, parent: entry.parent ?? company,

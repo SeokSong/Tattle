@@ -952,15 +952,15 @@ let companiesUsage = """
                           write the most frequent unidentified registrable domains to a local file
                           (tab separated: flows, bytes, domain; mode 600, new file only). names go only to
                           that file, never to the screen. refused inside a git work tree
-      --sources <list>   curated (default, the frozen baseline) or curated,trackerList
+      --sources <list>   curated (default, the frozen baseline) or curated,trackerList; --write-bands needs curated
     sources: the curated list only unless --sources is given (the frozen baseline). exit codes: 0 ok, 3 below the floor, 1 error
 
     usage: tattle companies agreement --report <App_Privacy_Report.ndjson> [--disagreements-out <file>] [--second <source>]
-      classifies every domain of the report with the curated list alone and with Apple's owner string alone
+      classifies every domain of the report with the curated list alone and with the second source alone
       (neither sees the other) and prints counts only. IP addresses are excluded and counted
       --second <source>   appleOwner (default) or trackerList: the source compared with the curated list
       --disagreements-out <file>
-                          write every disagreement and every name only Apple named to a local file (tab
+                          write every disagreement and every name only the second source named to a local file (tab
                           separated; mode 600, new file only; refused inside a git work tree)
 
     usage: tattle companies audit --references <dir> [--report <file>] [--captures <dir>]
@@ -1005,15 +1005,12 @@ func runCompanies(_ args: [String]) async -> Int32 {
             case "--write-bands": writeBandsPath = args[i]
             case "--unmatched-out": unmatchedOut = args[i]
             case "--sources":
-                let parts = args[i].split(separator: ",", omittingEmptySubsequences: false).map(String.init)
-                var parsed: [LabelSource] = []
-                for part in parts {
-                    guard part == "curated" || part == "trackerList", let source = LabelSource(rawValue: part),
-                          !parsed.contains(source) else { return fail("--sources takes curated and trackerList") }
-                    parsed.append(source)
+                // only the frozen baseline or the bundled order: the AdGuard list never comes before the curated list (1.6 D)
+                switch args[i] {
+                case "curated": sources = [.curated]
+                case "curated,trackerList": sources = [.curated, .trackerList]
+                default: return fail("--sources takes curated or curated,trackerList")
                 }
-                guard !parsed.isEmpty else { return fail("--sources takes curated and trackerList") }
-                sources = parsed
             default: label = args[i]
             }
         default:
@@ -1024,6 +1021,8 @@ func runCompanies(_ args: [String]) async -> Int32 {
     }
     if writeBandsPath != nil && label == nil { return fail("--write-bands needs --label") }
     if writeBandsPath != nil && bandsPath != nil { return fail("use --bands or --write-bands, not both") }
+    // band files are the curated-only baseline: a floor raised by another source would fail the next curated run
+    if writeBandsPath != nil && sources != [LabelSource.curated] { return fail("--write-bands works only with the curated list (the frozen baseline)") }
     // the file holds real domain names: never inside a git work tree, checked before any work is done
     if let unmatchedOut, FileOwnership.gitWorkTreeRoot(containing: unmatchedOut) != nil {
         return fail("--unmatched-out must point outside the git work tree: the file holds real domain names")
