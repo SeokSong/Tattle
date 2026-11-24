@@ -2,19 +2,34 @@ Tattle: third-party notices
 ===========================
 
 Tattle's own code is released under the MIT licence (see LICENSE at the repository root).
-This folder also ships third-party data under its own licence.
+This folder also ships third-party data under their own licences.
 
 Public Suffix List
 ------------------
 
 - Source: https://publicsuffix.org/list/public_suffix_list.dat
 - Version and commit: see manifest.json (psl.dat is built from that file by
-  scripts/build-companies-data.sh; the ICANN rules and the list's licence header are kept,
-  the private section is dropped)
+  scripts/build-companies-data.sh; the list's licence header and the rules of both the ICANN
+  and the private section are kept, with each private block's platform name)
 - Licence: Mozilla Public License, version 2.0. The text below is from
   https://www.mozilla.org/media/MPL/2.0/index.txt
-- The data is used unmodified apart from dropping the private section. The complete
-  original list is available from the source URL above.
+- The rules are used unmodified; comments are dropped except each private block's platform
+  name. The complete original list is available from the source URL above.
+
+AdGuard companiesdb tracker list
+--------------------------------
+
+- Source: https://github.com/AdguardTeam/companiesdb (dist/trackers.json and
+  dist/companies.json), by AdGuard. Based on the Whotracks.me database
+  (https://whotracks.me, CC BY 4.0, by Ghostery).
+- Version, commit and checksums: see manifest.json (tracker/tracker.tsv is built from that
+  commit by scripts/build-tracker-list.sh)
+- Licence: Creative Commons Attribution-ShareAlike 4.0 International,
+  https://creativecommons.org/licenses/by-sa/4.0/ . The full text is in tracker/LICENSE.
+  This licence covers the tracker folder only; the rest of Tattle is MIT.
+- Changes made: only the domain, company name and category are kept; company names are
+  trimmed; a tracker with no company whose name is only a domain gets an empty company;
+  domains that are public suffixes are not used.
 
 ------------------------------------------------------------------------------
 

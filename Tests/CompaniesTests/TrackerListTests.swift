@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import CryptoKit
+import Darwin
 import Companies
 
 private let mapText = "adguardCategory\tcategory\tnote\nads\tadvertising\tn\nstats\tanalytics\tn\nmisc\tunclassified\tn\n"
@@ -167,4 +168,57 @@ private func trackerClassifier(curated: String, trackers: String) throws -> Comp
     let c = try trackerClassifier(curated: "", trackers: "trk-only.test\tBlinkerly\tads\n")
     #expect(c.classify(hostname: "trk-only.test", order: [.curated]).source == .none)
     #expect(c.classify(hostname: "trk-only.test", order: [.curated, .trackerList]).source == .trackerList)
+}
+
+// MARK: credits and load budget
+
+@Test func noticesCreditAdGuardAndWhotracksMe() throws {
+    let url = try #require(DatasetManifest.resourceURL("NOTICES.txt"))
+    let text = try String(contentsOf: url, encoding: .utf8)
+    #expect(text.contains("AdGuard companiesdb"))
+    #expect(text.contains("Whotracks.me"))
+    #expect(text.contains("Attribution-ShareAlike 4.0"))
+    #expect(text.contains("https://creativecommons.org/licenses/by-sa/4.0/"))
+    #expect(text.contains("https://github.com/AdguardTeam/companiesdb"))
+    #expect(!text.contains("the private section is dropped"))
+}
+
+/// copy of MetricsLog.residentBytes() (CompaniesTests cannot import Capture)
+private func residentBytes() -> UInt64? {
+    var info = mach_task_basic_info()
+    var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+    let result = withUnsafeMutablePointer(to: &info) { pointer in
+        pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+            task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+        }
+    }
+    guard result == KERN_SUCCESS else { return nil }
+    return UInt64(info.resident_size)
+}
+
+@Test func bundledTrackerLoadIsCheapAndFast() throws {
+    let before = residentBytes()
+    let start = Date()
+    let list = try TrackerList.loadBundled()
+    let loadSeconds = Date().timeIntervalSince(start)
+    let after = residentBytes()
+
+    let url = try #require(DatasetManifest.resourceURL("tracker/tracker.tsv"))
+    let text = try String(contentsOf: url, encoding: .utf8)
+    let names = text.split(separator: "\n").dropFirst().compactMap { line in
+        line.split(separator: "\t", omittingEmptySubsequences: false).first.map { "x." + $0 }
+    }
+    let lookupStart = Date()
+    for name in names {
+        _ = list.lookup(name, registrable: registrableDomain(of: name) ?? name)
+    }
+    let lookupSeconds = Date().timeIntervalSince(lookupStart)
+    let meanMicros = names.isEmpty ? 0 : lookupSeconds * 1_000_000 / Double(names.count)
+
+    var delta = "unknown"
+    if let before, let after, after >= before { delta = "\((after - before) / 1024)" }
+    print("tracker list budget: rows \(list.count), load \(Int(loadSeconds * 1000)) ms, resident delta \(delta) KB, mean lookup \(Int(meanMicros)) µs")
+
+    #expect(loadSeconds < 5)
+    #expect(meanMicros < 1000)
 }

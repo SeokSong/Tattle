@@ -40,6 +40,8 @@ struct AboutView: View {
             }
             Text("The Public Suffix List is used to find the registrable part of a hostname. It is published under the Mozilla Public License 2.0.")
                 .font(.caption).foregroundStyle(.secondary)
+            Text("Tracker company names come from AdGuard companiesdb, based on Whotracks.me. That data is published under the Creative Commons Attribution-ShareAlike 4.0 licence.")
+                .font(.caption).foregroundStyle(.secondary)
             HStack { Spacer(); Button("Close") { dismiss() }.keyboardShortcut(.defaultAction) }
         }
         .padding(24)
