@@ -45,6 +45,15 @@ private func classify(_ f: Flow) -> Classification { Classifier.classify(f) }
     #expect(c == Classification(category: .helper, rule: "helper.eproc"))
 }
 
+@Test func systemProcessForAnotherSystemProcessIsSystem() {
+    // nsurlsessiond working for trustd is the system, not a helper for an app (review of PR #7)
+    let c = classify(flow([(proc("nsurlsessiond", eproc: "trustd"), 5)]))
+    #expect(c == Classification(category: .system, rule: "system.process"))
+    // still local when it talks to the local network
+    let local = classify(flow([(proc("nsurlsessiond", eproc: "trustd"), 5)], remote: v4(192, 168, 1, 20)))
+    #expect(local.category == .localNetwork)
+}
+
 @Test func systemProcessIsSystem() {
     let c = classify(flow([(proc("apsd"), 5)]))
     #expect(c == Classification(category: .system, rule: "system.process"))

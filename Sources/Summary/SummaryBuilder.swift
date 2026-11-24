@@ -95,21 +95,19 @@ public enum SummaryBuilder {
                 if result.isPossible {
                     add(&entry.hinted, bytes)
                     if label.isMatched, let parent = label.parent ?? label.company { entry.possible.insert(parent) }
-                } else if label.isMatched {
+                } else if label.isMatched, let parent = label.parent ?? label.company {
+                    // identified only together with the company it names: coverage never rises without a name
                     add(&entry.identified, bytes)
-                    if let parent = label.parent ?? label.company {
-                        var p = entry.parents[parent] ?? ParentAcc()
-                        if let brand = label.company { p.brands.insert(brand) }
-                        p.categories.insert(label.category)
-                        p.relation = label.relation
-                        add(&p.traffic, bytes)
-                        entry.parents[parent] = p
-                    }
+                    var p = entry.parents[parent] ?? ParentAcc()
+                    if let brand = label.company { p.brands.insert(brand) }
+                    p.categories.insert(label.category)
+                    p.relation = label.relation
+                    add(&p.traffic, bytes)
+                    entry.parents[parent] = p
                 } else {
                     add(&entry.notIdentified, bytes)
                     if let registrable = label.registrableDomain,
-                       let (row, _) = classifier.trackers.lookup(label.hostname, registrable: registrable),
-                       row.company == nil, row.category != .unclassified {
+                       let row = classifier.trackers.unnamedCategoryRow(label.hostname, registrable: registrable) {
                         entry.unnamed[row.category, default: []].insert(registrable)
                     }
                 }
@@ -147,7 +145,8 @@ public enum SummaryBuilder {
 
         let system = entries[CaptureSummary.systemKey].map(finish)
         let appSummaries = entries.values.filter { $0.key != CaptureSummary.systemKey }.map(finish).sorted {
-            let order = $0.name.localizedStandardCompare($1.name)
+            // a fixed locale, so the order is the same on every Mac
+            let order = $0.name.compare($1.name, options: [.caseInsensitive, .numeric], range: nil, locale: Locale(identifier: "en_US_POSIX"))
             return order == .orderedSame ? $0.key < $1.key : order == .orderedAscending
         }
         return CaptureSummary(

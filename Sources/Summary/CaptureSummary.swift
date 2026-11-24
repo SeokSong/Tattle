@@ -85,7 +85,7 @@ public struct CaptureAppSummary: Sendable, Equatable {
 }
 
 public struct CaptureSummary: Sendable, Equatable {
-    /// sorted by name (`localizedStandardCompare`), then by key
+    /// sorted by name (case-insensitive, numbers by value, fixed en_US_POSIX locale), then by key
     public let apps: [CaptureAppSummary]
     /// nil when no system traffic went to port 443
     public let system: CaptureAppSummary?

@@ -238,3 +238,11 @@ private func residentBytes() -> UInt64? {
     // the lazy list the classifier uses: empty would silently turn the AdGuard source off
     #expect(TrackerList.bundled.count > 5000)
 }
+
+@Test func unnamedCategoryRowWalksPastAnUnclassifiedRow() throws {
+    let list = try TrackerList(
+        parsing: "domain\tcompany\tadguardCategory\nnoco.test\t\tads\nx.noco.test\t\tmisc\n",
+        categories: try TrackerCategoryMap(parsing: mapText), aliases: try TrackerOwnerAliases(parsing: aliasText))
+    #expect(list.unnamedCategoryRow("a.x.noco.test", registrable: "noco.test")?.category == .advertising)
+    #expect(list.unnamedCategoryRow("other.test", registrable: "other.test") == nil)
+}

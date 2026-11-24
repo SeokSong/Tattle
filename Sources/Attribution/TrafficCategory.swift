@@ -53,7 +53,8 @@ public enum Classifier {
     private static let deviceLinkLookup: Set<String> =
         Set(deviceLinkProcesses).union(deviceLinkProcesses.map(ProcessNames.cut))
 
-    /// precedence, first match wins: deviceLink.process, app or helper (an app-tagged flow is never moved),
+    /// precedence, first match wins: deviceLink.process, app or helper (an app-tagged flow is never moved; a system
+    /// process acting for another system process is not a helper),
     /// deviceLink.linkLocal, localNetwork.address, system, unknown
     public static func classify(_ flow: Flow) -> Classification {
         let result = Attributor.attribute(flow.tally)
@@ -68,8 +69,12 @@ public enum Classifier {
                 return Classification(category: .helper, rule: ClassifierRule.helperEproc)
             }
             return Classification(category: .app, rule: ClassifierRule.appProcess)
-        case .onBehalfOf:
-            return Classification(category: .helper, rule: ClassifierRule.helperEproc)
+        case .onBehalfOf(let app, _):
+            // a system process working for another system process (nsurlsessiond for trustd) is system
+            // traffic, not a helper for an app: it falls through to the system rule below
+            if !Attributor.isSystemProcess(app) {
+                return Classification(category: .helper, rule: ClassifierRule.helperEproc)
+            }
         case .system, .unknown:
             break
         }
@@ -79,8 +84,12 @@ public enum Classifier {
         if flow.key.remoteAddress.isLocalOnly {
             return Classification(category: .localNetwork, rule: ClassifierRule.localNetworkAddress)
         }
-        if case .system = result.primary {
+        switch result.primary {
+        case .system, .onBehalfOf:
+            // .onBehalfOf reaches this point only when the effective process is a system process
             return Classification(category: .system, rule: ClassifierRule.systemProcess)
+        case .app, .unknown:
+            break
         }
         return Classification(category: .unknown, rule: ClassifierRule.unknownNoProcess)
     }

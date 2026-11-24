@@ -151,6 +151,18 @@ public struct TrackerList: Sendable {
         }
     }
 
+    /// the most specific row with a category other than `unclassified` and no company, walking up like `lookup`.
+    /// for a name no source names a company for: its category counts apart, never as a company
+    public func unnamedCategoryRow(_ name: String, registrable: String) -> TrackerEntry? {
+        var candidate = Substring(name)
+        while true {
+            if let row = table[String(candidate)], row.company == nil, row.category != .unclassified { return row }
+            if candidate.count <= registrable.count { return nil }
+            guard let dot = candidate.firstIndex(of: ".") else { return nil }
+            candidate = candidate[candidate.index(after: dot)...]
+        }
+    }
+
     /// reads the bundled files and the manifest entry
     public static func loadBundled() throws -> TrackerList {
         guard let mapURL = DatasetManifest.resourceURL("tracker-categories.tsv"),
