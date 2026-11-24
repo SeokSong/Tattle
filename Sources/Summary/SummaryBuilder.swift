@@ -145,8 +145,8 @@ public enum SummaryBuilder {
 
         let system = entries[CaptureSummary.systemKey].map(finish)
         let appSummaries = entries.values.filter { $0.key != CaptureSummary.systemKey }.map(finish).sorted {
-            // a fixed locale, so the order is the same on every Mac
-            let order = $0.name.compare($1.name, options: [.caseInsensitive, .numeric], range: nil, locale: Locale(identifier: "en_US_POSIX"))
+            // a non-localized compare: the same order on every Mac. (with the en_US_POSIX locale, Foundation ignores .caseInsensitive)
+            let order = $0.name.compare($1.name, options: [.caseInsensitive, .numeric])
             return order == .orderedSame ? $0.key < $1.key : order == .orderedAscending
         }
         return CaptureSummary(

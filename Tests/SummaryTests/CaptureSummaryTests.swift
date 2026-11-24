@@ -148,3 +148,11 @@ private func asTraffic(_ t: (connections: Int, bytes: Int)) -> TrafficCount {
     #expect(s.excluded[.localNetwork] == TrafficCount())
     #expect(s.excluded.count == 2)
 }
+
+@Test func appOrderIgnoresCase() throws {
+    // a lower-case name must not sort after every capitalised one (Foundation ignores .caseInsensitive with the
+    // en_US_POSIX locale, which an earlier version used)
+    let names = ["Zappy", "bobber", "Quill"]
+    let sorted = names.sorted { $0.compare($1, options: [.caseInsensitive, .numeric]) == .orderedAscending }
+    #expect(sorted == ["bobber", "Quill", "Zappy"])
+}

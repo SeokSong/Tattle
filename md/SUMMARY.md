@@ -10,7 +10,7 @@ Turn a capture into one entry per app that a non-technical reader can follow: wh
 
 `SummaryBuilder.build(flows:index:classifier:apps:) -> CaptureSummary`, at read time only, never on the packet path. Inputs are the flows and the hostname index of one capture, or several captures merged by the caller. One pass, one label per distinct hostname.
 
-- `apps`: one `CaptureAppSummary` per app, sorted by name (fixed locale, the same on every Mac)
+- `apps`: one `CaptureAppSummary` per app, sorted by name (case-insensitive and non-localized, the same on every Mac)
 - `system`: one "iOS system" entry for every system process (company Apple)
 - `noProcess`: connections iOS did not tag with any process (counts only)
 - `excluded`: the Mac link (`deviceLink`) and local network (`localNetwork`) traffic, left out as in the quality report
