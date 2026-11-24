@@ -166,7 +166,8 @@ public struct TrackerList: Sendable {
     /// lazy, loaded once. empty means the tracker source never matches; `loadBundled()` reports why
     public static let bundled: TrackerList = (try? loadBundled()) ?? TrackerList.empty
 
-    private static let empty: TrackerList = {
+    /// a list with no rows: the tracker source never matches. for tests and as the fallback
+    public static let empty: TrackerList = {
         // the header alone always parses
         let map = try? TrackerCategoryMap(parsing: TrackerCategoryMap.header.joined(separator: "\t"))
         let aliases = try? TrackerOwnerAliases(parsing: TrackerOwnerAliases.header.joined(separator: "\t"))

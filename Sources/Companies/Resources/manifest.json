@@ -51,13 +51,13 @@
     {
       "name": "Tattle source precedence table",
       "file": "precedence.tsv",
-      "version": "1",
+      "version": "2",
       "commit": "",
       "sourceURL": "",
       "licence": "MIT (own data, public knowledge)",
       "fetched": "2026-11-24",
-      "sha256": "9741728ed4328dfb40a8339077c6cd37c60f65ac12debbbd0a8361e0d1d427c3",
-      "sourceSHA256": "9741728ed4328dfb40a8339077c6cd37c60f65ac12debbbd0a8361e0d1d427c3",
+      "sha256": "eb80e76b2672302b3379f3c424fe585128a9b9c525c50f97a52368d7a618bbcf",
+      "sourceSHA256": "eb80e76b2672302b3379f3c424fe585128a9b9c525c50f97a52368d7a618bbcf",
       "rules": 2
     },
     {

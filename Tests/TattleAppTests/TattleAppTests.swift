@@ -296,3 +296,18 @@ private func dnsAnswer(_ host: String, _ address: IPAddress, ago: TimeInterval =
         #expect(row.name == entry.name && row.version == entry.version && row.licence == entry.licence)
     }
 }
+
+private let adguardMapText = "adguardCategory\tcategory\tnote\nads\tadvertising\tn\nstats\tanalytics\tn\nmisc\tunclassified\tn\n"
+private let adguardAliasText = "adguardCompany\tparent\tnote\nZorblax Holdings Inc.\tZorblax Holdings\tn\n"
+
+@Test func companyDetailUsesTheSameWordsForTheAdGuardList() throws {
+    let f = flow([ProcessPair("Reddit", 1, nil, nil): 3], bytes: 900, name: "x.trk-only.test")
+    let trackers = try TrackerList(
+        parsing: "domain\tcompany\tadguardCategory\ntrk-only.test\tBlinkerly\tads\n",
+        categories: TrackerCategoryMap(parsing: adguardMapText), aliases: TrackerOwnerAliases(parsing: adguardAliasText),
+        version: "2026-11-23")
+    let classifier = CompanyClassifier(curated: try CuratedList(parsing: "domain\tcompany\tparent\tcategory\tnote\n"), trackers: trackers)
+    let line = try #require(topFlows([f], classifier: classifier).first)
+    #expect(line.companyText == "Blinkerly · Advertising")
+    #expect(line.companyDetail == "Company list version 2026-11-23")
+}

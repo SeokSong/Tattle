@@ -24,12 +24,12 @@ private let categoryRow = "category\tcurated\tnone\tn\n"
     #expect(aliases.count == manifest.datasets.first { $0.file == "apple-owner-aliases.tsv" }?.rules)
 }
 
-@Test func provisionalOrderIsCuratedThenAppleWithCDNException() {
+@Test func bundledOrderIsCuratedThenAppleThenTracker() {
     let table = PrecedenceTable.bundled
-    #expect(table.order(for: .owner) == [.curated, .appleOwner])
+    #expect(table.order(for: .owner) == [.curated, .appleOwner, .trackerList])
     #expect(table.row(for: .owner).exceptions == [PrecedenceException(skip: .appleOwner, when: .cdnOperator)])
-    #expect(table.order(for: .category) == [.curated])
-    #expect(CompanyClassifier.provisionalOrder == [.curated, .appleOwner])
+    #expect(table.order(for: .category) == [.curated, .trackerList])
+    #expect(CompanyClassifier.provisionalOrder == [.curated, .appleOwner, .trackerList])
 }
 
 @Test func bundledAliasesPointAtCuratedParents() {
@@ -104,20 +104,20 @@ private let categoryRow = "category\tcurated\tnone\tn\n"
     let curated = try CuratedList(parsing: "domain\tcompany\tparent\tcategory\tnote\nzorblax.com\tZorblax\tZorblax Holdings\tadvertising\tn\n")
     let aliases = try AppleOwnerTable(parsing: "appleOwner\tkind\tparent\tnote\n")
     let flipped = try PrecedenceTable(parsing: header + "owner\tappleOwner,curated\tnone\tn\n" + categoryRow)
-    let c = CompanyClassifier(curated: curated, precedence: flipped, appleOwners: aliases)
+    let c = CompanyClassifier(curated: curated, precedence: flipped, appleOwners: aliases, trackers: .empty)
     let label = c.classify(hostname: "zorblax.com", appleOwner: "Somebody Ltd")
     #expect(label.source == .appleOwner && label.company == "Somebody Ltd")
     // the category still comes from the list, not from Apple
     #expect(label.category == .advertising)
     // and the same names with the bundled order give the curated answer
-    let normal = CompanyClassifier(curated: curated, appleOwners: aliases)
+    let normal = CompanyClassifier(curated: curated, appleOwners: aliases, trackers: .empty)
     #expect(normal.classify(hostname: "zorblax.com", appleOwner: "Somebody Ltd").source == .curated)
 }
 
 @Test func categoryComesFromListNotApple() throws {
     let curated = try CuratedList(parsing: "domain\tcompany\tparent\tcategory\tnote\nzorblax.com\tZorblax\tZorblax Holdings\tadvertising\tn\n")
     let aliases = try AppleOwnerTable(parsing: "appleOwner\tkind\tparent\tnote\nZorblax Holdings Ltd\talias\tZorblax Holdings\tn\n")
-    let c = CompanyClassifier(curated: curated, appleOwners: aliases)
+    let c = CompanyClassifier(curated: curated, appleOwners: aliases, trackers: .empty)
     // Apple alone never gives a category, even for an owner that aliases to a curated parent
     let apple = c.classify(hostname: "unlisted.test", appleOwner: "Zorblax Holdings Ltd")
     #expect(apple.source == .appleOwner && apple.category == .unclassified && apple.parent == nil)
@@ -131,7 +131,7 @@ private let categoryRow = "category\tcurated\tnone\tn\n"
 @Test func exceptionSkipsCDNOwner() throws {
     let curated = try CuratedList(parsing: "domain\tcompany\tparent\tcategory\tnote\nzorblax.com\tZorblax\tZorblax Holdings\tadvertising\tn\n")
     let aliases = try AppleOwnerTable(parsing: "appleOwner\tkind\tparent\tnote\nQuillnet Edge Inc\tcdn\tQuillnet\tn\nWexford Corp\talias\tWexford\tn\n")
-    let c = CompanyClassifier(curated: curated, appleOwners: aliases)
+    let c = CompanyClassifier(curated: curated, appleOwners: aliases, trackers: .empty)
     let skipped = c.resolve(hostname: "customer-site.test", appleOwner: "Quillnet Edge Inc")
     #expect(skipped.label.source == .none && skipped.label.company == nil)
     #expect(skipped.skipped == [SkippedSource(source: .appleOwner, condition: .cdnOperator)])
@@ -168,7 +168,7 @@ private func syntheticClassifier() throws -> CompanyClassifier {
         Quillnet Edge Inc\tcdn\tQuillnet\tn
 
         """)
-    return CompanyClassifier(curated: curated, appleOwners: aliases)
+    return CompanyClassifier(curated: curated, appleOwners: aliases, trackers: .empty)
 }
 
 private let observations: [(domain: String, appleOwner: String?)] = [

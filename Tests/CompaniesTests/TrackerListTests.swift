@@ -129,3 +129,42 @@ private func list(_ rows: String) throws -> TrackerList {
     #expect(try String(contentsOf: licence, encoding: .utf8).contains("Attribution-ShareAlike 4.0 International"))
     #expect(DatasetManifest.resourceURL("tracker/README.md") != nil)
 }
+
+// MARK: classifier
+
+private func trackerClassifier(curated: String, trackers: String) throws -> CompanyClassifier {
+    CompanyClassifier(curated: try CuratedList(parsing: "domain\tcompany\tparent\tcategory\tnote\n" + curated),
+                      trackers: try list(trackers))
+}
+
+@Test func classifierUsesTrackerListAfterCurated() throws {
+    let c = try trackerClassifier(curated: "zorblax.com\tZorblax\tZorblax Holdings\tadvertising\tn\n",
+                                  trackers: "ads.zorblax.com\tZorblax Tracker\tads\ntrk-only.test\tBlinkerly\tads\n")
+    #expect(c.classify(hostname: "ads.zorblax.com").source == .curated)
+    let label = c.classify(hostname: "x.trk-only.test")
+    #expect(label.source == .trackerList)
+    #expect(label.rule == .trackerRegistrable)
+    #expect(label.datasetId == TrackerList.datasetId)
+}
+
+@Test func trackerLabelWithoutCompanyIsNotIdentified() throws {
+    let c = try trackerClassifier(curated: "", trackers: "nocompany.test\t\tads\n")
+    let label = c.label(hostname: "nocompany.test", from: .trackerList)
+    #expect(!label.isMatched)
+    #expect(label.category == .unclassified)
+    #expect(c.classify(hostname: "nocompany.test").source == .none)
+}
+
+@Test func trackerUnclassifiedCategoryStaysUnclassified() throws {
+    let c = try trackerClassifier(curated: "", trackers: "x.test\tSome Co\tmisc\n")
+    let label = c.classify(hostname: "x.test")
+    #expect(label.source == .trackerList)
+    #expect(label.company == "Some Co")
+    #expect(label.category == .unclassified)
+}
+
+@Test func curatedOnlyOrderIgnoresTrackers() throws {
+    let c = try trackerClassifier(curated: "", trackers: "trk-only.test\tBlinkerly\tads\n")
+    #expect(c.classify(hostname: "trk-only.test", order: [.curated]).source == .none)
+    #expect(c.classify(hostname: "trk-only.test", order: [.curated, .trackerList]).source == .trackerList)
+}
