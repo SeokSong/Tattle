@@ -154,6 +154,8 @@ final class AppModel: ObservableObject {
                 self?.storeError = "\(result.failed.count) old capture folder(s) could not be removed. They hold no packets and are safe to delete from ~/Library/Application Support/\(AppIdentity.supportFolder)/run."
             }
         }
+        // demo mode (made-up data, for screenshots and the reader test) opens on the Summary screen
+        if ProcessInfo.processInfo.environment["TATTLE_DEMO_SUMMARY"] == "1" { selection = .summary }
         DiagnosticFiles.purge(in: DiagnosticFiles.directory(under: storePath.deletingLastPathComponent()), now: Date())
         refreshSessions()
         importModel.refresh()

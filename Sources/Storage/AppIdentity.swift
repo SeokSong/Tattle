@@ -7,9 +7,16 @@ public enum AppIdentity {
     public static let supportFolder = "Tattle"
     static let legacySupportFolder = "Watch"
 
-    /// the user's Application Support directory
-    public static func defaultBase() -> URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+    /// the environment variable that points the whole data folder (database, run folders, diagnostics)
+    /// somewhere else, so the app can be launched for a check or a screenshot without touching the real data
+    public static let supportBaseVariable = "TATTLE_SUPPORT_BASE"
+
+    /// the user's Application Support directory, or `TATTLE_SUPPORT_BASE` when it holds an absolute path
+    public static func defaultBase(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
+        if let override = environment[supportBaseVariable], override.hasPrefix("/") {
+            return URL(fileURLWithPath: override, isDirectory: true)
+        }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
     }
 

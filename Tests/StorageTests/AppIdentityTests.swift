@@ -86,3 +86,12 @@ private func mode(_ url: URL) -> Int? {
     #expect(path.deletingLastPathComponent().lastPathComponent == "Tattle")
     #expect(marker(path.deletingLastPathComponent()) == "old")
 }
+
+@Test func supportBaseCanBePointedElsewhere() {
+    // TATTLE_SUPPORT_BASE moves the whole data folder, so a launch for a check never touches the real data
+    let temp = "/tmp/tattle-check-base"
+    #expect(AppIdentity.defaultBase(environment: [AppIdentity.supportBaseVariable: temp]).path == temp)
+    // a relative path is ignored: the real folder is used, never a folder relative to wherever the app started
+    #expect(AppIdentity.defaultBase(environment: [AppIdentity.supportBaseVariable: "relative"]).path.hasSuffix("Application Support"))
+    #expect(AppIdentity.defaultBase(environment: [:]).path.hasSuffix("Application Support"))
+}
