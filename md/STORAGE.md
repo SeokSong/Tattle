@@ -205,6 +205,8 @@ Every place Tattle keeps data. Each later change that stores something new must 
 | Diagnostic raw-packet files (opt-in) | App: `diagnostics/` next to the database. CLI: the path given to `--diagnostic` (created new, 0600) | App: 24 hours. CLI: user-managed | App files yes; CLI files no |
 | Retention setting (days, one number) | `UserDefaults` of the app (`AppModel.retentionKey`) | Until changed | No |
 | "Show data amounts" (on or off) | `UserDefaults` of the app (`AppModel.showDataAmountsKey`) | Until changed | No |
+| "Show map of company head offices" (on or off) | `UserDefaults` of the app (`AppModel.showMapKey`) | Until changed | No |
+| Map lines of the live capture (company, head office, connection counts) | Memory only (`MapFeed`), rebuilt from the live snapshots | Until the next capture or quit | Not stored |
 | Temporary files: `devicectl` JSON output (device name and id; `DeviceLookup`, `getDeviceInfo`), tool output of `rvictl`, `ifconfig` (`CaptureController.run`, 0600) | `FileManager.temporaryDirectory` (per-user, 0700) | Removed in a `defer` when the command ends; a crash can leave one until the system clears the folder | No |
 | Band files (`report --write-bands`): numbers only | The path given (the repo's `Tests/Expected/` for committed ones) | User-managed | No |
 | Capture script log and run directory | Root script's run folder (see [CAPTURE.md](CAPTURE.md)) | Removed by `stop()`; a directory a crashed app left is stopped and removed at the next launch. The script log moves to `logs/` (newest 10 kept) | Not touched; contains no packets, no hostnames |

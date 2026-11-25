@@ -8,6 +8,7 @@ import PCAPNG
 import Pipeline
 import Storage
 import Summary
+import WorldMap
 import SwiftUI
 
 // everything the views show. the app never runs as root: the privileged part is PrototypeCaptureLauncher.
@@ -18,6 +19,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     case connect = "Connect"
     case live = "Live"
     case sessions = "Sessions"
+    case map = "Map"
     case importReport = "Import"
     case settings = "Settings"
 
@@ -28,6 +30,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .summary: return "list.bullet.rectangle"
         case .connect: return "cable.connector"
         case .live: return "waveform"
+        case .map: return "globe.americas"
         case .sessions: return "clock.arrow.circlepath"
         case .importReport: return "square.and.arrow.down"
         case .settings: return "gearshape"
@@ -142,6 +145,25 @@ final class AppModel: ObservableObject {
         didSet { UserDefaults.standard.set(showDataAmounts, forKey: Self.showDataAmountsKey) }
     }
 
+    /// the company map (Milestone 4): off until the user turns it on in Settings (owner, 2026-11-25); remembered
+    static let showMapKey = "showMap"
+    @Published var showMap: Bool = UserDefaults.standard.bool(forKey: AppModel.showMapKey) {
+        didSet {
+            UserDefaults.standard.set(showMap, forKey: Self.showMapKey)
+            if !showMap && selection == .map { selection = .live }
+        }
+    }
+    /// the sidebar: the Map screen only while the map is on
+    var sidebarItems: [SidebarItem] { SidebarItem.allCases.filter { $0 != .map || showMap } }
+    /// the live capture's map lines, fed from the same snapshots as the Live tables
+    let mapFeed = MapFeed()
+    /// where map lines start; the user's own place arrives in Part 5
+    @Published var mapStart = MapStart.fallback
+    /// the Summary's map lines (demo screenshots: made-up apps contacting real companies)
+    var summaryMap: (lines: MapLines, notDrawn: Int) {
+        ProcessInfo.processInfo.environment["TATTLE_DEMO_MAP"] == "1" ? MapFeed.demoLines() : MapFeed.summaryLines(summaryScreen)
+    }
+
     /// the App Privacy Report import screen and list; views observe it directly
     let importModel: ImportModel
 
@@ -185,6 +207,8 @@ final class AppModel: ObservableObject {
         }
         // demo mode (made-up data, for screenshots and the reader test) opens on the Summary screen
         if ProcessInfo.processInfo.environment["TATTLE_DEMO_SUMMARY"] == "1" { selection = .summary }
+        // demo screenshots of the map: on for this run only, never written to the saved setting (no didSet in init)
+        if ProcessInfo.processInfo.environment["TATTLE_DEMO_MAP"] == "1" { showMap = true }
         // TATTLE_START_SCREEN opens a screen by name (for screenshots without clicking): summary, connect, live,
         // sessions, import, settings
         if let name = ProcessInfo.processInfo.environment["TATTLE_START_SCREEN"]?.lowercased(),
@@ -293,6 +317,7 @@ final class AppModel: ObservableObject {
             liveStats = PipelineStats()
             liveFlows = []
             liveDNS = []
+            mapFeed.reset()
             grouping = ProcessGrouping()
             topFlowLines = []
             moreFlows = 0
@@ -450,6 +475,7 @@ final class AppModel: ObservableObject {
                 self.liveFlows = flows
                 self.liveDNS = dns
                 self.updateDerived()
+                if self.showMap { self.mapFeed.ingest(flows: flows, dns: dns, now: Date()) }
             }
         }
     }

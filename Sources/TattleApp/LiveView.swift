@@ -34,7 +34,25 @@ struct LiveView: View {
         }
     }
 
+    @ViewBuilder
     private var content: some View {
+        if model.showMap {
+            // the map stays at the top, about 80% of the height; the tables scroll under it (owner, 2026-11-25)
+            GeometryReader { geo in
+                VStack(spacing: 0) {
+                    LiveMap(feed: model.mapFeed, start: model.mapStart)
+                        .padding([.horizontal, .top], 16)
+                        .frame(height: geo.size.height * 0.8)
+                    Divider()
+                    tables
+                }
+            }
+        } else {
+            tables
+        }
+    }
+
+    private var tables: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Live · this session").font(.headline).foregroundStyle(.secondary)

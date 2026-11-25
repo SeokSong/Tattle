@@ -5,7 +5,7 @@ struct RootView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(SidebarItem.allCases, selection: Binding(
+            List(model.sidebarItems, selection: Binding(
                 get: { Optional(model.selection) }, set: { if let item = $0 { model.selection = item } })
             ) { item in
                 Label {
@@ -22,6 +22,7 @@ struct RootView: View {
             case .summary: SummaryView()
             case .connect: ConnectView()
             case .live: LiveView()
+            case .map: MapScreen()
             case .sessions: SessionsView()
             case .importReport: ImportView(model: model.importModel)
             case .settings: SettingsView()

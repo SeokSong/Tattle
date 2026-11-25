@@ -37,6 +37,11 @@ struct SettingsView: View {
                 Text("Raw packets, including any unencrypted web traffic, are saved on this Mac until you delete them: after 24 hours or with Delete all.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("Map") {
+                Toggle("Show map of company head offices", isOn: $model.showMap)
+                Text("Draws a line from your location to the head office of each company your phone contacts, on Live, on the Summary and on its own Map screen. Head offices are where companies are based, not where their servers are.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("About") {
                 Button("Data sources and licences...") { showAbout = true }
             }
