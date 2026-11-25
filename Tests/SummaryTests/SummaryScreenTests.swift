@@ -19,12 +19,12 @@ private func everyString(_ screen: SummaryScreen) -> [String] {
     func strings(_ r: SummaryRow) -> [String] {
         var out = [r.title, r.subtitle, r.untraced] + [r.description, r.possible].compactMap { $0 }
         for t in r.traced { out += [t.text] + [t.detail].compactMap { $0 } }
-        for c in r.trackingCompanies + r.otherCompanies { out += [c.parent, c.text, c.seenIn] + c.brands }
+        for c in r.trackingCompanies + r.otherCompanies { out += [c.parent, c.text, c.seenIn] + c.brands + [c.dataShare].compactMap { $0 } }
         return out + r.children.flatMap(strings)
     }
     let headings = [SummaryScreen.trackingHeading, SummaryScreen.otherHeading, SummaryScreen.untracedHeading,
                     SummaryScreen.tracedHeading, SummaryScreen.possibleExplanation, SummaryScreen.appleAppsBreakdownHeading,
-                    SummaryScreen.tipsHeading]
+                    SummaryScreen.tipsHeading, SummaryScreen.dataAmountsToggle]
     return screen.overview + screen.tips + screen.rows.flatMap(strings) + [screen.noProcess].compactMap { $0 } + headings
 }
 

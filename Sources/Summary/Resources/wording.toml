@@ -43,6 +43,12 @@ list.nothing = "No companies traced"
 empty.state = "Nothing to show yet. Capture your iPhone's traffic or import an App Privacy Report to see which companies your apps contacted."
 howto.heading = "How to read this"
 
+# ---------------------------------------------------------------- data amounts (5.2; owner, 2026-11-24)
+# with "Show data amounts" on, each company bullet gets its share of the app's captured traffic (captures only)
+toggle.dataAmounts = "Show data amounts"
+data.share = "{percent}% of data"
+data.share.small = "under 1% of data"
+
 # ---------------------------------------------------------------- tips (OD5; owner, 2026-11-24)
 # shown once at the top of the Summary when at least one app contacted an advertising or tracking company. both Settings paths were
 # checked by the owner on iOS 27 on 2026-11-24; re-check them every year (a test fails after 365 days on purpose:
