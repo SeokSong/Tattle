@@ -23,8 +23,9 @@ private func everyString(_ screen: SummaryScreen) -> [String] {
         return out + r.children.flatMap(strings)
     }
     let headings = [SummaryScreen.trackingHeading, SummaryScreen.otherHeading, SummaryScreen.untracedHeading,
-                    SummaryScreen.tracedHeading, SummaryScreen.possibleExplanation, SummaryScreen.appleAppsBreakdownHeading]
-    return screen.overview + screen.rows.flatMap(strings) + [screen.noProcess].compactMap { $0 } + headings
+                    SummaryScreen.tracedHeading, SummaryScreen.possibleExplanation, SummaryScreen.appleAppsBreakdownHeading,
+                    SummaryScreen.tipsHeading]
+    return screen.overview + screen.tips + screen.rows.flatMap(strings) + [screen.noProcess].compactMap { $0 } + headings
 }
 
 @Test func screenRowsFollowTheOwnersOrder() throws {

@@ -84,6 +84,9 @@ public struct SummaryRow: Sendable, Equatable, Identifiable {
 public struct SummaryScreen: Sendable, Equatable {
     /// the overview bullets; empty when there is nothing to show
     public let overview: [String]
+    /// "What you can do" (OD5), once at the top (owner, 2026-11-24: the same tips on every app added nothing);
+    /// empty unless at least one app contacted an advertising or tracking company
+    public let tips: [String]
     public let rows: [SummaryRow]
     /// `SummaryText.noProcessSentence(combined.noProcess.connections)`
     public let noProcess: String?
@@ -96,9 +99,11 @@ public struct SummaryScreen: Sendable, Equatable {
     public static var otherHeading: String { Wording.bundled.text("detail.heading.other") }
     public static var untracedHeading: String { Wording.bundled.text("detail.heading.untraced") }
     public static var tracedHeading: String { Wording.bundled.text("detail.heading.traced") }
+    public static var tipsHeading: String { Wording.bundled.text("tips.heading") }
 
-    public init(overview: [String], rows: [SummaryRow], noProcess: String?) {
+    public init(overview: [String], tips: [String] = [], rows: [SummaryRow], noProcess: String?) {
         self.overview = overview
+        self.tips = tips
         self.rows = rows
         self.noProcess = noProcess
     }
@@ -128,7 +133,15 @@ public enum SummaryScreenBuilder {
         let apps = ordered(combined.cards.filter { $0.kind == .app })
         let rest = combined.cards.filter { $0.kind == .appleApps } + combined.cards.filter { $0.kind == .system }
         let rows = (apps + rest).map { row($0) }
-        return SummaryScreen(overview: overview, rows: rows, noProcess: SummaryText.noProcessSentence(combined.noProcess.connections))
+        // OD5 tips once at the top, when any single app (an Apple app inside the drop-down included) counts at
+        // least one advertising or tracking company
+        let anyTracking = combined.cards.contains { card in
+            (card.kind == .app && !Rating.countedCompanies(card.companies).isEmpty)
+                || card.members.contains { !Rating.countedCompanies($0.companies).isEmpty }
+        }
+        let tips = anyTracking ? [w.text("tip.backgroundRefresh"), w.text("tip.tracking")] : []
+        return SummaryScreen(overview: overview, tips: tips, rows: rows,
+                             noProcess: SummaryText.noProcessSentence(combined.noProcess.connections))
     }
 
     /// most advertising or tracking companies first, then by name (non-localized), then key

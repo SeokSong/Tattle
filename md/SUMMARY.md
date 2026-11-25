@@ -121,3 +121,10 @@ The format is a small subset of TOML (`key = "text"` lines and `#` comments), re
 - iOS system and the merged Apple apps card get no grade (a grade judges one app); each Apple app inside does
 - Proof: `Tests/SummaryTests/RatingTests.swift` checks the 14 made-up test apps the owner approved before the code was written (OwnAds changed from A to B with the own-company decision)
 - The threshold lives only in `rating.toml`; the older rating sentences read it too. A broken file is reported on standard error and the built-in scale is used
+
+## Tips (Problem 4.3, OD5)
+
+- Shown once under "What you can do" at the top of the Summary, when at least one app contacted an advertising or tracking company (owner, 2026-11-24: the same two tips on every app added nothing):
+  - "Limit background activity: Settings › General › Background App Refresh (may not stop every connection)"
+  - "Check tracking permission: Settings › Privacy & Security › Tracking"
+- The owner checked both Settings paths on iOS 27 on 2026-11-24. The version and date are in `wording.toml` (`tips.checked.*`); `tipsSettingsPathsAreRecheckedEveryYear` fails 365 days later on purpose, so the paths are checked again on a current iOS

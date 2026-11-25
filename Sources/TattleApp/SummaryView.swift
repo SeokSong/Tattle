@@ -20,6 +20,12 @@ struct SummaryView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(screen.overview, id: \.self) { Bullet(text: $0).font(.title3) }
                         }
+                        if !screen.tips.isEmpty {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(SummaryScreen.tipsHeading).font(.caption.bold()).foregroundStyle(.secondary)
+                                ForEach(Array(screen.tips.enumerated()), id: \.offset) { Bullet(text: $0.element) }
+                            }
+                        }
                         Button(SummaryScreen.howToReadHeading) { showHowTo = true }
                         ForEach(Array(screen.rows.enumerated()), id: \.element.id) { index, row in
                             if index > 0 { Divider() }
