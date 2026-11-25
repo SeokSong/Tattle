@@ -24,7 +24,6 @@ struct MapPanel: View {
 
     @State private var camera: GlobeCamera?
     @State private var lastFrame: Date?
-    @State private var worldSince: Date?
     @State private var replayStarted = Date()
     /// the Map screen: where the user turned the globe to, and the zoom
     @State private var dragFrom: GlobeCamera?
@@ -72,15 +71,29 @@ struct MapPanel: View {
     private func frame(now: Date) -> (camera: GlobeCamera, progress: [String: Double], activity: [LineActivity]) {
         let dt = lastFrame.map { min(0.1, now.timeIntervalSince($0)) } ?? 0
         var progress: [String: Double] = [:], activity: [LineActivity] = [], target: GlobeCamera
+        // the quiet spin is already a smooth motion: applied as it is, not eased (easing would almost stop it)
+        var direct = mode == .interactive
         switch mode {
         case .live:
             progress = firstSeen.mapValues { min(1, max(0, now.timeIntervalSince($0) / 0.4)) }
             activity = events.map { LineActivity(lineID: $0.id, age: now.timeIntervalSince($0.time)) }
             let drawn = lines.lines.filter { (progress[$0.id] ?? 1) > 0 }
-            let world = CameraDirector.isWorldView(drawn)
-            let since = world ? (worldSince ?? now) : nil
-            target = CameraDirector.target(start: start.point, lines: drawn, seconds: since.map { now.timeIntervalSince($0) } ?? 0)
-            DispatchQueue.main.async { if world && worldSince == nil { worldSince = now } else if !world { worldSince = nil } }
+            if CameraDirector.isWorldView(drawn) {
+                // the world view follows the latest connections; when it is quiet, it spins slowly from where it is
+                let byID = Dictionary(uniqueKeysWithValues: lines.lines.map { ($0.id, $0.to) })
+                let recentIDs = Set(events.filter { let age = now.timeIntervalSince($0.time); return age >= 0 && age < CameraDirector.followSeconds }.map(\.id))
+                let lastPing = events.map(\.time).filter { $0 <= now }.max()
+                if let follow = CameraDirector.follow(start: start.point, recent: recentIDs.compactMap { byID[$0] }) {
+                    target = follow
+                } else if let lastPing, now.timeIntervalSince(lastPing) < CameraDirector.quietSeconds, let camera {
+                    target = camera
+                } else {
+                    target = CameraDirector.drift(camera ?? CameraDirector.target(start: start.point, lines: drawn, spin: false), seconds: dt)
+                    direct = true
+                }
+            } else {
+                target = CameraDirector.target(start: start.point, lines: drawn)
+            }
         case .replay:
             let replay = Replay(lines: lines, start: start.point)
             let t = now.timeIntervalSince(replayStarted)
@@ -90,7 +103,7 @@ struct MapPanel: View {
             target = camera ?? CameraDirector.target(start: start.point, lines: lines.lines, spin: false)
         }
         let current = camera ?? target
-        let next = mode == .interactive ? target : CameraDirector.step(from: current, to: target, seconds: dt)
+        let next = direct ? target : CameraDirector.step(from: current, to: target, seconds: dt)
         DispatchQueue.main.async {
             camera = next
             lastFrame = now

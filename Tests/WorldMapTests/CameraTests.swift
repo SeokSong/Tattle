@@ -107,3 +107,18 @@ private func lines(_ places: [(String, Double, Double, String)]) -> MapLines {
     let camera = CameraDirector.target(start: start, lines: map.lines, spin: false)
     #expect(Geo.angle(camera.centre, start) < 62 * .pi / 180)
 }
+
+@Test func liveWorldViewFollowsTheLatestConnections() throws {
+    // a ping to London, then pings to Seattle: the camera turns back to show Seattle and the start
+    let seattle = GeoPoint(latitude: 47.6, longitude: -122.3), london = GeoPoint(latitude: 51.5, longitude: -0.1)
+    let toSeattle = try #require(CameraDirector.follow(start: start, recent: [seattle]))
+    #expect(toSeattle.zoom == CameraDirector.worldZoom)
+    #expect(Geo.angle(toSeattle.centre, seattle) < .pi / 4 && Geo.angle(toSeattle.centre, start) < .pi / 4)
+    let toLondon = try #require(CameraDirector.follow(start: start, recent: [london]))
+    #expect(Geo.angle(toLondon.centre, london) < .pi / 2 && Geo.angle(toLondon.centre, start) < .pi / 2)
+    // nothing recent: nothing to follow
+    #expect(CameraDirector.follow(start: start, recent: []) == nil)
+    // quiet: the spin goes on from where the camera is
+    let drifted = CameraDirector.drift(toSeattle, seconds: 2)
+    #expect(abs(drifted.centre.longitude - toSeattle.centre.longitude - 2 * CameraDirector.spinPerSecond) < 1e-9)
+}

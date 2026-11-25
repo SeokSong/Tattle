@@ -60,6 +60,26 @@ public enum CameraDirector {
         return GlobeCamera(centre: centre, zoom: zoom)
     }
 
+    /// how long after the last connection the live world view keeps following before the slow spin takes over
+    public static let quietSeconds = 8.0
+    /// how far back connections count for following: the camera aims between the start and these head offices
+    public static let followSeconds = 3.0
+
+    /// the live world view while connections arrive (owner, 2026-11-25: a spinning globe turned away from new pings,
+    /// "follow the connections smoothly"): the whole globe, turned so the start and the head offices pinged recently
+    /// are in view. nil when nothing was pinged recently
+    public static func follow(start: GeoPoint, recent: [GeoPoint]) -> GlobeCamera? {
+        guard !recent.isEmpty else { return nil }
+        let middle = centroid([start] + recent)
+        return GlobeCamera(centre: GeoPoint(latitude: max(-10, min(45, middle.latitude)), longitude: middle.longitude), zoom: worldZoom)
+    }
+
+    /// the live world view when it is quiet: the slow spin, from wherever the camera is
+    public static func drift(_ camera: GlobeCamera, seconds dt: Double) -> GlobeCamera {
+        GlobeCamera(centre: GeoPoint(latitude: camera.centre.latitude, longitude: wrap(camera.centre.longitude + dt * spinPerSecond)),
+                    zoom: worldZoom)
+    }
+
     /// one animation step from `current` towards `target`: eases in so a change of view is a smooth glide, never a
     /// jump. longitude goes the short way round
     public static func step(from current: GlobeCamera, to target: GlobeCamera, seconds dt: Double, halfLife: Double = 0.6) -> GlobeCamera {

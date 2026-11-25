@@ -86,7 +86,8 @@ final class MapFeed: ObservableObject {
             if firstSeen[id] == nil { firstSeen[id] = time }
             events.append((id, time))
         }
-        events.removeAll { now.timeIntervalSince($0.time) > 5 }
+        // kept past the camera's quiet time, so it knows when the last connection was
+        events.removeAll { now.timeIntervalSince($0.time) > 12 }
     }
 
     /// the head office behind a connection's label: confirmed names only (owner, 2026-11-25, as in the Summary), the
