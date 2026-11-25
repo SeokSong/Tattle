@@ -77,3 +77,19 @@ private let flows = [
     #expect(rows["Company"]?.hasPrefix("Possible: ") == true)
     #expect(rows["Company source"]?.contains("may belong to another service") == true)
 }
+
+@Test func detailOfAnUnnamedConnectionHasNoRepeatedReason() throws {
+    // review of PR #13: the reason is the Name row; "Where the name came from" would repeat it
+    let unnamed = flow(10, process: "Zappyx", name: nil)
+    let line = try #require(topFlows([unnamed]).first)
+    #expect(line.detailRows.map(\.label).contains("Where the name came from") == false)
+    #expect(line.detailRows.first?.label == "Name")
+}
+
+@Test func filteredRowsCountTheRestForEveryScreen() {
+    // review of PR #13: the "N more flows" line counts only the filtered app's flows, on Sessions as on Live
+    let many = (0..<15).map { flow(UInt32(20 + $0), process: "Zappyx", name: "unknown-\($0).test") } + flows
+    let rows = flowRows(many, limit: 10, app: "Zappyx")
+    #expect(rows.lines.count == 10)
+    #expect(rows.moreFlows == 17 - 10)
+}

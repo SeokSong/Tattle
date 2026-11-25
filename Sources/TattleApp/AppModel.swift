@@ -69,6 +69,8 @@ struct SessionRow: Identifiable, Equatable {
 struct SessionDetail {
     var grouping: ProcessGrouping
     var flows: [FlowLine]
+    /// flows left out of the table (filtered or not), shown as "N more flows"
+    var moreFlows = 0
     /// the apps the Sessions filter can offer for this session
     var appNames: [String] = []
     var gapCount = 0
@@ -82,6 +84,8 @@ final class AppModel: ObservableObject {
     static let retentionChoices = [1, 3, 7]
     /// rows in the live flow table; the rest fold into one "N more flows" line
     static let liveTableRows = 10
+    /// the Sessions table shows as many rows as before 5.1 (topFlows' default)
+    static let sessionTableRows = 10
     /// the session count cache is cleared when it passes this (one entry per ended session)
     static let maxCountCache = 1_000
 
@@ -101,10 +105,12 @@ final class AppModel: ObservableObject {
     @Published var sessions: [SessionRow] = []
     @Published var storeError: String?
     @Published var summaryScreen: SummaryScreen?
-    /// the app filter on Live and Sessions (5.1); nil shows all apps. it changes what is shown, never stored data
-    @Published var appFilter: String? {
-        didSet { updateDerived() }
+    /// the app filters (5.1), one per screen; nil shows all apps. they change what is shown, never stored data.
+    /// a filter whose app is not in the current names is cleared, so a table never comes up empty under a blank picker
+    @Published var liveAppFilter: String? {
+        didSet { if liveAppFilter != oldValue { updateDerived() } }
     }
+    @Published var sessionsAppFilter: String?
     /// the apps the Live filter can offer
     @Published var liveAppNames: [String] = []
     @Published var summaryLoading = false
@@ -288,6 +294,7 @@ final class AppModel: ObservableObject {
             startRefreshing()
             startWatchdog(source: source, launcher: started, pipeline: pipeline)
             captureState = .capturing(since: Date())
+            liveAppFilter = nil
             selection = .live
         } catch {
             try? tee?.close()
@@ -435,8 +442,10 @@ final class AppModel: ObservableObject {
 
     private func updateDerived() {
         grouping = groupByProcess(from: liveFlows, withEmptyUnattributed: true)
-        liveAppNames = appNames(in: liveFlows)
-        let rows = flowRows(liveFlows, observations: liveDNS, limit: Self.liveTableRows, app: appFilter)
+        let names = appNames(in: liveFlows)
+        if names != liveAppNames { liveAppNames = names }
+        if let filter = liveAppFilter, !names.contains(filter) { liveAppFilter = nil; return }
+        let rows = flowRows(liveFlows, observations: liveDNS, limit: Self.liveTableRows, app: liveAppFilter)
         topFlowLines = rows.lines
         moreFlows = rows.moreFlows
     }
@@ -482,10 +491,13 @@ final class AppModel: ObservableObject {
             // the category is decided per flow, then carried to each of its tally rows
             let flows = try store.flows(session: id)
             let stats = try store.sessionStats(id: id)
+            let names = appNames(in: flows)
+            if let filter = sessionsAppFilter, !names.contains(filter) { sessionsAppFilter = nil }
+            let rows = flowRows(flows, observations: try store.domains(session: id), limit: Self.sessionTableRows, app: sessionsAppFilter)
             return SessionDetail(
                 grouping: groupByProcess(from: tallyInputs(from: flows), withEmptyUnattributed: true),
-                flows: topFlows(flows, observations: try store.domains(session: id), app: appFilter),
-                appNames: appNames(in: flows),
+                flows: rows.lines, moreFlows: rows.moreFlows,
+                appNames: names,
                 gapCount: stats.gapCount, maxGapMs: stats.maxGapMs, kernelDropped: stats.kernelDropped)
         } catch {
             storeError = "Session could not be read: \(error.localizedDescription)"

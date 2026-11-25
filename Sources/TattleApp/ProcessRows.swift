@@ -236,7 +236,8 @@ struct FlowLine: Identifiable {
     var detailRows: [(label: String, value: String)] {
         var rows: [(String, String)] = []
         rows.append(("Name", hostname ?? (unnamedReason ?? .noDNSMatch).label))
-        rows.append(("Where the name came from", hostnameDetail))
+        // an unnamed connection's reason is already its Name row
+        if hostname != nil { rows.append(("Where the name came from", hostnameDetail)) }
         if let company = companyText { rows.append(("Company", company)) }
         if let source = companyDetail { rows.append(("Company source", source)) }
         rows.append(("App", attribution))
@@ -244,13 +245,17 @@ struct FlowLine: Identifiable {
         rows.append(("Address", "\(address) (\(transport))"))
         rows.append(("Packets", String(packets)))
         rows.append(("IP bytes", formatBytes(ipBytes)))
-        let time = DateFormatter()
-        time.dateStyle = .medium
-        time.timeStyle = .medium
-        if let firstSeen { rows.append(("First seen", time.string(from: firstSeen))) }
-        if let lastSeen { rows.append(("Last seen", time.string(from: lastSeen))) }
+        if let firstSeen { rows.append(("First seen", Self.time.string(from: firstSeen))) }
+        if let lastSeen { rows.append(("Last seen", Self.time.string(from: lastSeen))) }
         return rows
     }
+
+    private static let time: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .medium
+        return f
+    }()
 }
 
 func describeAttribution(_ result: AttributionResult) -> String {
@@ -294,13 +299,18 @@ func topFlows(
     classifier: CompanyClassifier = CompanyClassifier(),
     makeIndex: ([DomainObservation], [Flow]) -> HostnameIndex = { HostnameIndex($0, flows: $1) }
 ) -> [FlowLine] {
-    let index = makeIndex(observations, flows)
+    flowRows(flows, observations: observations, limit: limit, app: app, classifier: classifier, makeIndex: makeIndex).lines
+}
+
+private func lines(
+    _ flows: [(flow: Flow, app: String)], index: HostnameIndex, limit: Int, classifier: CompanyClassifier
+) -> [FlowLine] {
     // one label per distinct hostname for this refresh; dropped when the rows are built
     var cache = LabelCache(classifier: classifier)
-    return flows.filter { app == nil || flowAppName($0) == app }
-        .sorted { $0.ipBytesIn + $0.ipBytesOut > $1.ipBytesIn + $1.ipBytesOut }
+    return flows.sorted { $0.flow.ipBytesIn + $0.flow.ipBytesOut > $1.flow.ipBytesIn + $1.flow.ipBytesOut }
         .prefix(limit)
-        .map { flow in
+        .map { tagged in
+            let flow = tagged.flow
             let category = Classifier.classify(flow).category
             var line = FlowLine(
                 id: flow.id,
@@ -309,7 +319,7 @@ func topFlows(
                 attribution: describeAttribution(Attributor.attribute(flow.tally)),
                 setAsideLabel: category.isPhoneTraffic ? nil : category.label)
             line.companyLabel = FlowLabels.label(for: flow, index: index, cache: &cache)
-            line.appName = flowAppName(flow)
+            line.appName = tagged.app
             line.packets = flow.packetsIn + flow.packetsOut
             line.firstSeen = flow.firstSeen
             line.lastSeen = flow.lastSeen
@@ -348,10 +358,13 @@ func flowRows(
     classifier: CompanyClassifier = CompanyClassifier(),
     makeIndex: ([DomainObservation], [Flow]) -> HostnameIndex = { HostnameIndex($0, flows: $1) }
 ) -> FlowRows {
-    let shown = app == nil ? flows.count : flows.filter { flowAppName($0) == app }.count
+    // the index is built from every flow (a hint can come from another app's connection); each flow's app is
+    // worked out once and used for the filter, the count and the row
+    let index = makeIndex(observations, flows)
+    let tagged = flows.map { (flow: $0, app: flowAppName($0)) }.filter { app == nil || $0.app == app }
     return FlowRows(
-        lines: topFlows(flows, observations: observations, limit: limit, app: app, classifier: classifier, makeIndex: makeIndex),
-        moreFlows: max(0, shown - limit))
+        lines: lines(tagged, index: index, limit: limit, classifier: classifier),
+        moreFlows: max(0, tagged.count - limit))
 }
 
 func formatBytes(_ count: Int) -> String {
