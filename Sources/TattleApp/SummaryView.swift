@@ -17,7 +17,9 @@ struct SummaryView: View {
                     if screen.isEmpty {
                         Text(SummaryScreen.emptyText).foregroundStyle(.secondary)
                     } else {
-                        Text(screen.overview.joined(separator: " ")).font(.title3)
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(screen.overview, id: \.self) { Bullet(text: $0).font(.title3) }
+                        }
                         Button(SummaryScreen.howToReadHeading) { showHowTo = true }
                         ForEach(Array(screen.rows.enumerated()), id: \.element.id) { index, row in
                             if index > 0 { Divider() }
@@ -45,47 +47,64 @@ struct SummaryView: View {
     }
 }
 
+/// one bullet: a dot and the text, wrapping under the text
+struct Bullet: View {
+    let text: String
+    var help: String?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("•").foregroundStyle(.secondary)
+            Text(text).help(help ?? "")
+        }
+    }
+}
+
+/// a bullet with an (i) button that opens its explanation
+struct InfoBullet: View {
+    let text: String
+    let detail: String?
+    @State private var show = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Bullet(text: text)
+            if let detail {
+                Button { show.toggle() } label: { Image(systemName: "info.circle") }
+                    .buttonStyle(.borderless)
+                    .help(detail)
+                    .popover(isPresented: $show) { Text(detail).padding(12).frame(width: 300) }
+            }
+        }
+    }
+}
+
+/// grouped bullets (owner, 2026-11-24): a reader spends 10 to 20 seconds per app at most
 struct SummaryRowView: View {
     let row: SummaryRow
     @State private var expanded = false
-    @State private var showDetail = false
 
     var body: some View {
         DisclosureGroup(isExpanded: $expanded) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 if let description = row.description {
                     Text(description).font(.caption).foregroundStyle(.secondary)
                 }
-                if !row.sentences.isEmpty {
-                    Text(row.sentences.joined(separator: " "))
+                if !row.trackingCompanies.isEmpty {
+                    group(SummaryScreen.trackingHeading) { companies(row.trackingCompanies) }
                 }
-                if let line = row.captureLine {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(line).font(.callout)
-                        if let detail = row.captureDetail {
-                            Button { showDetail.toggle() } label: { Image(systemName: "info.circle") }
-                                .buttonStyle(.borderless)
-                                .help(detail)
-                                .popover(isPresented: $showDetail) {
-                                    Text(detail).padding(12).frame(width: 300)
-                                }
-                        }
+                if !row.otherCompanies.isEmpty {
+                    group(SummaryScreen.otherHeading) { companies(row.otherCompanies) }
+                }
+                group(SummaryScreen.untracedHeading) { Bullet(text: row.untraced) }
+                if !row.traced.isEmpty {
+                    group(SummaryScreen.tracedHeading) {
+                        ForEach(row.traced) { InfoBullet(text: $0.text, detail: $0.detail) }
                     }
                 }
-                if let line = row.reportLine {
-                    Text(line).font(.callout)
-                }
-                ForEach(row.companies) { line in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(line.text)
-                        ForEach(line.brands, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
-                        Text(line.seenIn).font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                if !row.possibleNames.isEmpty {
-                    Text(SummaryScreen.possibleHeading).font(.caption.bold())
-                    Text(row.possibleNames.joined(separator: ", "))
-                    Text(SummaryScreen.possibleExplanation).font(.caption).foregroundStyle(.secondary)
+                if let possible = row.possible {
+                    InfoBullet(text: possible, detail: SummaryScreen.possibleExplanation)
+                        .font(.callout).foregroundStyle(.secondary)
                 }
                 if !row.children.isEmpty {
                     Text(SummaryScreen.appleAppsBreakdownHeading).font(.caption.bold())
@@ -95,6 +114,8 @@ struct SummaryRowView: View {
             }
             .padding(.leading, 4)
             .padding(.top, 4)
+            // the details start under the app name, not centred in the row
+            .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
             Button { withAnimation { expanded.toggle() } } label: {
                 HStack {
@@ -105,6 +126,23 @@ struct SummaryRowView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    private func group<Content: View>(_ heading: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(heading).font(.caption.bold()).foregroundStyle(.secondary)
+            content()
+        }
+    }
+
+    /// "where it was seen" is on hover only (owner, 2026-11-24); brands stay visible under the company
+    private func companies(_ lines: [CompanyLine]) -> some View {
+        ForEach(lines) { line in
+            VStack(alignment: .leading, spacing: 1) {
+                Bullet(text: line.text, help: line.seenIn)
+                ForEach(line.brands, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary).padding(.leading, 14) }
+            }
         }
     }
 }

@@ -258,6 +258,17 @@ public enum SummaryText {
             "list.row": ["companies", "tracking"], "list.tracking.none": [], "list.tracking.one": [],
             "list.tracking.other": ["count"], "list.untraced.one": [], "list.untraced.other": ["count"],
             "list.nothing": [], "empty.state": [],
+            "overview.bullet.companies.none": ["companies"], "overview.bullet.companies.one": ["companies"],
+            "overview.bullet.companies.other": ["companies", "count"], "overview.bullet.untraced.none": [],
+            "overview.bullet.untraced.one": [], "overview.bullet.untraced.other": ["count"],
+            "overview.bullet.captures": ["period"], "overview.bullet.report": ["period"],
+            "detail.heading.tracking": [], "detail.heading.other": [], "detail.heading.untraced": [], "detail.heading.traced": [],
+            "detail.untraced.none": [], "detail.untraced.one": [], "detail.untraced.other": ["count"],
+            "detail.untraced.kind.one": ["kind"], "detail.untraced.kind.other": ["kind", "count"],
+            "detail.untraced.withkinds": ["destinations", "kinds"],
+            "detail.traced.captures": ["percent"], "detail.traced.captures.all": [],
+            "detail.traced.report": ["identified", "total"], "detail.traced.report.single": ["identified"],
+            "detail.traced.report.help": [], "detail.possible": ["names"],
         ]
         for reason in CaptureRestReason.allCases { s["coverage.reason.\(reason.rawValue)"] = ["percent"] }
         for category in CompanyCategory.allCases where category != .unclassified {

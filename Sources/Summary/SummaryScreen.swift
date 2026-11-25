@@ -4,7 +4,7 @@ import Foundation
 // read time only. turns the combined summary into the first screen: a list of apps, each row openable.
 // every text comes from `SummaryText`, `Glossary` or `Wording`; nothing here is worded in code.
 
-/// one company line inside an opened row
+/// one company bullet inside an opened row
 public struct CompanyLine: Sendable, Equatable, Identifiable {
     public var id: String { parent }
     public let parent: String
@@ -12,7 +12,7 @@ public struct CompanyLine: Sendable, Equatable, Identifiable {
     public let text: String
     /// `SummaryText.brandText(brand:parent:)` for every brand that differs from the parent, in brand order
     public let brands: [String]
-    /// `SummaryText.seenIn(captures:report:)`
+    /// `SummaryText.seenIn(captures:report:)`, shown on hover only (owner, 2026-11-24)
     public let seenIn: String
 
     public init(parent: String, text: String, brands: [String], seenIn: String) {
@@ -23,7 +23,20 @@ public struct CompanyLine: Sendable, Equatable, Identifiable {
     }
 }
 
-/// one row of the list; opening it shows everything below `subtitle`
+/// one bullet under "Traced", with its (i) text
+public struct TracedLine: Sendable, Equatable, Identifiable {
+    public var id: String { text }
+    public let text: String
+    /// the (i) text: the largest cause of the rest for captures, the no-data-amounts note for the report
+    public let detail: String?
+
+    public init(text: String, detail: String?) {
+        self.text = text
+        self.detail = detail
+    }
+}
+
+/// one row of the list; opening it shows grouped bullets (owner, 2026-11-24: bullets, not sentences)
 public struct SummaryRow: Sendable, Equatable, Identifiable {
     public let id: String
     public let kind: CardKind
@@ -32,41 +45,40 @@ public struct SummaryRow: Sendable, Equatable, Identifiable {
     public let subtitle: String
     /// `SummaryText.systemDescription` for iOS system, `appleAppsDescription` for Apple apps, else nil
     public let description: String?
-    public let sentences: [String]
-    /// `captureCoverage` for the card's capture summary, nil without captures
-    public let captureLine: String?
-    /// the (i) icon text; nil when none
-    public let captureDetail: String?
-    /// `reportCoverage`, nil without a report entry
-    public let reportLine: String?
-    public let companies: [CompanyLine]
-    /// the card's possible names; empty when none. the heading and explanation are shown only when non-empty
-    public let possibleNames: [String]
+    /// under "Advertising or tracking": the companies with an advertising or analytics category, own company first
+    public let trackingCompanies: [CompanyLine]
+    /// under "Other companies"
+    public let otherCompanies: [CompanyLine]
+    /// the one bullet under "Not traced" (always present: the unknown part is never left out)
+    public let untraced: String
+    /// the bullets under "Traced": captures first, then the report
+    public let traced: [TracedLine]
+    /// "Possible, not counted: ..." or nil; its (i) text is `SummaryScreen.possibleExplanation`
+    public let possible: String?
     /// Apple apps only: one row per Apple app, ordered like the list
     public let children: [SummaryRow]
 
     public init(
-        id: String, kind: CardKind, title: String, subtitle: String, description: String?, sentences: [String],
-        captureLine: String?, captureDetail: String?, reportLine: String?, companies: [CompanyLine],
-        possibleNames: [String], children: [SummaryRow]
+        id: String, kind: CardKind, title: String, subtitle: String, description: String?,
+        trackingCompanies: [CompanyLine], otherCompanies: [CompanyLine], untraced: String, traced: [TracedLine],
+        possible: String?, children: [SummaryRow]
     ) {
         self.id = id
         self.kind = kind
         self.title = title
         self.subtitle = subtitle
         self.description = description
-        self.sentences = sentences
-        self.captureLine = captureLine
-        self.captureDetail = captureDetail
-        self.reportLine = reportLine
-        self.companies = companies
-        self.possibleNames = possibleNames
+        self.trackingCompanies = trackingCompanies
+        self.otherCompanies = otherCompanies
+        self.untraced = untraced
+        self.traced = traced
+        self.possible = possible
         self.children = children
     }
 }
 
 public struct SummaryScreen: Sendable, Equatable {
-    /// `SummaryText.overview(...)`; empty when there is nothing to show
+    /// the overview bullets; empty when there is nothing to show
     public let overview: [String]
     public let rows: [SummaryRow]
     /// `SummaryText.noProcessSentence(combined.noProcess.connections)`
@@ -74,9 +86,12 @@ public struct SummaryScreen: Sendable, Equatable {
     public var isEmpty: Bool { rows.isEmpty }
     public static var emptyText: String { Wording.bundled.text("empty.state") }
     public static var howToReadHeading: String { Wording.bundled.text("howto.heading") }
-    public static var possibleHeading: String { SummaryText.possibleHeading }
     public static var possibleExplanation: String { SummaryText.possibleExplanation }
     public static var appleAppsBreakdownHeading: String { SummaryText.appleAppsBreakdownHeading }
+    public static var trackingHeading: String { Wording.bundled.text("detail.heading.tracking") }
+    public static var otherHeading: String { Wording.bundled.text("detail.heading.other") }
+    public static var untracedHeading: String { Wording.bundled.text("detail.heading.untraced") }
+    public static var tracedHeading: String { Wording.bundled.text("detail.heading.traced") }
 
     public init(overview: [String], rows: [SummaryRow], noProcess: String?) {
         self.overview = overview
@@ -90,17 +105,25 @@ public enum SummaryScreenBuilder {
 
     public static func build(_ combined: CombinedSummary, timeZone: TimeZone = .current, now: Date = Date()) -> SummaryScreen {
         var overview: [String] = []
-        let starts = [combined.captureStart, combined.reportStart].compactMap { $0 }
-        let ends = [combined.captureEnd, combined.reportEnd].compactMap { $0 }
-        if !combined.cards.isEmpty, let start = starts.min(), let end = ends.max() {
-            overview = SummaryText.overview(
-                period: SummaryText.period(from: start, to: end, timeZone: timeZone, now: now),
-                hasCaptures: combined.captureStart != nil, hasReport: combined.reportStart != nil,
-                apps: combined.apps, companies: combined.companies, adTrack: combined.adTrack, untraced: combined.untraced)
+        if !combined.cards.isEmpty {
+            overview.append(w.text(plural("count.app", combined.apps), ["count": String(combined.apps)]))
+            let companies = w.text(plural("count.company", combined.companies), ["count": String(combined.companies)])
+            overview.append(w.text(combined.adTrack == 0 ? "overview.bullet.companies.none" : plural("overview.bullet.companies", combined.adTrack),
+                                   ["companies": companies, "count": String(combined.adTrack)]))
+            overview.append(w.text(combined.untraced == 0 ? "overview.bullet.untraced.none" : plural("overview.bullet.untraced", combined.untraced),
+                                   ["count": String(combined.untraced)]))
+            var dates: [String] = []
+            if let s = combined.captureStart, let e = combined.captureEnd {
+                dates.append(w.text("overview.bullet.captures", ["period": SummaryText.period(from: s, to: e, timeZone: timeZone, now: now)]))
+            }
+            if let s = combined.reportStart, let e = combined.reportEnd {
+                dates.append(w.text("overview.bullet.report", ["period": SummaryText.period(from: s, to: e, timeZone: timeZone, now: now)]))
+            }
+            if !dates.isEmpty { overview.append(dates.joined(separator: " · ")) }
         }
         let apps = ordered(combined.cards.filter { $0.kind == .app })
         let rest = combined.cards.filter { $0.kind == .appleApps } + combined.cards.filter { $0.kind == .system }
-        let rows = (apps + rest).map { row($0, combined: combined, timeZone: timeZone, now: now) }
+        let rows = (apps + rest).map { row($0) }
         return SummaryScreen(overview: overview, rows: rows, noProcess: SummaryText.noProcessSentence(combined.noProcess.connections))
     }
 
@@ -129,34 +152,49 @@ public enum SummaryScreenBuilder {
         return w.text("list.nothing")
     }
 
-    private static func row(_ card: AppCard, combined: CombinedSummary, timeZone: TimeZone, now: Date) -> SummaryRow {
-        var captureLine: String?, captureDetail: String?, reportLine: String?
-        if let cap = card.capture {
-            captureLine = SummaryText.captureCoverage(
-                period: SummaryText.period(from: cap.windowStart, to: cap.windowEnd, timeZone: timeZone, now: now), coverage: cap.coverage)
-            captureDetail = SummaryText.captureRestDetail(coverage: cap.coverage, reason: SummaryText.mainRestReason(summary: cap))
+    /// the "Not traced" bullet: the count, and the types the AdGuard list knows (never more than the count)
+    static func untracedBullet(_ card: AppCard) -> String {
+        let n = card.untracedDestinations
+        guard n > 0 else { return w.text("detail.untraced.none") }
+        let destinations = w.text(plural("detail.untraced", n), ["count": String(n)])
+        var left = n, kinds: [String] = []
+        for category in CompanyCategory.allCases where category != .unclassified {
+            guard let raw = card.typeKnown[category], raw > 0, left > 0 else { continue }
+            let k = min(raw, left)
+            left -= k
+            kinds.append(w.text(plural("detail.untraced.kind", k), ["count": String(k), "kind": w.text(plural("kind.\(category.rawValue)", k))]))
         }
-        if let rep = card.report, let start = rep.firstSeen ?? combined.reportStart, let end = rep.lastSeen ?? combined.reportEnd {
-            reportLine = SummaryText.reportCoverage(
-                period: SummaryText.period(from: start, to: end, timeZone: timeZone, now: now),
-                identified: rep.coverage.numerator, total: rep.coverage.denominator)
+        return kinds.isEmpty ? destinations : w.text("detail.untraced.withkinds", ["destinations": destinations, "kinds": kinds.joined(separator: ", ")])
+    }
+
+    private static func row(_ card: AppCard) -> SummaryRow {
+        var traced: [TracedLine] = []
+        if let cap = card.capture, cap.coverage.denominator > 0 {
+            let all = cap.coverage.numerator >= cap.coverage.denominator
+            let text = all ? w.text("detail.traced.captures.all")
+                : w.text("detail.traced.captures", ["percent": SummaryText.percentText(cap.coverage.numerator, of: cap.coverage.denominator) ?? "0.0"])
+            traced.append(TracedLine(text: text, detail: SummaryText.captureRestDetail(coverage: cap.coverage, reason: SummaryText.mainRestReason(summary: cap))))
+        }
+        if let rep = card.report, rep.coverage.denominator > 0 {
+            let total = rep.coverage.denominator, identified = min(rep.coverage.numerator, total)
+            let text = total == 1 ? w.text("detail.traced.report.single", ["identified": String(identified)])
+                : w.text("detail.traced.report", ["identified": String(identified), "total": String(total)])
+            traced.append(TracedLine(text: text, detail: w.text("detail.traced.report.help")))
         }
         let lines = card.companies.map { c in
-            CompanyLine(
+            (c.isAdvertisingOrTracking, CompanyLine(
                 parent: c.parent,
                 text: SummaryText.companyRow(parent: c.parent, categories: c.categories, isOwnCompany: c.relation == .sameCompanyAsApp),
                 brands: c.brands.compactMap { SummaryText.brandText(brand: $0, parent: c.parent) },
-                seenIn: SummaryText.seenIn(captures: c.inCaptures, report: c.inReport))
+                seenIn: SummaryText.seenIn(captures: c.inCaptures, report: c.inReport)))
         }
         let description: String? =
             card.kind == .system ? SummaryText.systemDescription : card.kind == .appleApps ? SummaryText.appleAppsDescription : nil
         return SummaryRow(
             id: card.key, kind: card.kind, title: card.name, subtitle: subtitle(card), description: description,
-            sentences: SummaryText.appSentences(
-                app: card.name, companies: card.companyNames, adTrack: card.adTrackNames,
-                untraced: card.untracedDestinations, typeKnown: card.typeKnown),
-            captureLine: captureLine, captureDetail: captureDetail, reportLine: reportLine, companies: lines,
-            possibleNames: card.possibleCompanies,
-            children: ordered(card.members).map { row($0, combined: combined, timeZone: timeZone, now: now) })
+            trackingCompanies: lines.filter(\.0).map(\.1), otherCompanies: lines.filter { !$0.0 }.map(\.1),
+            untraced: untracedBullet(card), traced: traced,
+            possible: card.possibleCompanies.isEmpty ? nil : w.text("detail.possible", ["names": card.possibleCompanies.joined(separator: ", ")]),
+            children: ordered(card.members).map { row($0) })
     }
 }

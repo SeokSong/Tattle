@@ -17,12 +17,14 @@ private func row(_ screen: SummaryScreen, _ title: String) throws -> SummaryRow 
 /// every string the screen shows
 private func everyString(_ screen: SummaryScreen) -> [String] {
     func strings(_ r: SummaryRow) -> [String] {
-        var out = [r.title, r.subtitle] + r.sentences + r.possibleNames
-        out += [r.description, r.captureLine, r.captureDetail, r.reportLine].compactMap { $0 }
-        for c in r.companies { out += [c.parent, c.text, c.seenIn] + c.brands }
+        var out = [r.title, r.subtitle, r.untraced] + [r.description, r.possible].compactMap { $0 }
+        for t in r.traced { out += [t.text] + [t.detail].compactMap { $0 } }
+        for c in r.trackingCompanies + r.otherCompanies { out += [c.parent, c.text, c.seenIn] + c.brands }
         return out + r.children.flatMap(strings)
     }
-    return screen.overview + screen.rows.flatMap(strings) + [screen.noProcess].compactMap { $0 }
+    let headings = [SummaryScreen.trackingHeading, SummaryScreen.otherHeading, SummaryScreen.untracedHeading,
+                    SummaryScreen.tracedHeading, SummaryScreen.possibleExplanation, SummaryScreen.appleAppsBreakdownHeading]
+    return screen.overview + screen.rows.flatMap(strings) + [screen.noProcess].compactMap { $0 } + headings
 }
 
 @Test func screenRowsFollowTheOwnersOrder() throws {
@@ -38,32 +40,37 @@ private func everyString(_ screen: SummaryScreen) -> [String] {
     #expect(try row(screen, "com.example.lantern").subtitle == "3 destinations, none traced")
 }
 
-@Test func screenOpenedRowUsesTheApprovedSentences() throws {
-    let combined = SummaryDemo.combined()
-    let screen = SummaryScreenBuilder.build(combined, timeZone: utc)
-    let card = try #require(combined.cards.first { $0.name == "Pinwheel" })
-    let pinwheel = try row(screen, "Pinwheel")
-    #expect(pinwheel.sentences == SummaryText.appSentences(
-        app: "Pinwheel", companies: card.companyNames, adTrack: card.adTrackNames,
-        untraced: card.untracedDestinations, typeKnown: card.typeKnown))
-    #expect(try #require(pinwheel.captureLine).contains("77.7%"))
-    #expect(try #require(pinwheel.reportLine).contains("9 of this app's 12 destinations"))
-    #expect(pinwheel.captureDetail != nil)
-    #expect(try row(screen, "com.example.lantern").captureLine == nil)
+@Test func screenOpenedRowIsGroupedBullets() throws {
+    // owner, 2026-11-24: bullets, not sentences; a reader spends 10 to 20 seconds per app at most
+    let pinwheel = try row(SummaryDemo.screen(timeZone: utc), "Pinwheel")
+    #expect(pinwheel.trackingCompanies.map(\.parent) == ["Adlantic", "Metricly"])
+    #expect(pinwheel.otherCompanies.map(\.parent) == ["Pinwheel Labs", "Cloudway"])
+    #expect(pinwheel.untraced == "4 destinations (1 advertising service, owner unknown)")
+    #expect(pinwheel.traced.map(\.text) == ["Captures: 77.7% of traffic", "App Privacy Report: 9 of 12 destinations"])
+    #expect(pinwheel.traced[0].detail != nil)
+    #expect(pinwheel.traced[1].detail == "The report doesn't show how much data was sent.")
+    let lantern = try row(SummaryDemo.screen(timeZone: utc), "com.example.lantern")
+    #expect(lantern.traced.map(\.text) == ["App Privacy Report: 0 of 3 destinations"])
+    #expect(lantern.untraced == "3 destinations")
+    #expect(lantern.trackingCompanies.isEmpty && lantern.otherCompanies.isEmpty)
 }
 
 @Test func screenCompanyLines() throws {
     let pinwheel = try row(SummaryDemo.screen(timeZone: utc), "Pinwheel")
-    let first = try #require(pinwheel.companies.first)
+    let first = try #require(pinwheel.otherCompanies.first)
     #expect(first.text == "Pinwheel Labs · the app's own company · Online service")
     #expect(first.seenIn == "Seen in both")
-    #expect(try #require(pinwheel.companies.first { $0.parent == "Cloudway" }).seenIn == "Seen in your App Privacy Report")
+    #expect(try #require(pinwheel.otherCompanies.first { $0.parent == "Cloudway" }).seenIn == "Seen in your App Privacy Report")
+    #expect(pinwheel.trackingCompanies.first?.text == "Adlantic · Advertising")
 }
 
 @Test func screenOverviewAndEmpty() {
     let screen = SummaryDemo.screen(timeZone: utc)
-    #expect(screen.overview.count == 2)
-    #expect(screen.overview[0].hasPrefix("In your captures and App Privacy Report ("))
+    #expect(screen.overview.count == 4)
+    #expect(screen.overview[0] == "6 apps")
+    #expect(screen.overview[1].hasSuffix("of them advertising or tracking"))
+    #expect(screen.overview[2].hasSuffix("destinations not traced"))
+    #expect(screen.overview[3].hasPrefix("Captures ") && screen.overview[3].contains(" · App Privacy Report "))
     let empty = SummaryScreenBuilder.build(CombinedSummaryBuilder.build(capture: nil, report: nil), timeZone: utc)
     #expect(empty.isEmpty)
     #expect(empty.overview == [])
@@ -77,7 +84,7 @@ private func everyString(_ screen: SummaryScreen) -> [String] {
     let ip = try! NSRegularExpression(pattern: "\\d\\.\\d+\\.\\d")
     func check(_ r: SummaryRow) {
         #expect(titles.contains(r.title), "title \(r.title)")
-        for c in r.companies {
+        for c in r.trackingCompanies + r.otherCompanies {
             #expect(companies.contains(c.parent), "company \(c.parent)")
             for b in c.brands { #expect(companies.contains(b), "brand \(b)") }
         }
@@ -109,12 +116,17 @@ private func everyString(_ screen: SummaryScreen) -> [String] {
     }
 }
 
-@Test func screenDemoNeverSaysEveryDestinationWithAnUntracedReportLine() {
+@Test func screenDemoNeverSaysNoneWithAnUntracedReportLine() {
     // the demo once had a report entry with 1 untraced destination but an empty untraced list, so the card said
-    // "Every named destination was traced" above "4 of this app's 5 destinations could be traced"
+    // nothing was untraced above "4 of 5 destinations"
+    let pattern = try! NSRegularExpression(pattern: "(\\d+) of (\\d+) destination")
     func check(_ row: SummaryRow) {
-        if row.sentences.contains(where: { $0.hasPrefix("Every named destination") }), let line = row.reportLine {
-            #expect(!line.contains(" of this app's "), "\(row.title): \(line)")
+        if row.untraced == "None" {
+            for t in row.traced {
+                guard let m = pattern.firstMatch(in: t.text, range: NSRange(t.text.startIndex..., in: t.text)),
+                      let a = Range(m.range(at: 1), in: t.text), let b = Range(m.range(at: 2), in: t.text) else { continue }
+                #expect(t.text[a] == t.text[b], "\(row.title): \(t.text)")
+            }
         }
         row.children.forEach(check)
     }

@@ -43,6 +43,34 @@ list.nothing = "No companies traced"
 empty.state = "Nothing to show yet. Capture your iPhone's traffic or import an App Privacy Report to see which companies your apps contacted."
 howto.heading = "How to read this"
 
+# ---------------------------------------------------------------- bullets (owner, 2026-11-24: bullets, not sentences;
+# a reader spends 10 to 20 seconds per app at most). these are labels, not sentences: no full stop
+overview.bullet.companies.none = "{companies}, no advertising or tracking found"
+overview.bullet.companies.one = "{companies}, 1 of them advertising or tracking"
+overview.bullet.companies.other = "{companies}, {count} of them advertising or tracking"
+overview.bullet.untraced.none = "Every named destination traced"
+overview.bullet.untraced.one = "1 destination not traced"
+overview.bullet.untraced.other = "{count} destinations not traced"
+overview.bullet.captures = "Captures {period}"
+overview.bullet.report = "App Privacy Report {period}"
+detail.heading.tracking = "Advertising or tracking"
+detail.heading.other = "Other companies"
+detail.heading.untraced = "Not traced"
+detail.heading.traced = "Traced"
+detail.untraced.none = "None"
+detail.untraced.one = "1 destination"
+detail.untraced.other = "{count} destinations"
+# the AdGuard list knows the type but not the company; {kind} is kind.*
+detail.untraced.kind.one = "1 {kind}, owner unknown"
+detail.untraced.kind.other = "{count} {kind}, owner unknown"
+detail.untraced.withkinds = "{destinations} ({kinds})"
+detail.traced.captures = "Captures: {percent}% of traffic"
+detail.traced.captures.all = "Captures: all traffic"
+detail.traced.report = "App Privacy Report: {identified} of {total} destinations"
+detail.traced.report.single = "App Privacy Report: {identified} of 1 destination"
+detail.traced.report.help = "The report doesn't show how much data was sent."
+detail.possible = "Possible, not counted: {names}"
+
 # ---------------------------------------------------------------- each app, when the reader opens it
 # up to 3 companies are named; with more, the first 2 (own company first, then advertising or tracking)
 app.companies.named = "{app} contacted {names}."
