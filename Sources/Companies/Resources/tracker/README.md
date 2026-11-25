@@ -6,6 +6,8 @@ Licence: this folder, and only this folder, is under the Creative Commons Attrib
 
 `tracker.tsv` is built by `scripts/build-tracker-list.sh` from a pinned copy. Changes made: only the fields domain, company name and category are kept; company names are trimmed; a tracker with no company whose name is only a domain gets an empty company. The pinned commit and checksums are in `../manifest.json`.
 
-Do not edit `tracker.tsv` by hand.
+`hq.tsv` lists a head office for AdGuard companies that are not curated parents. Which companies are listed comes from this data; the head office, city, country and coordinates come from Wikidata (CC0). It is built by `scripts/hq-data.swift` and kept in this folder so it stays under the same licence.
+
+Do not edit `tracker.tsv` or `hq.tsv` by hand.
 
 Before shipping this data in an iOS App Store app, check the licence's rule against adding technical restrictions (DRM).
