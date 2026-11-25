@@ -93,3 +93,13 @@ private let flows = [
     #expect(rows.lines.count == 10)
     #expect(rows.moreFlows == 17 - 10)
 }
+
+@Test func sessionListSaysWhenACaptureEndedUnexpectedly() {
+    // 5.3: a capture ended by a pulled cable is marked in the Sessions list; one ended by Stop is not
+    let start = t0
+    var row = SessionRow(id: UUID(), startedAt: start, endedAt: start.addingTimeInterval(65), packets: 10, flows: 2,
+                         endReason: FlowEndReason.interrupted.rawValue)
+    #expect(sessionCaption(row).hasSuffix(" · ended unexpectedly"))
+    row.endReason = FlowEndReason.captureStopped.rawValue
+    #expect(!sessionCaption(row).contains("unexpectedly"))
+}

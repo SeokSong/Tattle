@@ -16,9 +16,18 @@ struct LiveView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(spacing: 8) {
-                    Text("Not capturing").font(.title2.bold())
-                    Text("Start a capture from Connect. Finished captures are in Sessions.")
-                        .foregroundStyle(.secondary)
+                    // a capture that ended on its own keeps the user on Live (5.3): say why here, not only on Connect
+                    if case .failed(let message) = model.captureState {
+                        Label(message, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .frame(maxWidth: 520)
+                            .padding(.bottom, 8)
+                        Text("The capture is saved in Sessions.").foregroundStyle(.secondary)
+                    } else {
+                        Text("Not capturing").font(.title2.bold())
+                        Text("Start a capture from Connect. Finished captures are in Sessions.")
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
