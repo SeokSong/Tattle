@@ -16,7 +16,12 @@ A head office, never where the servers are. Head-office data: [COMPANIES.md](COM
 - One projection for every view, so "start at the user, zoom out, spin" is one smooth change of centre and zoom
 - Speed (Part 0): about 1.1 ms per frame with 300 lines, offscreen at 1400x900
 - The outline is built by `scripts/build-world-outline.sh` (downloads a pinned release once, outside the repo)
-- `tattle globe-preview <out.png> [lat,lon] [zoom]` draws the globe with made-up traffic to real head offices, for checking the look without the app; the start point is the middle of the contiguous US
+- A preview draws the globe with made-up traffic to real head offices, for checking the look without the app; the start point is the middle of the contiguous US. From the repo folder:
+
+```sh
+swift build --product tattle && .build/debug/tattle globe-preview ~/Desktop/globe.png && open ~/Desktop/globe.png
+.build/debug/tattle globe-preview ~/Desktop/globe-world.png 30,10 0.42   # centre latitude,longitude and zoom (0.45 = whole globe)
+```
 
 ## Next
 Part 3 (camera), Part 4 (Live, Summary and Map screen), Part 5 (location and the Settings switch). Plan: md/milestone4/PLAN.md (private).
