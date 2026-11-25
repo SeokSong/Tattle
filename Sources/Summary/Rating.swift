@@ -67,7 +67,13 @@ public struct RatingScale: Sendable, Equatable {
     /// checks the file loads, so this is a safety net, never a second place to change the scale
     public static let fallback: RatingScale = try! RatingScale(aMax: 0, bMax: 1, cMax: 3, dMax: 5, thresholdPercent: 70)
 
-    public static let bundled: RatingScale = (try? loadBundled()) ?? fallback
+    /// a broken file is reported once on standard error (the app keeps working on the fallback scale)
+    public static let bundled: RatingScale = {
+        do { return try loadBundled() } catch {
+            FileHandle.standardError.write(Data("rating.toml could not be read (\(error)); using the built-in scale\n".utf8))
+            return fallback
+        }
+    }()
 }
 
 public enum RatingResult: Sendable, Equatable {
@@ -78,10 +84,11 @@ public enum RatingResult: Sendable, Equatable {
 }
 
 public enum Rating {
-    /// the companies that count: advertising or analytics, never the app's own company. content delivery, cloud,
-    /// online and Apple system companies have no advertising or analytics category, so they never count
+    /// the companies that count: every company with an advertising or analytics category, the app's own company
+    /// included (owner, 2026-11-24, revising OD4: the closed row and the opened row must agree). content delivery,
+    /// cloud, online and Apple system companies have no such category, so they never count
     public static func countedCompanies(_ companies: [CombinedCompany]) -> [CombinedCompany] {
-        companies.filter { $0.isAdvertisingOrTracking && $0.relation != .sameCompanyAsApp }
+        companies.filter(\.isAdvertisingOrTracking)
     }
 
     /// one grade from both sources together (owner, 2026-11-24). nil when no source has anything to trace.

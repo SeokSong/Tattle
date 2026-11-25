@@ -26,8 +26,9 @@ private func grade(_ companies: [CombinedCompany], capture: CoverageRatio? = tra
     #expect(grade([]) == .graded(.A, count: 0))
     // OneAd
     #expect(grade([company("Adlantic", [.advertising])]) == .graded(.B, count: 1))
-    // OwnAds: the own company does advertising only; it is not counted
-    #expect(grade([company("Zappy Inc", [.advertising], own: true)]) == .graded(.A, count: 0))
+    // OwnAds: the own company does advertising. approved as A, changed to B by the owner on 2026-11-24 after the
+    // review of PR #11: the own company counts, so the closed row never says "none found" above an advertiser
+    #expect(grade([company("Zappy Inc", [.advertising], own: true)]) == .graded(.B, count: 1))
     // CDNHeavy: only content delivery and cloud
     #expect(grade([company("CdnCo", [.contentDelivery]), company("Cloudway", [.cloudService])]) == .graded(.A, count: 0))
     // TwoThree, FourFive, SixPlus
