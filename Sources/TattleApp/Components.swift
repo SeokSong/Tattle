@@ -96,6 +96,8 @@ struct FlowTable: View {
     var flows: [FlowLine]
     /// flows left out of the table, shown as one "N more flows" line
     var moreFlows = 0
+    /// the connection whose detail sheet is open
+    @State private var detail: FlowLine?
 
     var body: some View {
         if flows.isEmpty {
@@ -108,6 +110,7 @@ struct FlowTable: View {
                     Text("Address").bold()
                     Text("App").bold()
                     Text("IP bytes").bold().gridColumnAlignment(.trailing)
+                    Text("")
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -142,12 +145,16 @@ struct FlowTable: View {
                             }
                         }
                         Text(formatBytes(flow.ipBytes)).monospacedDigit()
+                        Button { detail = flow } label: { Image(systemName: "info.circle") }
+                            .buttonStyle(.borderless)
+                            .help("Connection details")
                     }
                 }
                 if let fold = FlowRows(lines: [], moreFlows: moreFlows).foldLine {
-                    GridRow { Text(fold).foregroundStyle(.secondary).gridCellColumns(5) }
+                    GridRow { Text(fold).foregroundStyle(.secondary).gridCellColumns(6) }
                 }
             }
+            .sheet(item: $detail) { FlowDetailView(line: $0) }
         }
     }
 }

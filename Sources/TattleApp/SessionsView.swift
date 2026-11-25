@@ -42,6 +42,7 @@ struct SessionsView: View {
                             ProcessTable(rows: detail.grouping.rows)
                             SetAsideSection(rows: detail.grouping.setAside)
                             Text("Top flows by bytes").font(.headline)
+                            AppFilterPicker(selection: $model.appFilter, names: detail.appNames)
                             FlowTable(flows: detail.flows)
                             Text("A name seen in the connection was read from that connection. A name from DNS is a lookup answer for the same server address and may be another service on that server.")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -60,6 +61,8 @@ struct SessionsView: View {
         }
         .onAppear { model.refreshSessions() }
         .onChange(of: selected) { id in detail = id.flatMap { model.detail(for: $0) } }
+        // the filter changes what the table shows: read the session again with it
+        .onChange(of: model.appFilter) { _ in detail = selected.flatMap { model.detail(for: $0) } }
         .onChange(of: model.sessions) { rows in
             if let selected, !rows.contains(where: { $0.id == selected }) {
                 self.selected = nil

@@ -69,6 +69,8 @@ struct SessionRow: Identifiable, Equatable {
 struct SessionDetail {
     var grouping: ProcessGrouping
     var flows: [FlowLine]
+    /// the apps the Sessions filter can offer for this session
+    var appNames: [String] = []
     var gapCount = 0
     var maxGapMs = 0
     /// tcpdump's drop count; nil when unknown (the capture was ended by KILL)
@@ -99,6 +101,12 @@ final class AppModel: ObservableObject {
     @Published var sessions: [SessionRow] = []
     @Published var storeError: String?
     @Published var summaryScreen: SummaryScreen?
+    /// the app filter on Live and Sessions (5.1); nil shows all apps. it changes what is shown, never stored data
+    @Published var appFilter: String? {
+        didSet { updateDerived() }
+    }
+    /// the apps the Live filter can offer
+    @Published var liveAppNames: [String] = []
     @Published var summaryLoading = false
 
     @Published var retentionDays: Int {
@@ -427,7 +435,8 @@ final class AppModel: ObservableObject {
 
     private func updateDerived() {
         grouping = groupByProcess(from: liveFlows, withEmptyUnattributed: true)
-        let rows = flowRows(liveFlows, observations: liveDNS, limit: Self.liveTableRows)
+        liveAppNames = appNames(in: liveFlows)
+        let rows = flowRows(liveFlows, observations: liveDNS, limit: Self.liveTableRows, app: appFilter)
         topFlowLines = rows.lines
         moreFlows = rows.moreFlows
     }
@@ -475,7 +484,8 @@ final class AppModel: ObservableObject {
             let stats = try store.sessionStats(id: id)
             return SessionDetail(
                 grouping: groupByProcess(from: tallyInputs(from: flows), withEmptyUnattributed: true),
-                flows: topFlows(flows, observations: try store.domains(session: id)),
+                flows: topFlows(flows, observations: try store.domains(session: id), app: appFilter),
+                appNames: appNames(in: flows),
                 gapCount: stats.gapCount, maxGapMs: stats.maxGapMs, kernelDropped: stats.kernelDropped)
         } catch {
             storeError = "Session could not be read: \(error.localizedDescription)"
