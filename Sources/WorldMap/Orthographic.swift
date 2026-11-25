@@ -29,6 +29,19 @@ public struct Orthographic: Sendable, Equatable {
         return (originX + x, originY - y)
     }
 
+    /// a point raised `height` globe radii above the surface (0.2 is a fifth of the Earth's radius up). visible when it
+    /// is on the near side or sticks out past the globe's edge; used for lines that arc up like flight paths
+    public func project(_ p: GeoPoint, height: Double) -> (x: Double, y: Double)? {
+        let la = p.latitude * .pi / 180, lo = p.longitude * .pi / 180
+        let cla = centre.latitude * .pi / 180, clo = centre.longitude * .pi / 180
+        let k = 1 + max(0, height)
+        let depth = k * (sin(cla) * sin(la) + cos(cla) * cos(la) * cos(lo - clo))
+        let x = k * cos(la) * sin(lo - clo)
+        let y = k * (cos(cla) * sin(la) - sin(cla) * cos(la) * cos(lo - clo))
+        guard depth >= 0 || x * x + y * y > 1 else { return nil }
+        return (originX + radius * x, originY - radius * y)
+    }
+
     /// like `project`, but a point on the far side is pushed onto the globe's edge. used to fill land: a coastline
     /// that goes behind the globe then follows the rim, so the filled shape stays closed and on the visible side
     public func projectOntoRim(_ p: GeoPoint) -> (x: Double, y: Double) {
