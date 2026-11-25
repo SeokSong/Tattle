@@ -268,6 +268,7 @@ For the company map: where each parent company is based. A head office, never wh
 | `Resources/hq.tsv` | Curated parents | MIT (Tattle's selection); places from Wikidata (CC0) |
 | `Resources/tracker/hq.tsv` | AdGuard companies that are not curated parents | CC BY-SA 4.0, with the rest of the tracker folder: which companies are listed comes from AdGuard (owner, 2026-11-25) |
 | `Resources/hq-pins.tsv` | Hand pins for curated parents: a Wikidata item, or a place entered by hand | MIT |
+| `Resources/tracker/hq-corrections.tsv` | The owner's corrections for AdGuard companies: drop, move, or rename a building to its city | CC BY-SA 4.0 (keyed by AdGuard's names) |
 
 - Columns of both `hq.tsv` files: parent, city, country, latitude, longitude, wikidata, match. `match` is `pinned` (a curated parent's hand-picked item), `hand` (a place entered by hand, `wikidata` is the item or `none`) or `website` (an AdGuard company found by its website)
 - Keyed by the parent name the Summary counts, so a brand's line goes to its parent's head office (owner, 2026-11-25)
@@ -281,6 +282,6 @@ For the company map: where each parent company is based. A head office, never wh
 | | With a head office |
 |---|---|
 | Curated parents | 160 of 160 (112 from a pinned item, 48 entered by hand: 21 checked and 27 given or corrected by the owner, 2026-11-25) |
-| AdGuard companies (not curated parents) | 332 of 2,454 (website matches only) |
+| AdGuard companies (not curated parents) | 331 of 2,454 (website matches only; 18 corrected and 1 dropped by the owner in `tracker/hq-corrections.tsv`) |
 
 Companies without a head office are counted under the map, never drawn.

@@ -128,9 +128,9 @@
       "sourceURL": "https://query.wikidata.org",
       "licence": "CC-BY-SA-4.0",
       "fetched": "2026-11-25",
-      "sha256": "4cdde48a4d9db6df3fbe2bace48fe56f7811f3186f9407e9fcb127d1ea54ee10",
-      "sourceSHA256": "4cdde48a4d9db6df3fbe2bace48fe56f7811f3186f9407e9fcb127d1ea54ee10",
-      "rules": 332
+      "sha256": "f186d6d21610ba9577f23943e7001ee6de079ff7a670add27dccdd9393b0806a",
+      "sourceSHA256": "f186d6d21610ba9577f23943e7001ee6de079ff7a670add27dccdd9393b0806a",
+      "rules": 331
     }
   ]
 }

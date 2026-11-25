@@ -71,6 +71,22 @@ func pins() -> [String: Pin] {
     return out
 }
 
+/// tracker/hq-corrections.tsv: parent, city, country, latitude, longitude, note. city "drop" leaves the company off the
+/// map; empty coordinates keep Wikidata's (a rename of a building or street address to its city). kept in the tracker
+/// folder because it is keyed by AdGuard's company names
+struct Correction { let city: String; let country: String; let lat: Double?; let lon: Double?; let note: String }
+func correctionsTable() -> [String: Correction] {
+    var out: [String: Correction] = [:]
+    for (i, f) in tsv("tracker/hq-corrections.tsv").enumerated() {
+        guard f.count == 6, !f[0].isEmpty, !f[1].isEmpty, out[f[0]] == nil,
+              f[3].isEmpty == f[4].isEmpty, f[3].isEmpty || (Double(f[3]) != nil && Double(f[4]) != nil) else {
+            fail("tracker/hq-corrections.tsv line \(i + 2): wrong columns, a repeated company or half a coordinate")
+        }
+        out[f[0]] = Correction(city: f[1], country: f[2], lat: Double(f[3]), lon: Double(f[4]), note: f[5])
+    }
+    return out
+}
+
 /// the spellings of one website that Wikidata may hold as P856
 func variants(_ url: String) -> [String] {
     guard let host = URLComponents(string: url.trimmingCharacters(in: .whitespaces))?.host?.lowercased() else { return [] }
@@ -86,7 +102,7 @@ let fields = """
     OPTIONAL { ?st pq:P625 ?qcoord } OPTIONAL { ?st pq:P580 ?start } OPTIONAL { ?st pq:P582 ?end }
     OPTIONAL { ?hq wdt:P625 ?coord } OPTIONAL { ?hq wdt:P17 ?country } }
   OPTIONAL { ?item wikibase:sitelinks ?links }
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul". }
 """
 let select = "SELECT ?key ?item ?itemLabel ?hq ?hqLabel ?country ?countryLabel ?coord ?qcoord ?start ?end ?rank ?links WHERE {"
 
@@ -238,6 +254,7 @@ func build() {
     var review = ["parent\tlist\treason\twikidata\tchosen head office"]
     var counts = (curated: 0, curatedHQ: 0, adguard: 0, adguardHQ: 0)
     let allPins = pins()
+    let corrections = correctionsTable()
     for p in parents() {
         if p.curated { counts.curated += 1 } else { counts.adguard += 1 }
         let list = p.curated ? "curated" : "AdGuard"
@@ -297,7 +314,17 @@ func build() {
             continue
         }
         if p.curated { counts.curatedHQ += 1 } else { counts.adguardHQ += 1 }
-        let line = [p.name, hq.hqLabel, hq.country, String(format: "%.4f", lat), String(format: "%.4f", lon), hq.item, how].joined(separator: "\t")
+        // the owner's corrections for AdGuard companies (tracker/hq-corrections.tsv): drop the row, rename a place shown as a
+        // building or street address, or move it (coordinates given)
+        var (city, country, la, lo) = (hq.hqLabel, hq.country, lat, lon)
+        if !p.curated, let fix = corrections[p.name] {
+            if fix.city == "drop" { counts.adguardHQ -= 1; review.append("\(p.name)\t\(list)\tdropped by the owner: \(fix.note)\t\(hq.item)\t"); continue }
+            city = fix.city
+            if !fix.country.isEmpty { country = fix.country }
+            if let a = fix.lat, let b = fix.lon { (la, lo) = (a, b) }
+            reasons = []
+        }
+        let line = [p.name, city, country, String(format: "%.4f", la), String(format: "%.4f", lo), hq.item, how].joined(separator: "\t")
         if p.curated { curatedLines.append(line) } else { adguardLines.append(line) }
         if !reasons.isEmpty { review.append("\(p.name)\t\(list)\t\(reasons.joined(separator: "; "))\t\(hq.item)\t\(hq.hqLabel), \(hq.country)") }
     }

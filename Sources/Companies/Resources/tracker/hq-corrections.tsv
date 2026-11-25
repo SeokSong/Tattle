@@ -1,0 +1,20 @@
+parent	city	country	latitude	longitude	note
+ADJS	drop				owner review 2026-11-25: matched GitHub; the company could not be found
+Acxiom	Conway	United States	35.0887	-92.4421	owner review 2026-11-25
+Art.Lebedev Studio	Moscow	Russia	55.7558	37.6173	owner review 2026-11-25
+Brand Networks	Rochester	United States	43.1566	-77.6088	owner review 2026-11-25
+Comodo Security Solutions, Inc.	Bloomfield	United States	40.8068	-74.1854	owner review 2026-11-25
+Dynamic Yield	New York City	United States	40.7128	-74.0060	owner review 2026-11-25
+Etsy, Inc.	Brooklyn	United States	40.6782	-73.9442	owner review 2026-11-25
+Content Square	Paris				Wikidata names the district
+NBCUniversal, LLC	New York City				Wikidata names the building
+News Corp	New York City				Wikidata names the street address
+ORS	Vienna				Wikidata names the building
+RBC Group	Moscow				Wikidata names the metro area district
+163	Hangzhou	China	30.2741	120.1551	owner review 2026-11-25 (Wikidata gives the Cayman Islands registration)
+Monster Worldwide	Weston	United States	42.3668	-71.3031	owner review 2026-11-25
+Piano	Amsterdam	Netherlands	52.3676	4.9041	owner review 2026-11-25
+SearchRev	Palo Alto	United States	37.4419	-122.1430	owner review 2026-11-25
+Symantec	Tempe	United States	33.4255	-111.9400	owner review 2026-11-25
+XXXLutz KG	Wels	Austria	48.1575	14.0289	owner review 2026-11-25
+WPP	London	United Kingdom	51.5074	-0.1278	owner review 2026-11-25 (Wikidata picks the Jersey registration; the parent, WPP plc, is in London)

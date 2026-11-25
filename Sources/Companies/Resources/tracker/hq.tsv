@@ -1,15 +1,14 @@
 parent	city	country	latitude	longitude	wikidata	match
 1&1 IONOS	Montabaur	Germany	50.4352	7.8113	Q882107	website
-163	George Town	Cayman Islands	19.2964	-81.3817	Q196259	website
+163	Hangzhou	China	30.2741	120.1551	Q196259	website
 1822direkt	Frankfurt	Germany	50.1367	8.7429	Q200932	website
 360i	New York City	United States	40.7128	-74.0061	Q4635648	website
 AB Tasty	Paris	France	48.8567	2.3522	Q56317102	website
-ADJS	San Francisco	United States	37.7750	-122.4194	Q364	website
 AT&T	Dallas	United States	32.7798	-96.7993	Q35476	website
 Act-On	Beaverton	United States	45.4656	-122.7956	Q4676587	website
 Active Campaign	Chicago	United States	41.8819	-87.6278	Q65063411	website
 Activision Blizzard	Santa Monica	United States	34.0196	-118.4548	Q200491	website
-Acxiom	Wilmington	United States	39.7483	-75.5514	Q344935	website
+Acxiom	Conway	United States	35.0887	-92.4421	Q344935	website
 AdEspresso	San Francisco	United States	37.7750	-122.4194	Q140460132	website
 AdGuard	Limassol	Cyprus	34.6750	33.0443	Q4033398	website
 Adcash	Tallinn	Estonia	59.4372	24.7450	Q2824126	website
@@ -27,7 +26,7 @@ Answers.com	St. Louis	United States	38.6264	-90.1994	Q2915210	website
 Apa	Vienna	Austria	48.1984	16.3606	Q680662	website
 AppDynamics	San Francisco	United States	37.7750	-122.4194	Q4780783	website
 Appier	Taipei	Taiwan	25.0375	121.5625	Q56272861	website
-Art.Lebedev Studio	Kyiv	Ukraine	50.4500	30.5236	Q877529	website
+Art.Lebedev Studio	Moscow	Russia	55.7558	37.6173	Q877529	website
 Astronomer	New York City	United States	40.7128	-74.0061	Q135418354	website
 Australian Government	Canberra	Australia	-35.3080	149.1245	Q2991162	website
 Auth0 Inc.	Bellevue	United States	47.6144	-122.1925	Q56072164	website
@@ -39,7 +38,7 @@ Baynote	San Jose	United States	37.3042	-121.8728	Q2892275	website
 Bazaarvoice	Austin	United States	30.3000	-97.7333	Q812651	website
 Bol.com	Utrecht	Netherlands	52.0908	5.1222	Q609913	website
 Box UK	London	United Kingdom	51.5072	-0.1275	Q94737313	website
-Brand Networks	San Francisco	United States	37.7750	-122.4194	Q16960674	website
+Brand Networks	Rochester	United States	43.1566	-77.6088	Q16960674	website
 Brandwatch	Brighton	United Kingdom	50.8208	-0.1375	Q4957208	website
 BuzzFeed	New York	United States	43.0000	-75.0000	Q5003490	website
 Callibri	Yekaterinburg	Russia	56.8356	60.6128	Q141532546	website
@@ -53,17 +52,17 @@ Clickky	Odesa	Ukraine	46.4842	30.7325	Q28134162	website
 Cloud Technologies S.A.	Warsaw	Poland	52.2300	21.0111	Q140136708	website
 Comm100	Vancouver	Canada	49.2608	-123.1139	Q16249381	website
 CommerceHub	Albany	United States	42.6500	-73.7667	Q5152403	website
-Comodo Security Solutions, Inc.	Clifton	United States	40.8539	-74.1790	Q1985340	website
+Comodo Security Solutions, Inc.	Bloomfield	United States	40.8068	-74.1854	Q1985340	website
 Conduit	New York City	United States	40.7128	-74.0061	Q2892775	website
 Condé Nast	One World Trade Center	United States	40.7130	-74.0135	Q605401	website
 Constant Contact	Waltham	United States	42.3806	-71.2350	Q5163620	website
-Content Square	8th arrondissement of Paris	France	48.8742	2.3111	Q86676634	website
+Content Square	Paris	France	48.8742	2.3111	Q86676634	website
 Contentful GmbH	Berlin	Germany	52.5167	13.3833	Q18348837	website
 Conviva	Silicon Valley	United States	37.3775	-122.0675	Q16241261	website
 Cooliris	San Francisco	United States	37.7750	-122.4194	Q3915908	website
 Crakmedia Network	Quebec City	Canada	46.8161	-71.2242	Q111947249	website
 Creative Commons Corporation	Mountain View	United States	37.3928	-122.0419	Q43449	website
-Cxense	Q585	Norway	59.9133	10.7389	Q5014902	website
+Cxense	Oslo	Norway	59.9133	10.7389	Q5014902	website
 Cygnus	Fort Atkinson	United States	42.9272	-88.8406	Q5199204	website
 D.A.Consortium	Tokyo	Japan	35.6894	139.6917	Q18337418	website
 Daily Mail and General Trust plc	Kensington	United Kingdom	51.5004	-0.1909	Q667613	website
@@ -76,15 +75,15 @@ Digilant	Boston	United States	42.3603	-71.0578	Q5275732	website
 Digiteka	Paris	France	48.8567	2.3522	Q140834956	website
 Dmn Media	London	United Kingdom	51.5072	-0.1275	Q4809216	website
 Drawbridge	San Mateo	United States	37.5542	-122.3131	Q5306018	website
-Dun & Bradstreet	Q16568	United States	30.3167	-81.6500	Q1265181	website
-Dynamic Yield	Barcelona	Spain	41.3825	2.1769	Q28605484	website
+Dun & Bradstreet	Jacksonville	United States	30.3167	-81.6500	Q1265181	website
+Dynamic Yield	New York City	United States	40.7128	-74.0060	Q28605484	website
 Dynatrace	Boston	United States	42.3603	-71.0578	Q25048844	website
 Edgio	Tempe	United States	33.4256	-111.9400	Q6549207	website
 Elastic	Mountain View	United States	37.3928	-122.0419	Q22074922	website
 Engagio	San Mateo	United States	37.5542	-122.3131	Q27150199	website
 Equifax	Atlanta	United States	33.7544	-84.3897	Q5384453	website
 Etarget	Bratislava	Slovakia	48.1517	17.1093	Q108538376	website
-Etsy, Inc.	Dumbo	United States	40.7031	-73.9894	Q1353939	website
+Etsy, Inc.	Brooklyn	United States	40.6782	-73.9442	Q1353939	website
 Evergage	Somerville	United States	42.3875	-71.1000	Q4781774	website
 Everyday Health	New York City	United States	40.7128	-74.0061	Q5417806	website
 Experian Information Solutions, Inc.	Dublin	Ireland	53.3419	-6.2481	Q692157	website
@@ -159,11 +158,11 @@ Mluvii	Prague	Czech Republic	50.0468	14.4563	Q55751144	website
 Mobify	Vancouver	Canada	49.2608	-123.1139	Q6886719	website
 Monetate	Conshohocken	United States	40.0772	-75.3019	Q6899030	website
 Monotype	Woburn	United States	42.4792	-71.1528	Q1583606	website
-Monster Worldwide	Guaynabo	United States	18.3667	-66.1000	Q692041	website
+Monster Worldwide	Weston	United States	42.3668	-71.3031	Q692041	website
 Mux	San Francisco	United States	37.7750	-122.4194	Q55624256	website
 MyFonts	Woburn	United States	42.4792	-71.1528	Q3331123	website
 MyThings	London	United Kingdom	51.5072	-0.1275	Q6944890	website
-NBCUniversal, LLC	30 Rockefeller Plaza	United States	40.7590	-73.9794	Q724759	website
+NBCUniversal, LLC	New York City	United States	40.7590	-73.9794	Q724759	website
 NET-Metrix	Zurich	Switzerland	47.3894	8.4837	Q33121488	website
 NTENT	Vienna	United States	38.9000	-77.2667	Q48968714	website
 NTTCom Online Marketing Solutions	Shinagawa	Japan	35.6092	139.7302	Q55541022	website
@@ -171,11 +170,11 @@ National Australia Bank	Melbourne	Australia	-37.8142	144.9631	Q1430985	website
 Net Applications	Aliso Viejo	United States	33.6162	-117.7444	Q1137986	website
 Netsprint SA	Warsaw	Poland	52.2300	21.0111	Q11790715	website
 Neustar	Sterling	United States	39.0052	-77.4050	Q4052342	website
-News Corp	1211 Avenue of the Americas	United States	40.7586	-73.9822	Q185278	website
+News Corp	New York City	United States	40.7586	-73.9822	Q185278	website
 Newsmax	West Palm Beach	United States	26.7097	-80.0642	Q11991273	website
 Nexstar Digital, LLC.	Irving	United States	32.8117	-96.9508	Q7020906	website
 Nine Entertainment Co.	Sydney	Australia	-33.8678	151.2100	Q16999054	website
-ORS	ORF-Zentrum	Austria	48.1776	16.2905	Q304116	website
+ORS	Vienna	Austria	48.1776	16.2905	Q304116	website
 OneTrust	Atlanta	United States	33.7544	-84.3897	Q96756948	website
 Onet.pl SA	Kraków	Poland	50.0806	19.9725	Q495943	website
 Oneupweb	Traverse City	United States	44.7681	-85.6222	Q17072705	website
@@ -191,7 +190,7 @@ Penske Media Corporation	Los Angeles	United States	34.0522	-118.2437	Q7119727	we
 PerfOps	Kraków	Poland	50.0614	19.9372	Q107439276	website
 Perion	Tel Aviv	Israel	32.0800	34.7800	Q121002697	website
 Phunware	Austin	United States	30.3000	-97.7333	Q78203110	website
-Piano	Mérignac	France	44.8425	-0.6450	Q300079	website
+Piano	Amsterdam	Netherlands	52.3676	4.9041	Q300079	website
 Pilot GmbH	Hamburg	Germany	53.5500	10.0000	Q131406561	website
 Placester	Boston	United States	42.3603	-71.0578	Q140651026	website
 Pontiflex	Brooklyn	United States	40.6508	-73.9497	Q7228283	website
@@ -208,7 +207,7 @@ Qualcomm	San Diego	United States	32.8973	-117.1960	Q544847	website
 QualityUnit	Bratislava	Slovakia	48.1517	17.1093	Q141720214	website
 Qualtrics	Provo	United States	40.2339	-111.6586	Q7268803	website
 QuinStreet	Foster City	United States	37.5514	-122.2664	Q7272057	website
-RBC Group	Kaluzhskaya	Russia	55.6572	37.5403	Q629733	website
+RBC Group	Moscow	Russia	55.6572	37.5403	Q629733	website
 RCS MediaGroup S.p.A. 	Milan	Italy	45.4669	9.1900	Q1327389	website
 RTB House S.A.	Warsaw	Poland	52.2300	21.0111	Q24963107	website
 RTL Group	Kirchberg	Luxembourg	49.6275	6.1456	Q921159	website
@@ -228,9 +227,9 @@ Samsung	Samsung Town	South Korea	37.5039	127.0270	Q20716	website
 Sanoma	Sanomatalo	Finland	60.1724	24.9378	Q1540297	website
 Sapo	Lisbon	Portugal	38.7080	-9.1390	Q284147	website
 Say Media	San Francisco	United States	37.7750	-122.4194	Q7388880	website
-Schibsted ASA	Q585	Norway	59.9133	10.7389	Q20112811	website
+Schibsted ASA	Oslo	Norway	59.9133	10.7389	Q20112811	website
 Scout 24	Munich	Germany	48.1327	11.6147	Q2261455	website
-SearchRev	San Francisco	United States	37.7750	-122.4194	Q4652189	website
+SearchRev	Palo Alto	United States	37.4419	-122.1430	Q4652189	website
 SeeVolution	Los Angeles	United States	34.0522	-118.2437	Q7445467	website
 Seedtag Advertising S.L	Madrid	Spain	40.4169	-3.7033	Q140865485	website
 Seven Group Holdings Limited	Pyrmont	Australia	-33.8686	151.1928	Q7457267	website
@@ -258,7 +257,7 @@ Ströer SSP GmbH	Cologne	Germany	50.9422	6.9578	Q2357618	website
 StumbleUpon	San Francisco	United States	37.7750	-122.4194	Q911595	website
 SupplyFrame	Pasadena	United States	34.1475	-118.1439	Q24818973	website
 Survata	San Francisco	United States	37.7750	-122.4194	Q17089237	website
-Symantec	Lindon	United States	40.3386	-111.7161	Q441619	website
+Symantec	Tempe	United States	33.4255	-111.9400	Q441619	website
 Synacor	Buffalo	United States	42.8864	-78.8781	Q43079856	website
 TAGGY	Tokyo	Japan	35.6894	139.6917	Q11248006	website
 Take-Two Interactive Software, Inc.	New York City	United States	40.7128	-74.0061	Q94933	website
@@ -300,10 +299,10 @@ Vox Media	New York	United States	43.0000	-75.0000	Q7942354	website
 Vpon	Shanghai	People's Republic of China	31.2325	121.4692	Q65233126	website
 WEBORAMA	Paris	France	48.8567	2.3522	Q16683212	website
 WP Engine	Austin	United States	30.3000	-97.7333	Q19903819	website
-WPP	Saint Helier	Jersey	49.1858	-2.1100	Q1318049	website
+WPP	London	United Kingdom	51.5074	-0.1278	Q1318049	website
 WalkMe	San Francisco	United States	37.7750	-122.4194	Q18156830	website
 Wanelo	San Francisco	United States	37.7750	-122.4194	Q17041176	website
-Web.com Group	Q16568	United States	30.3167	-81.6500	Q16967024	website
+Web.com Group	Jacksonville	United States	30.3167	-81.6500	Q16967024	website
 Webtrekk	Berlin	Germany	52.5167	13.3833	Q7978995	website
 Webtrends	Portland	United States	45.5150	-122.6792	Q7978996	website
 WidgetBox	San Francisco	United States	37.7750	-122.4194	Q7998723	website
@@ -312,7 +311,7 @@ WonderPush	Paris	France	48.8567	2.3522	Q140700367	website
 Woopra	San Francisco	United States	37.7750	-122.4194	Q8034025	website
 Wykop	Poznań	Poland	52.4083	16.9336	Q8039882	website
 XING	Hamburg	Germany	53.5500	10.0000	Q681849	website
-XXXLutz KG	Würzburg	Germany	49.7944	9.9294	Q1890558	website
+XXXLutz KG	Wels	Austria	48.1575	14.0289	Q1890558	website
 Xaxis	New York City	United States	40.7128	-74.0061	Q25346573	website
 Xiaomi Inc.	Beijing	People's Republic of China	40.0465	116.3118	Q1636958	website
 YLE (Finnish Broadcasting Company)	Länsi-Pasila	Finland	60.2028	24.9253	Q54718	website
