@@ -9,6 +9,8 @@ public struct MapLine: Sendable, Equatable, Identifiable {
     public let to: GeoPoint
     /// the city shown for the place
     public let city: String
+    /// the country, as the head-office data names it; decides the North America view (owner's globe rule)
+    public let country: String
     /// the companies based here that were contacted, sorted
     public private(set) var companies: [String]
     /// connections that went to a company here
@@ -24,10 +26,11 @@ public struct MapLine: Sendable, Equatable, Identifiable {
         }
     }
 
-    init(id: String, to: GeoPoint, city: String, company: String, order: Int) {
+    init(id: String, to: GeoPoint, city: String, country: String, company: String, order: Int) {
         self.id = id
         self.to = to
         self.city = city
+        self.country = country
         self.companies = [company]
         self.count = 1
         self.order = order
@@ -50,12 +53,13 @@ public struct MapLines: Sendable, Equatable {
 
     public init() {}
 
-    static func key(_ p: GeoPoint) -> String {
+    /// the line id for a place: the same rounding `add` uses
+    public static func key(_ p: GeoPoint) -> String {
         String(format: "%.2f,%.2f", p.latitude, p.longitude)
     }
 
     /// one connection to a company based at `place`; nil place means it cannot be drawn
-    public mutating func add(company: String?, place: GeoPoint?, city: String = "") {
+    public mutating func add(company: String?, place: GeoPoint?, city: String = "", country: String = "") {
         guard let company, let place else {
             notDrawn += 1
             return
@@ -65,7 +69,7 @@ public struct MapLines: Sendable, Equatable {
             lines[i].add(company: company)
         } else {
             index[key] = lines.count
-            lines.append(MapLine(id: key, to: place, city: city, company: company, order: lines.count))
+            lines.append(MapLine(id: key, to: place, city: city, country: country, company: company, order: lines.count))
         }
     }
 

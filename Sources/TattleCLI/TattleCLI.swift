@@ -14,6 +14,7 @@ import Report
 import Storage
 import Summary
 import AppKit
+import ImageIO
 import SwiftUI
 import WorldMap
 
@@ -1478,15 +1479,17 @@ if arguments.count == 5 && arguments[1] == "flows" && arguments[3] == "--db" {
 
 /// `tattle globe-preview <out.png> [lat,lon] [zoom]`: draws the globe with made-up connections to real head
 /// offices from the bundled table, for choosing and checking the look without the app. no capture data is read.
+/// `tattle globe-preview <out.gif> [live|replay]`: the camera's motion as an animation (Part 3), each live connection a spark
 /// the start point is the middle of the contiguous US, never a real person's place
 @MainActor
 func runGlobePreview(_ args: [String]) {
     guard let out = args.first else {
-        print("usage: tattle globe-preview <out.png> [lat,lon] [zoom]")
+        print("usage: tattle globe-preview ~/Desktop/globe.png [lat,lon] [zoom], or ~/Desktop/globe.gif [live|replay]")
         exit(2)
     }
     let start = GeoPoint(latitude: 39.83, longitude: -98.58)
-    var centre = start
+    // looking from a little south of the start, so lines that rise off the globe show their curve
+    var centre = GeoPoint(latitude: start.latitude - 15, longitude: start.longitude)
     if args.count > 1 {
         let n = args[1].split(separator: ",").compactMap { Double($0) }
         if n.count == 2 { centre = GeoPoint(latitude: n[0], longitude: n[1]) }
@@ -1507,8 +1510,13 @@ func runGlobePreview(_ args: [String]) {
         let office = table.office(forParent: company)
         for _ in 0..<n {
             lines.add(company: office == nil ? nil : company,
-                      place: office.map { GeoPoint(latitude: $0.latitude, longitude: $0.longitude) }, city: office?.city ?? "")
+                      place: office.map { GeoPoint(latitude: $0.latitude, longitude: $0.longitude) }, city: office?.city ?? "",
+                      country: office?.country ?? "")
         }
+    }
+    if out.hasSuffix(".gif") {
+        writeGlobeAnimation(out: out, replay: args.dropFirst().first == "replay", traffic: traffic, table: table, start: start)
+        return
     }
     let view = GlobeView(centre: centre, zoom: zoom, lines: lines.lines, start: start)
         .frame(width: 1200, height: 800)
@@ -1524,6 +1532,86 @@ func runGlobePreview(_ args: [String]) {
         exit(1)
     }
     print("wrote \(out): \(lines.lines.count) lines, \(lines.notDrawn) connections not drawn")
+}
+
+/// renders the camera's motion as a GIF: `live` plays made-up connections arriving (North American head offices
+/// first, then one abroad turns on the spinning world view); `replay` plays the Summary's near-to-far replay
+@MainActor
+func writeGlobeAnimation(out: String, replay: Bool, traffic: [(String, Int)], table: HeadOfficeTable, start: GeoPoint) {
+    let fps = 15.0, seconds = replay ? 12.0 : 26.0
+    func place(_ company: String) -> (GeoPoint, String, String)? {
+        table.office(forParent: company).map { (GeoPoint(latitude: $0.latitude, longitude: $0.longitude), $0.city, $0.country) }
+    }
+    // live: each company's first connection at a set time, the rest spread after it
+    var events: [(time: Double, company: String)] = []
+    let firstSeen: [String: Double] = [
+        "Apple": 1, "Alphabet": 2, "Meta Platforms": 3.5, "Amazon": 5, "Microsoft": 6.5, "AppLovin": 7.5, "Cloudflare": 8.5,
+        "Snap": 9.5, "Criteo": 11, "Adform": 12.5, "Spotify": 14, "ByteDance": 15.5, "Tencent": 17, "Yandex": 18, "Atlassian": 19,
+    ]
+    for (company, n) in traffic {
+        guard let t0 = firstSeen[company] else { continue }
+        for i in 0..<n { events.append((t0 + Double(i) * 0.25, company)) }
+    }
+    events.sort { $0.time < $1.time }
+    var all = MapLines()
+    for (company, n) in traffic {
+        guard let (p, city, country) = place(company) else { continue }
+        for _ in 0..<n { all.add(company: company, place: p, city: city, country: country) }
+    }
+    let replayPlan = Replay(lines: all, start: start)
+
+    let frames = Int(seconds * fps)
+    let url = URL(fileURLWithPath: out) as CFURL
+    guard let dest = CGImageDestinationCreateWithURL(url, "com.compuserve.gif" as CFString, frames, nil) else {
+        print("could not write \(out)")
+        exit(1)
+    }
+    CGImageDestinationSetProperties(dest, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
+    let frameProps = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 1 / fps]] as CFDictionary
+    var camera = CameraDirector.target(start: start, lines: [])
+    var worldSince: Double?
+    var next = 0
+    var live = MapLines()
+    // when each line first appeared (it draws in over 0.4 s) and every connection's time, for the activity effect
+    var firstSeenAt: [String: Double] = [:]
+    var happened: [(id: String, time: Double)] = []
+    for f in 0..<frames {
+        let t = Double(f) / fps
+        let shown: [MapLine], progress: [String: Double], target: GlobeCamera
+        if replay {
+            let started = replayPlan.started(at: t)
+            shown = replayPlan.order
+            progress = replayPlan.progress(at: t)
+            if CameraDirector.isWorldView(started), worldSince == nil { worldSince = t }
+            target = CameraDirector.target(start: start, lines: started, seconds: 0, spin: false)
+        } else {
+            while next < events.count, events[next].time <= t {
+                if let (p, city, country) = place(events[next].company) {
+                    live.add(company: events[next].company, place: p, city: city, country: country)
+                    let id = MapLines.key(p)
+                    if firstSeenAt[id] == nil { firstSeenAt[id] = events[next].time }
+                    happened.append((id, events[next].time))
+                }
+                next += 1
+            }
+            shown = live.lines
+            progress = firstSeenAt.mapValues { min(1, (t - $0) / 0.4) }
+            if CameraDirector.isWorldView(shown), worldSince == nil { worldSince = t }
+            target = CameraDirector.target(start: start, lines: shown, seconds: t - (worldSince ?? t))
+        }
+        camera = CameraDirector.step(from: camera, to: target, seconds: 1 / fps)
+        let recent = replay ? [] : happened.filter { t - $0.time < 1 }.map { LineActivity(lineID: $0.id, age: t - $0.time) }
+        let view = GlobeView(centre: camera.centre, zoom: camera.zoom, lines: shown, start: start, progress: progress,
+                             activity: recent)
+            .frame(width: 720, height: 480)
+        guard let image = ImageRenderer(content: view).cgImage else { continue }
+        CGImageDestinationAddImage(dest, image, frameProps)
+    }
+    guard CGImageDestinationFinalize(dest) else {
+        print("could not write \(out)")
+        exit(1)
+    }
+    print("wrote \(out): \(frames) frames, \(Int(seconds)) s")
 }
 
 if arguments.count >= 3 && arguments[1] == "globe-preview" {
