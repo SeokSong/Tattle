@@ -41,9 +41,9 @@ public struct DatasetManifest: Codable, Sendable, Equatable {
     /// the resource bundle folder, or nil when none of `searchDirectories` holds it. SwiftPM's generated
     /// `Bundle.module` traps when the bundle is absent, so it is never used: a missing bundle means
     /// the datasets read as empty and the screens say the lists could not be read
-    public static func locateBundle(in searchDirectories: [URL]) -> URL? {
+    public static func locateBundle(in searchDirectories: [URL], named name: String = bundleName) -> URL? {
         for dir in searchDirectories {
-            let candidate = dir.appendingPathComponent(bundleName, isDirectory: true)
+            let candidate = dir.appendingPathComponent(name, isDirectory: true)
             var isDirectory: ObjCBool = false
             if FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory), isDirectory.boolValue {
                 return candidate
@@ -53,6 +53,17 @@ public struct DatasetManifest: Codable, Sendable, Equatable {
     }
 
     private static let defaultBundle: URL? = locateBundle(in: defaultSearchDirectories)
+
+    /// a file in another target's resource bundle (`Tattle_Summary.bundle`), found the same way as this one's, so
+    /// a change to the search (an .app layout) reaches every bundle
+    public static func resourceURL(_ name: String, inBundleNamed bundle: String) -> URL? {
+        guard let folder = locateBundle(in: defaultSearchDirectories, named: bundle) else { return nil }
+        for path in ["Resources/" + name, name] {
+            let url = folder.appendingPathComponent(path)
+            if FileManager.default.fileExists(atPath: url.path) { return url }
+        }
+        return nil
+    }
 
     /// location of a file in the bundled Resources folder, or nil when the bundle or the file is not
     /// there. `searchDirectories` replaces the default search (tests pass a fake location)

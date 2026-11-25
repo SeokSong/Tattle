@@ -48,7 +48,7 @@ private func sentences() -> [String] {
         if let s = SummaryText.reportCoverage(period: period, identified: i, total: t) { out.append(s) }
         if let s = SummaryText.reportRating(identified: i, total: t) { out.append(s) }
     }
-    for p in [0, 55, 69, 70, 82, 100] { out.append(SummaryText.captureRating(percent: p)) }
+    for p in [0, 55, 69, 70, 82, 100] { if let s = SummaryText.captureRating(coverage: CoverageRatio(numerator: p, denominator: 100)) { out.append(s) } }
     for n in [0, 1, 2] { if let s = SummaryText.noProcessSentence(n) { out.append(s) } }
     out.append(SummaryText.dataAmountSentence(captureDay: "14 November", company: "Alphabet"))
     out += [SummaryText.possibleExplanation, SummaryText.systemDescription, SummaryText.appleAppsDescription]
@@ -146,12 +146,15 @@ private func labels() -> [String] {
     #expect(SummaryText.brandText(brand: "Alphabet", parent: "Alphabet") == nil)
     #expect(SummaryText.seenIn(captures: false, report: true) == "Seen in your App Privacy Report")
     #expect(SummaryText.captureCoverage(period: period, coverage: CoverageRatio(numerator: 77, denominator: 100))
-            == "Captures (14 to 21 November): 77% of this app's traffic could be traced to a company.")
+            == "Captures (14 to 21 November): 77.0% of this app's traffic could be traced to a company.")
+    // one decimal, rounded down (owner, 2026-11-24): a small traced share is not shown as 0
+    #expect(SummaryText.captureCoverage(period: period, coverage: CoverageRatio(numerator: 5, denominator: 1000))
+            == "Captures (14 to 21 November): 0.5% of this app's traffic could be traced to a company.")
     #expect(SummaryText.captureCoverage(period: period, coverage: CoverageRatio(numerator: 5, denominator: 5))
             == "Captures (14 to 21 November): All of this app's traffic could be traced to a company.")
     #expect(SummaryText.captureCoverage(period: period, coverage: CoverageRatio(numerator: 0, denominator: 0)) == nil)
     #expect(SummaryText.captureRestDetail(coverage: CoverageRatio(numerator: 77, denominator: 100), reason: .hiddenByApp)
-            == "Of the remaining 23%, the largest share went to destinations whose names the app kept hidden.")
+            == "Of the remaining 23.0%, the largest share went to destinations whose names the app kept hidden.")
     #expect(SummaryText.captureRestDetail(coverage: CoverageRatio(numerator: 5, denominator: 5), reason: .hiddenByApp) == nil)
     #expect(SummaryText.reportCoverage(period: "18 to 21 November", identified: 6, total: 9)
             == "App Privacy Report (18 to 21 November): 6 of this app's 9 destinations could be traced to a company. The report doesn't show how much data was sent.")
@@ -159,10 +162,12 @@ private func labels() -> [String] {
     #expect(SummaryText.reportCoverage(period: period, identified: 0, total: 1)
             == "App Privacy Report (14 to 21 November): this app's only destination could not be traced to a company. The report doesn't show how much data was sent.")
     #expect(SummaryText.reportCoverage(period: period, identified: 1, total: 1)?.contains("only destination could be traced") == true)
-    #expect(SummaryText.captureRating(percent: 82) == "Rated on 82% traced traffic.")
-    #expect(SummaryText.captureRating(percent: 55) == "Not enough data to rate: 55% of this app's traffic could be traced to a company. A rating needs at least 70%.")
-    #expect(SummaryText.reportRating(identified: 6, total: 9) == "Not enough data to rate: 6 of 9 destinations (66%) could be traced to a company. A rating needs at least 70%.")
-    #expect(SummaryText.reportRating(identified: 7, total: 10) == "Rated on 7 of 10 traced destinations (70%).")
+    #expect(SummaryText.captureRating(coverage: CoverageRatio(numerator: 824, denominator: 1000)) == "Rated on 82.4% traced traffic.")
+    #expect(SummaryText.captureRating(coverage: CoverageRatio(numerator: 55, denominator: 100))
+            == "Not enough data to rate: 55.0% of this app's traffic could be traced to a company. A rating needs at least 70%.")
+    #expect(SummaryText.captureRating(coverage: CoverageRatio(numerator: 0, denominator: 0)) == nil)
+    #expect(SummaryText.reportRating(identified: 6, total: 9) == "Not enough data to rate: 6 of 9 destinations (66.6%) could be traced to a company. A rating needs at least 70%.")
+    #expect(SummaryText.reportRating(identified: 7, total: 10) == "Rated on 7 of 10 traced destinations (70.0%).")
     #expect(SummaryText.reportRating(identified: 1, total: 1) == "Rated on 1 of 1 traced destination (100%).")
     #expect(SummaryText.reportRating(identified: 0, total: 1) == "Not enough data to rate: 0 of 1 destination (0%) could be traced to a company. A rating needs at least 70%.")
     #expect(SummaryText.reportRating(identified: 0, total: 0) == nil)
@@ -210,17 +215,20 @@ private func labels() -> [String] {
     for s in counts { #expect(!s.localizedCaseInsensitiveContains("possible"), "\(s)") }
 }
 
-@Test func wordingPercentRoundsDownAndClamps() {
-    #expect(SummaryText.percent(2, of: 3) == 66)
-    #expect(SummaryText.percent(1, of: 0) == nil)
-    #expect(SummaryText.percent(0, of: 5) == 0)
-    #expect(SummaryText.percent(7, of: 5) == 100)
+@Test func wordingPercentHasOneDecimalRoundsDownAndClamps() {
+    #expect(SummaryText.percentText(2, of: 3) == "66.6")
+    #expect(SummaryText.percentText(1, of: 0) == nil)
+    #expect(SummaryText.percentText(0, of: 5) == "0.0")
+    #expect(SummaryText.percentText(7, of: 5) == "100.0")
+    #expect(SummaryText.percentText(1, of: 200) == "0.5")
     #expect(SummaryText.reportCoverage(period: period, identified: 12, total: 9)?.contains("9 of this app's 9") == true)
 }
 
 @Test func wordingRatingThreshold() {
-    #expect(SummaryText.captureRating(percent: 69).hasPrefix("Not enough data to rate"))
-    #expect(SummaryText.captureRating(percent: 70).hasPrefix("Rated on"))
+    // the exact ratio decides, not the shown text
+    #expect(SummaryText.captureRating(coverage: CoverageRatio(numerator: 6999, denominator: 10000))?.hasPrefix("Not enough data to rate") == true)
+    #expect(SummaryText.captureRating(coverage: CoverageRatio(numerator: 70, denominator: 100))?.hasPrefix("Rated on") == true)
+    #expect(!SummaryText.meetsRatingThreshold(6999, of: 10000) && SummaryText.meetsRatingThreshold(7, of: 10))
     #expect(SummaryText.reportRating(identified: 7, total: 10)?.hasPrefix("Rated on") == true)
 }
 
@@ -229,14 +237,17 @@ private func labels() -> [String] {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = utc
     func day(_ y: Int, _ m: Int, _ d: Int) throws -> Date { try #require(calendar.date(from: DateComponents(year: y, month: m, day: d, hour: 12))) }
-    #expect(SummaryText.period(from: try day(2026, 11, 14), to: try day(2026, 11, 14), timeZone: utc) == "14 November")
-    #expect(SummaryText.period(from: try day(2026, 11, 14), to: try day(2026, 11, 21), timeZone: utc) == "14 to 21 November")
-    #expect(SummaryText.period(from: try day(2026, 11, 28), to: try day(2026, 12, 3), timeZone: utc) == "28 November to 3 December")
-    #expect(SummaryText.period(from: try day(2025, 12, 28), to: try day(2026, 1, 3), timeZone: utc) == "28 December 2025 to 3 January 2026")
+    let now = try day(2026, 12, 10)
+    #expect(SummaryText.period(from: try day(2026, 11, 14), to: try day(2026, 11, 14), timeZone: utc, now: now) == "14 November")
+    #expect(SummaryText.period(from: try day(2026, 11, 14), to: try day(2026, 11, 21), timeZone: utc, now: now) == "14 to 21 November")
+    #expect(SummaryText.period(from: try day(2026, 11, 28), to: try day(2026, 12, 3), timeZone: utc, now: now) == "28 November to 3 December")
+    #expect(SummaryText.period(from: try day(2025, 12, 28), to: try day(2026, 1, 3), timeZone: utc, now: now) == "28 December 2025 to 3 January 2026")
+    // a period from an earlier year shows its year (review of PR #9)
+    #expect(SummaryText.period(from: try day(2025, 11, 14), to: try day(2025, 11, 21), timeZone: utc, now: now) == "14 to 21 November 2025")
 }
 
 @Test func wordingGlossaryHasSixTerms() {
-    #expect(Glossary.terms.map(\.term) == ["Company", "Advertising or tracking", "The app's own company", "Apple system and Apple apps", "Not identified", "Possible"])
+    #expect(Glossary.terms.map(\.term) == ["Company", "Advertising or tracking", "The app's own company", "Apple system and Apple apps", "Not traced", "Possible"])
     #expect(Glossary.howToRead.count == 3)
     #expect(Glossary.terms[4].text == "A destination that could not be traced to any company. It stays in the count, so the numbers never look more complete than they are.")
 }
@@ -253,4 +264,21 @@ private func labels() -> [String] {
     let zappy = try #require(s.apps.first { $0.key == SummaryCorpus.Expected.Zappy.key })
     #expect(SummaryText.mainRestReason(summary: zappy) == .hiddenByApp)
     #expect(SummaryText.mainRestReason(summary: try #require(s.apps.first { $0.name == "Bobber" })) == .unknownDestination)
+}
+
+@Test func wordingNamesAreNeverSearchedForPlaceholders() {
+    // review of PR #9: an app name like "{count} Timer" stays as written
+    let s = SummaryText.appSentences(app: "{count} Timer", companies: ["A", "B", "C", "D", "E"], adTrack: [], untraced: 0, typeKnown: [:])
+    #expect(s.first == "{count} Timer contacted 5 companies, including A and B.")
+    #expect(Wording(entries: ["k": "{a} then {b}"]).text("k", ["a": "{b}", "b": "x"]) == "{b} then x")
+}
+
+@Test func wordingFileWithAByteOrderMarkLoads() throws {
+    #expect(try Wording(parsing: "\u{FEFF}# comment\na = \"x\"\n").entries == ["a": "x"])
+}
+
+@Test func wordingTypeKnownNeverExceedsUntraced() {
+    let s = SummaryText.appSentences(app: "Zappy", companies: ["A"], adTrack: [], untraced: 1, typeKnown: [.advertising: 2, .analytics: 3])
+    #expect(s.last == "It is a known advertising service whose owner is unknown.")
+    #expect(s.count == 4)
 }

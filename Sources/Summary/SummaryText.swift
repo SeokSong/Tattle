@@ -15,13 +15,26 @@ public enum SummaryText {
 
     // MARK: helpers
 
-    /// rounds down, so a percent never overstates. nil when there is nothing to divide by
-    public static func percent(_ numerator: Int, of denominator: Int) -> Int? {
+    /// tenths of a percent, rounded down, so a percent never overstates. nil when there is nothing to divide by
+    public static func permille(_ numerator: Int, of denominator: Int) -> Int? {
         guard denominator > 0 else { return nil }
-        return min(max(numerator, 0), denominator) * 100 / denominator
+        return min(max(numerator, 0), denominator) * 1000 / denominator
     }
 
-    public static func period(from start: Date, to end: Date, timeZone: TimeZone) -> String {
+    /// the percent with one decimal (owner, 2026-11-24): "77.3", "0.5", "100.0"
+    public static func percentText(_ numerator: Int, of denominator: Int) -> String? {
+        permille(numerator, of: denominator).map(tenths)
+    }
+
+    static func tenths(_ value: Int) -> String { "\(value / 10).\(value % 10)" }
+
+    /// the exact ratio decides, never the shown text: 69.98% is not rated
+    public static func meetsRatingThreshold(_ numerator: Int, of denominator: Int) -> Bool {
+        denominator > 0 && min(numerator, denominator) * 100 >= ratingThreshold * denominator
+    }
+
+    /// the year is shown when the two dates are in different years, or not in the current year (`now`)
+    public static func period(from start: Date, to end: Date, timeZone: TimeZone, now: Date = Date()) -> String {
         func format(_ pattern: String, _ date: Date) -> String {
             let f = DateFormatter()
             f.locale = Locale(identifier: "en_US_POSIX")
@@ -32,9 +45,10 @@ public enum SummaryText {
         let (d1, m1, y1) = (format("d", start), format("MMMM", start), format("yyyy", start))
         let (d2, m2, y2) = (format("d", end), format("MMMM", end), format("yyyy", end))
         if y1 != y2 { return "\(d1) \(m1) \(y1) to \(d2) \(m2) \(y2)" }
-        if m1 != m2 { return "\(d1) \(m1) to \(d2) \(m2)" }
-        if d1 != d2 { return "\(d1) to \(d2) \(m1)" }
-        return "\(d1) \(m1)"
+        let year = y2 == format("yyyy", now) ? "" : " \(y2)"
+        if m1 != m2 { return "\(d1) \(m1) to \(d2) \(m2)\(year)" }
+        if d1 != d2 { return "\(d1) to \(d2) \(m1)\(year)" }
+        return "\(d1) \(m1)\(year)"
     }
 
     /// "A", "A and B", "A, B and C". callers pass at most three names
@@ -99,8 +113,12 @@ public enum SummaryText {
             }
             out.append(w.text(untraced == 0 ? "app.untraced.none" : plural("app.untraced", untraced), ["count": String(untraced)]))
         }
+        // never more known-type destinations than untraced ones, in each category or in total
+        var left = untraced
         for category in CompanyCategory.allCases where category != .unclassified {
-            guard let k = typeKnown[category], k > 0, untraced > 0 else { continue }
+            guard let raw = typeKnown[category], raw > 0, left > 0 else { continue }
+            let k = min(raw, left)
+            left -= k
             let kind = w.text(plural("kind.\(category.rawValue)", k))
             let key = untraced == 1 && k == 1 ? "app.typeknown.only" : plural("app.typeknown", k)
             out.append(w.text(key, ["kind": kind, "count": String(k)]))
@@ -150,15 +168,15 @@ public enum SummaryText {
 
     /// nil when the app has no traffic to trace
     public static func captureCoverage(period: String, coverage: CoverageRatio) -> String? {
-        guard let p = percent(coverage.numerator, of: coverage.denominator) else { return nil }
+        guard let p = percentText(coverage.numerator, of: coverage.denominator) else { return nil }
         if coverage.numerator >= coverage.denominator { return w.text("coverage.captures.all", ["period": period]) }
-        return w.text("coverage.captures", ["period": period, "percent": String(p)])
+        return w.text("coverage.captures", ["period": period, "percent": p])
     }
 
     /// the (i) text: the largest cause of the rest. nil when everything was traced or there is no cause
     public static func captureRestDetail(coverage: CoverageRatio, reason: CaptureRestReason?) -> String? {
-        guard let reason, let p = percent(coverage.numerator, of: coverage.denominator), coverage.numerator < coverage.denominator else { return nil }
-        return w.text("coverage.reason.\(reason.rawValue)", ["percent": String(100 - p)])
+        guard let reason, let p = permille(coverage.numerator, of: coverage.denominator), coverage.numerator < coverage.denominator else { return nil }
+        return w.text("coverage.reason.\(reason.rawValue)", ["percent": tenths(1000 - p)])
     }
 
     public static func reportCoverage(period: String, identified: Int, total: Int) -> String? {
@@ -171,17 +189,18 @@ public enum SummaryText {
 
     public static let ratingThreshold = 70
 
-    public static func captureRating(percent p: Int) -> String {
-        w.text(p >= ratingThreshold ? "rating.captures.shown" : "rating.captures.hidden",
-               ["percent": String(p), "threshold": String(ratingThreshold)])
+    public static func captureRating(coverage: CoverageRatio) -> String? {
+        guard let p = percentText(coverage.numerator, of: coverage.denominator) else { return nil }
+        let shown = meetsRatingThreshold(coverage.numerator, of: coverage.denominator)
+        return w.text(shown ? "rating.captures.shown" : "rating.captures.hidden", ["percent": p, "threshold": String(ratingThreshold)])
     }
 
     public static func reportRating(identified: Int, total: Int) -> String? {
-        guard let p = percent(identified, of: total) else { return nil }
-        let shown = p >= ratingThreshold
+        guard let p = percentText(identified, of: total) else { return nil }
+        let shown = meetsRatingThreshold(identified, of: total)
         if total == 1 { return w.text(shown ? "rating.report.shown.single" : "rating.report.hidden.single", ["threshold": String(ratingThreshold)]) }
         return w.text(shown ? "rating.report.shown" : "rating.report.hidden", [
-            "identified": String(min(identified, total)), "total": String(total), "percent": String(p),
+            "identified": String(min(identified, total)), "total": String(total), "percent": p,
             "threshold": String(ratingThreshold),
         ])
     }

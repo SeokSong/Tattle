@@ -88,8 +88,8 @@ The format is a small subset of TOML (`key = "text"` lines and `#` comments), re
 - A destination the AdGuard list knows by type but not by company is "a known advertising service whose owner is unknown"
 - No advertising or tracking found: "No advertising or tracking companies were found." (the owner first wanted "This app doesn't track")
 - The own company row keeps its categories ("Alphabet · the app's own company · Advertising"), so the advertising or tracking count always has a row to point to
-- Coverage: one line per source with the percent traced; the largest cause of the rest is only behind an (i) icon. Percentages round down. "the largest share", never "most", because the largest cause need not be over half
-- Rating: "Rated on 82% traced traffic."; below 70%: "Not enough data to rate: 55% of this app's traffic could be traced to a company. A rating needs at least 70%." A hidden rating hides only the band
+- Coverage: one line per source with the percent traced; the largest cause of the rest is only behind an (i) icon. Percentages have one decimal and round down (77.3%, 0.5%), so a small traced share is never shown as 0 and nothing is overstated; whether a rating is shown is decided on the exact ratio. Dates show the year when it is not the current year. "the largest share", never "most", because the largest cause need not be over half
+- Rating: "Rated on 82.4% traced traffic."; below 70%: "Not enough data to rate: 55.0% of this app's traffic could be traced to a company. A rating needs at least 70%." A hidden rating hides only the band
 - Never used: sells, sold, shared your data, spying, safe, unsafe, stops, blocks, even when not in use, privacy score
 
 | Where | Example |
@@ -97,7 +97,7 @@ The format is a small subset of TOML (`key = "text"` lines and `#` comments), re
 | Overview | In your captures and App Privacy Report (14 to 21 November), 12 apps contacted 31 companies, 9 of which do advertising or tracking. Another 40 destinations could not be traced to any company. |
 | App, opened | Zappy contacted Zappy Inc, AdCo Holdings and CdnCo. Of these, AdCo Holdings does advertising or tracking. It also contacted 3 destinations that could not be traced to any company. Among them, 2 are known advertising services whose owner is unknown. |
 | Company row | AdCo Holdings · Advertising, Analytics / Alphabet · the app's own company · Advertising / YouTube (owned by Alphabet) |
-| Captures | Captures (14 to 21 November): 77% of this app's traffic could be traced to a company. (i): Of the remaining 23%, the largest share went to destinations whose names the app kept hidden. |
+| Captures | Captures (14 to 21 November): 77.3% of this app's traffic could be traced to a company. (i): Of the remaining 22.7%, the largest share went to destinations whose names the app kept hidden. |
 | Report | App Privacy Report (18 to 21 November): 6 of this app's 9 destinations could be traced to a company. The report doesn't show how much data was sent. |
 | Data amounts | In the capture from 14 November, the largest share of the data went to Alphabet. (captures only, with the toggle on) |
 

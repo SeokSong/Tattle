@@ -1,3 +1,4 @@
+import Companies
 import Foundation
 
 /// why the wording file failed to load. carries a line number only
@@ -23,6 +24,8 @@ public struct Wording: Sendable {
     /// strict: a bad line fails the whole load, so a typo never shows half a screen of wrong text
     public init(parsing text: String) throws(WordingError) {
         var entries: [String: String] = [:]
+        // some editors save a byte order mark; it is not part of the first line
+        let text = text.hasPrefix("\u{FEFF}") ? String(text.dropFirst()) : text
         for (index, raw) in text.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "\n" || $0 == "\r\n" }).enumerated() {
             let number = index + 1
             let line = raw.trimmingCharacters(in: .whitespaces)
@@ -57,9 +60,17 @@ public struct Wording: Sendable {
     /// the text for `key` with each `{name}` replaced. a missing key shows as `[key]`: a visible bug, never
     /// a made-up sentence
     public func text(_ key: String, _ values: [String: String] = [:]) -> String {
-        guard var text = entries[key] else { return "[\(key)]" }
-        for (name, value) in values { text = text.replacingOccurrences(of: "{\(name)}", with: value) }
-        return text
+        guard let template = entries[key] else { return "[\(key)]" }
+        // one pass over the template: a filled-in value (an app or company name) is never searched again, so a
+        // name like "{count} Timer" stays as written. an unknown placeholder is left as it is
+        var out = "", rest = Substring(template)
+        while let open = rest.firstIndex(of: "{"), let close = rest[open...].firstIndex(of: "}") {
+            out += rest[..<open]
+            let name = String(rest[rest.index(after: open)..<close])
+            out += values[name] ?? String(rest[open...close])
+            rest = rest[rest.index(after: close)...]
+        }
+        return out + rest
     }
 
     /// the `{name}` placeholders a text uses
@@ -77,27 +88,10 @@ public struct Wording: Sendable {
 
     /// the file name SwiftPM gives this target's resource bundle
     static let bundleName = "Tattle_Summary.bundle"
-    private final class Anchor {}
 
-    /// SwiftPM's `Bundle.module` traps when the bundle is absent, so it is never used (as in `DatasetManifest`)
-    static func resourceURL(_ name: String) -> URL? {
-        var dirs: [URL] = []
-        if let exe = Bundle.main.executableURL { dirs.append(exe.resolvingSymlinksInPath().deletingLastPathComponent()) }
-        dirs.append(Bundle.main.bundleURL)
-        dirs.append(Bundle.main.bundleURL.deletingLastPathComponent())
-        if let resources = Bundle.main.resourceURL { dirs.append(resources) }
-        let own = Bundle(for: Anchor.self).bundleURL
-        dirs.append(own)
-        dirs.append(own.deletingLastPathComponent())
-        for dir in dirs {
-            let bundle = dir.appendingPathComponent(bundleName, isDirectory: true)
-            for path in ["Resources/" + name, name] {
-                let url = bundle.appendingPathComponent(path)
-                if FileManager.default.fileExists(atPath: url.path) { return url }
-            }
-        }
-        return nil
-    }
+    /// found by the same search as the company lists (`DatasetManifest`); `Bundle.module` is never used, it traps
+    /// when the bundle is absent
+    static func resourceURL(_ name: String) -> URL? { DatasetManifest.resourceURL(name, inBundleNamed: bundleName) }
 
     public static func loadBundled() throws -> Wording {
         guard let url = resourceURL("wording.toml") else { throw WordingError.fileMissing }
