@@ -1,0 +1,24 @@
+{
+  "datasets": [
+    {
+      "name": "Natural Earth 1:110m land",
+      "file": "land.txt",
+      "version": "v5.1.2",
+      "sourceURL": "https://github.com/nvkelso/natural-earth-vector",
+      "licence": "public domain",
+      "sourceSHA256": "9e0729ee253ca7d7a5c4ae9395fb1902264c5377c52e224d13dd85010e2835d9",
+      "sha256": "abd1fe695f5ebc0bce9eddbaf67317edb4c5c7359da41d4b7b0130f4aca043f8",
+      "lines": 128
+    },
+    {
+      "name": "Natural Earth 1:110m country borders",
+      "file": "borders.txt",
+      "version": "v5.1.2",
+      "sourceURL": "https://github.com/nvkelso/natural-earth-vector",
+      "licence": "public domain",
+      "sourceSHA256": "d42479fd79552cca4eec7f85fcdca717a790d29ff06be7676f1af0568c6d3f7c",
+      "sha256": "3ddd6c31547e08164bff11a03c56ddd4995fcf72ae98234272f2993105beedbb",
+      "lines": 333
+    }
+  ]
+}

@@ -13,6 +13,9 @@ import Pipeline
 import Report
 import Storage
 import Summary
+import AppKit
+import SwiftUI
+import WorldMap
 
 let appleVendorID = 1452
 
@@ -1470,6 +1473,61 @@ if arguments.count == 3 && arguments[1] == "flows" {
 
 if arguments.count == 5 && arguments[1] == "flows" && arguments[3] == "--db" {
     await printFlows(path: arguments[2], dbPath: arguments[4])
+    exit(0)
+}
+
+/// `tattle globe-preview <out.png> [lat,lon] [zoom]`: draws the globe with made-up connections to real head
+/// offices from the bundled table, for choosing and checking the look without the app. no capture data is read.
+/// the start point is the middle of the contiguous US, never a real person's place
+@MainActor
+func runGlobePreview(_ args: [String]) {
+    guard let out = args.first else {
+        print("usage: tattle globe-preview <out.png> [lat,lon] [zoom]")
+        exit(2)
+    }
+    let start = GeoPoint(latitude: 39.83, longitude: -98.58)
+    var centre = start
+    if args.count > 1 {
+        let n = args[1].split(separator: ",").compactMap { Double($0) }
+        if n.count == 2 { centre = GeoPoint(latitude: n[0], longitude: n[1]) }
+    }
+    let zoom = args.count > 2 ? Double(args[2]) ?? 0.45 : 0.45
+    guard let table = try? HeadOfficeTable.loadBundled() else {
+        print("the head-office data could not be read")
+        exit(1)
+    }
+    // made-up traffic: how many connections went to each company
+    let traffic: [(String, Int)] = [
+        ("Alphabet", 40), ("Meta Platforms", 18), ("Amazon", 12), ("Apple", 25), ("Microsoft", 6), ("AppLovin", 9),
+        ("Cloudflare", 5), ("ByteDance", 7), ("Criteo", 3), ("Spotify", 2), ("Tencent", 1), ("Adform", 1),
+        ("Unity", 4), ("Snap", 3), ("Yandex", 1), ("Atlassian", 1),
+    ]
+    var lines = MapLines()
+    for (company, n) in traffic {
+        let office = table.office(forParent: company)
+        for _ in 0..<n {
+            lines.add(company: office == nil ? nil : company,
+                      place: office.map { GeoPoint(latitude: $0.latitude, longitude: $0.longitude) }, city: office?.city ?? "")
+        }
+    }
+    let view = GlobeView(centre: centre, zoom: zoom, lines: lines.lines, start: start)
+        .frame(width: 1200, height: 800)
+    let renderer = ImageRenderer(content: view)
+    renderer.scale = 2
+    guard let image = renderer.cgImage,
+          let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
+        print("could not draw the preview")
+        exit(1)
+    }
+    do { try png.write(to: URL(fileURLWithPath: out)) } catch {
+        print("could not write \(out)")
+        exit(1)
+    }
+    print("wrote \(out): \(lines.lines.count) lines, \(lines.notDrawn) connections not drawn")
+}
+
+if arguments.count >= 3 && arguments[1] == "globe-preview" {
+    await runGlobePreview(Array(arguments.dropFirst(2)))
     exit(0)
 }
 

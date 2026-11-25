@@ -31,6 +31,16 @@ AdGuard companiesdb tracker list
   trimmed; a tracker with no company whose name is only a domain gets an empty company;
   domains that are public suffixes are not used.
 
+Natural Earth (world outline for the company map)
+-------------------------------------------------
+
+- Source: https://github.com/nvkelso/natural-earth-vector, release v5.1.2: ne_110m_land and
+  ne_110m_admin_0_boundary_lines_land. Ships in the WorldMap module's Resources (land.txt,
+  borders.txt), built by scripts/build-world-outline.sh; checksums in that folder's manifest.json.
+- Licence: public domain (https://www.naturalearthdata.com/about/terms-of-use/). No permission or
+  credit is needed; it is given here so the source can be checked.
+- Changes made: coordinates rounded to 2 decimals and written one ring or line per text line.
+
 Wikidata (company head offices)
 -------------------------------
 

@@ -33,11 +33,13 @@ let package = Package(
         ),
         // read-time labels for the screens and the command line; never imported by the packet path
         .target(name: "Summary", dependencies: ["Companies", "Flows", "Domains", "Attribution"], resources: [.copy("Resources")]),
+        // the company map (Milestone 4): globe math, the world outline (Natural Earth, public domain) and the drawing
+        .target(name: "WorldMap", dependencies: ["Companies"], resources: [.copy("Resources")]),
         .target(name: "Capture", dependencies: ["PCAPNG", "Storage", "Pipeline"]),
-        .executableTarget(name: "TattleCLI", dependencies: ["PCAPNG", "Storage", "Pipeline", "Capture", "Report", "Companies", "Summary"]),
+        .executableTarget(name: "TattleCLI", dependencies: ["PCAPNG", "Storage", "Pipeline", "Capture", "Report", "Companies", "Summary", "WorldMap"]),
         .executableTarget(
             name: "TattleApp",
-            dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains", "Storage", "Attribution", "Pipeline", "Capture", "Report", "Companies", "Summary"]
+            dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains", "Storage", "Attribution", "Pipeline", "Capture", "Report", "Companies", "Summary", "WorldMap"]
         ),
 
         // shared test helpers: fixture lookup and byte builders
@@ -45,6 +47,7 @@ let package = Package(
 
         .testTarget(name: "TattleCLITests", dependencies: ["PCAPNG", "TestSupport"]),
         .testTarget(name: "CompaniesTests", dependencies: ["Companies"]),
+        .testTarget(name: "WorldMapTests", dependencies: ["WorldMap", "Companies"]),
         .testTarget(name: "PrivacyReportTests", dependencies: ["PrivacyReport", "TestSupport"]),
         .testTarget(name: "SummaryTests", dependencies: ["Summary", "Companies", "Attribution", "Flows", "Domains", "PacketDecoder", "TestSupport"]),
         .testTarget(name: "PacketDecoderTests", dependencies: ["PacketDecoder", "TestSupport"]),
