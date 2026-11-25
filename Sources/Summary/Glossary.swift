@@ -10,21 +10,20 @@ public struct GlossaryTerm: Sendable, Equatable {
     }
 }
 
+/// the glossary and "How to read this" texts come from Resources/wording.toml (`glossary.N.term`,
+/// `glossary.N.text`, `howto.N`); the rules about words stay in code
 public enum Glossary {
-    public static let terms: [GlossaryTerm] = [
-        GlossaryTerm(term: "Company", text: "The business behind a destination. Brands are listed under the company that owns them, so YouTube counts as Alphabet."),
-        GlossaryTerm(term: "Advertising or tracking", text: "A company with an advertising or analytics service among the destinations. It shows the app contacted them, not what was sent."),
-        GlossaryTerm(term: "The app's own company", text: "The company that makes the app. It is counted and marked, because an app contacting its own servers is expected."),
-        GlossaryTerm(term: "Apple system and Apple apps", text: "iOS background services and Apple's own apps. Apple servers count as their own company."),
-        GlossaryTerm(term: "Not identified", text: "A destination no list knows. It stays in the count, so the numbers never look more complete than they are."),
-        GlossaryTerm(term: "Possible", text: "A name seen only through a lookup or a shared server. It may be a different service, so it is never counted."),
-    ]
+    /// the glossary has exactly six terms (OD3)
+    public static let termCount = 6
+    public static let howToReadCount = 3
 
-    public static let howToRead: [String] = [
-        "Every number counts companies, not websites: YouTube and Google Ads are one company, Alphabet.",
-        "\"Contacted\" means the app connected to the company. It does not say what was sent or why.",
-        "Unknown parts are always shown next to the counts.",
-    ]
+    public static var terms: [GlossaryTerm] {
+        (1...termCount).map {
+            GlossaryTerm(term: Wording.bundled.text("glossary.\($0).term"), text: Wording.bundled.text("glossary.\($0).text"))
+        }
+    }
+
+    public static var howToRead: [String] { (1...howToReadCount).map { Wording.bundled.text("howto.\($0)") } }
 
     /// words and phrases no user-facing text may contain, matched ignoring case on whole words
     public static let bannedPhrases: [String] = [

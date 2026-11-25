@@ -1,0 +1,130 @@
+# Every sentence the summary shows. Approved by the owner on 2026-11-24 (md-notes/wording-draft.md).
+#
+# Format: one `key = "text"` per line; lines starting with # are comments. Inside the text, write \" for a
+# quote and \\ for a backslash. {name} is filled in by the app; each key allows only the placeholders the
+# code passes it (WordingTests checks every key and placeholder, and lints every sentence).
+#
+# Rules the owner chose: no speaker (never "Tattle" or "we"); the unit word is "destinations"; one idea,
+# one word ("traced"); counts and the untraced part always together; no sentence starts with a number.
+# Words that are never allowed are listed in Sources/Summary/Glossary.swift.
+#
+# To change what the screen says: edit the text, keep the key and its placeholders, run the tests.
+
+# ---------------------------------------------------------------- counting words
+count.app.one = "1 app"
+count.app.other = "{count} apps"
+count.company.one = "1 company"
+count.company.other = "{count} companies"
+join.two = "{a} and {b}"
+join.three = "{a}, {b} and {c}"
+
+# ---------------------------------------------------------------- overview (top of the screen)
+overview.source.both = "In your captures and App Privacy Report"
+overview.source.captures = "In your captures"
+overview.source.report = "In your App Privacy Report"
+overview.tracking.none = "{source} ({period}), {apps} contacted {companies}. No advertising or tracking companies were found."
+overview.tracking.one = "{source} ({period}), {apps} contacted {companies}, 1 of which does advertising or tracking."
+overview.tracking.other = "{source} ({period}), {apps} contacted {companies}, {count} of which do advertising or tracking."
+overview.untraced.none = "Every destination was traced to a company."
+overview.untraced.one = "Another destination could not be traced to any company."
+overview.untraced.other = "Another {count} destinations could not be traced to any company."
+
+# ---------------------------------------------------------------- each app, when the reader opens it
+# up to 3 companies are named; with more, the first 2 (own company first, then advertising or tracking)
+app.companies.named = "{app} contacted {names}."
+app.companies.many = "{app} contacted {count} companies, including {first} and {second}."
+app.tracking.none = "No advertising or tracking companies were found."
+# the app contacted one company, and it does advertising or tracking
+app.tracking.only = "{names} does advertising or tracking."
+app.tracking.named.one = "Of these, {names} does advertising or tracking."
+app.tracking.named.other = "Of these, {names} do advertising or tracking."
+app.tracking.many = "Of these, {count} do advertising or tracking."
+app.untraced.none = "Every destination was traced to a company."
+app.untraced.one = "It also contacted 1 destination that could not be traced to any company."
+app.untraced.other = "It also contacted {count} destinations that could not be traced to any company."
+# nothing the app contacted could be traced
+app.untraced.all.one = "{app} contacted 1 destination, but it could not be traced to a company."
+app.untraced.all.other = "{app} contacted {count} destinations, but none could be traced to a company."
+# the AdGuard list knows the type of the destination (for example advertising) but not its company
+app.typeknown.only = "It is a known {kind} whose owner is unknown."
+app.typeknown.one = "Among them is a known {kind} whose owner is unknown."
+app.typeknown.other = "Among them, {count} are known {kind} whose owner is unknown."
+
+# the service words used by app.typeknown.*, singular and plural
+kind.advertising.one = "advertising service"
+kind.advertising.other = "advertising services"
+kind.analytics.one = "analytics service"
+kind.analytics.other = "analytics services"
+kind.social.one = "social media service"
+kind.social.other = "social media services"
+kind.contentDelivery.one = "content delivery service"
+kind.contentDelivery.other = "content delivery services"
+kind.cloudService.one = "cloud or app service"
+kind.cloudService.other = "cloud or app services"
+kind.onlineService.one = "online service"
+kind.onlineService.other = "online services"
+kind.appleSystem.one = "Apple system service"
+kind.appleSystem.other = "Apple system services"
+
+# ---------------------------------------------------------------- company rows
+# {categories} is the category labels joined with ", "
+company.row = "{parent} · {categories}"
+company.row.plain = "{parent}"
+company.row.own = "{parent} · the app's own company"
+company.row.own.categories = "{parent} · the app's own company · {categories}"
+company.brand = "{brand} (owned by {parent})"
+seen.both = "Seen in both"
+seen.captures = "Seen in captures"
+seen.report = "Seen in your App Privacy Report"
+
+# ---------------------------------------------------------------- possible (never counted)
+possible.heading = "Possible (not counted)"
+possible.explanation = "A lookup for this name was seen, but the server is shared, so it may be a different service."
+
+# ---------------------------------------------------------------- how much could be traced
+coverage.captures = "Captures ({period}): {percent}% of this app's traffic could be traced to a company."
+coverage.captures.all = "Captures ({period}): All of this app's traffic could be traced to a company."
+# behind the (i) icon, not shown by default: the largest cause of the rest
+coverage.reason.hiddenByApp = "Of the remaining {percent}%, the largest share went to destinations whose names the app kept hidden."
+coverage.reason.startedBeforeCapture = "Of the remaining {percent}%, the largest share came from connections that started before the capture began."
+coverage.reason.noName = "Of the remaining {percent}%, the largest share came from connections that did not include a destination name."
+coverage.reason.unknownDestination = "Of the remaining {percent}%, the largest share went to destinations that are not in any company list."
+coverage.reason.possibleOnly = "Of the remaining {percent}%, the largest share went to destinations that could only be guessed from shared servers."
+coverage.report = "App Privacy Report ({period}): {identified} of this app's {total} destinations could be traced to a company. The report doesn't show how much data was sent."
+coverage.report.single.traced = "App Privacy Report ({period}): this app's only destination could be traced to a company. The report doesn't show how much data was sent."
+coverage.report.single.untraced = "App Privacy Report ({period}): this app's only destination could not be traced to a company. The report doesn't show how much data was sent."
+
+# ---------------------------------------------------------------- rating lines (the band itself is Part 4)
+rating.captures.shown = "Rated on {percent}% traced traffic."
+rating.captures.hidden = "Not enough data to rate: {percent}% of this app's traffic could be traced to a company. A rating needs at least {threshold}%."
+rating.report.shown = "Rated on {identified} of {total} traced destinations ({percent}%)."
+rating.report.shown.single = "Rated on 1 of 1 traced destination (100%)."
+rating.report.hidden = "Not enough data to rate: {identified} of {total} destinations ({percent}%) could be traced to a company. A rating needs at least {threshold}%."
+rating.report.hidden.single = "Not enough data to rate: 0 of 1 destination (0%) could be traced to a company. A rating needs at least {threshold}%."
+
+# ---------------------------------------------------------------- special entries
+special.system = "iOS background services. Apple servers count as its own company."
+special.apple = "Apple's own apps, together."
+special.apple.breakdown = "Each Apple app on its own"
+noprocess.one = "iOS gave no app information for 1 connection."
+noprocess.other = "iOS gave no app information for {count} connections."
+
+# ---------------------------------------------------------------- data amounts (captures only, toggle on)
+data.amount = "In the capture from {day}, the largest share of the data went to {company}."
+
+# ---------------------------------------------------------------- glossary (six terms) and how to read this
+glossary.1.term = "Company"
+glossary.1.text = "The business behind a destination. Brands are listed under the company that owns them, so YouTube counts as Alphabet."
+glossary.2.term = "Advertising or tracking"
+glossary.2.text = "A company with an advertising or analytics service among the destinations. It shows the app contacted them, not what was sent."
+glossary.3.term = "The app's own company"
+glossary.3.text = "The company that makes the app. It is counted and marked, because an app contacting its own servers is expected."
+glossary.4.term = "Apple system and Apple apps"
+glossary.4.text = "iOS background services and Apple's own apps. Apple servers count as their own company."
+glossary.5.term = "Not identified"
+glossary.5.text = "A destination that could not be traced to any company. It stays in the count, so the numbers never look more complete than they are."
+glossary.6.term = "Possible"
+glossary.6.text = "A name seen only through a lookup or a shared server. It may be a different service, so it is never counted."
+howto.1 = "Every number counts companies, not websites: YouTube and Google Ads are one company, Alphabet."
+howto.2 = "\"Contacted\" means the app connected to the company. It does not say what was sent or why."
+howto.3 = "Unknown parts are always shown next to the counts."

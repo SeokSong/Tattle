@@ -2,28 +2,23 @@ import Attribution
 import Companies
 import Foundation
 
-/// why the rest of an app's captured traffic was not identified, in tie-break order
-public enum CaptureRestReason: CaseIterable, Sendable {
+/// the largest cause of the part of an app's captured traffic that could not be traced, in tie-break order.
+/// shown only behind the (i) icon (owner, 2026-11-24)
+public enum CaptureRestReason: String, CaseIterable, Sendable {
     case hiddenByApp, startedBeforeCapture, noName, unknownDestination, possibleOnly
-
-    public var text: String {
-        switch self {
-        case .hiddenByApp: "was hidden by the app"
-        case .startedBeforeCapture: "started before the capture"
-        case .noName: "had no name to identify"
-        case .unknownDestination: "went to destinations no list knows"
-        case .possibleOnly: "has only a possible name"
-        }
-    }
 }
 
-/// the frozen summary sentences. pure text: every function takes the numbers it needs. no speaker ever appears
+/// the summary sentences. the words live in Resources/wording.toml (`Wording`); this code only chooses which
+/// sentence applies and fills in numbers and names. no speaker ever appears (owner, 2026-11-24)
 public enum SummaryText {
+    private static var w: Wording { Wording.bundled }
+
     // MARK: helpers
 
+    /// rounds down, so a percent never overstates. nil when there is nothing to divide by
     public static func percent(_ numerator: Int, of denominator: Int) -> Int? {
         guard denominator > 0 else { return nil }
-        return numerator * 100 / denominator
+        return min(max(numerator, 0), denominator) * 100 / denominator
     }
 
     public static func period(from start: Date, to end: Date, timeZone: TimeZone) -> String {
@@ -42,107 +37,104 @@ public enum SummaryText {
         return "\(d1) \(m1)"
     }
 
+    /// "A", "A and B", "A, B and C". callers pass at most three names
+    public static func names(_ list: [String]) -> String {
+        switch list.count {
+        case 0: return ""
+        case 1: return list[0]
+        case 2: return w.text("join.two", ["a": list[0], "b": list[1]])
+        default: return w.text("join.three", ["a": list[0], "b": list[1], "c": list[2]])
+        }
+    }
+
+    private static func plural(_ base: String, _ n: Int) -> String { base + (n == 1 ? ".one" : ".other") }
+
     // MARK: overview
 
+    /// two sentences: the companies with the advertising or tracking part, then the untraced part
     public static func overview(
-        period: String, hasCaptures: Bool, hasReport: Bool, apps: Int, companies: Int, adTrack: Int, notIdentified: Int
-    ) -> String {
-        precondition(hasCaptures || hasReport, "an overview needs at least one source")
-        let source: String
-        if hasCaptures && hasReport {
-            source = "In your captures and App Privacy Report"
-        } else if hasCaptures {
-            source = "In your captures"
-        } else {
-            source = "In your App Privacy Report"
-        }
-        let appsPart = apps == 1 ? "1 app" : "\(apps) apps"
-        let companiesPart = companies == 1 ? "1 company" : "\(companies) companies"
-        let notIdentifiedPart: String
-        switch notIdentified {
-        case 0: notIdentifiedPart = "Every destination was identified."
-        case 1: notIdentifiedPart = "1 destination couldn't be identified."
-        default: notIdentifiedPart = "\(notIdentified) destinations couldn't be identified."
-        }
-        return "\(source) (\(period)): \(appsPart) contacted \(companiesPart). \(adTrackSentence(adTrack)) \(notIdentifiedPart)"
+        period: String, hasCaptures: Bool, hasReport: Bool, apps: Int, companies: Int, adTrack: Int, untraced: Int
+    ) -> [String] {
+        precondition(hasCaptures || hasReport, "an overview needs a source")
+        let source = w.text(hasCaptures && hasReport ? "overview.source.both" : hasCaptures ? "overview.source.captures" : "overview.source.report")
+        let values = [
+            "source": source, "period": period, "count": String(adTrack),
+            "apps": w.text(plural("count.app", apps), ["count": String(apps)]),
+            "companies": w.text(plural("count.company", companies), ["count": String(companies)]),
+        ]
+        let tracking = w.text(adTrack == 0 ? "overview.tracking.none" : plural("overview.tracking", adTrack), values)
+        let rest = w.text(untraced == 0 ? "overview.untraced.none" : plural("overview.untraced", untraced), ["count": String(untraced)])
+        return [tracking, rest]
     }
 
     // MARK: each app
 
-    public static func companiesSentence(app: String, named: Int) -> String {
-        switch named {
-        case 0: "No companies were identified."
-        case 1: "\(app) contacted 1 company."
-        default: "\(app) contacted \(named) companies."
-        }
-    }
-
-    public static func adTrackSentence(_ n: Int) -> String {
-        switch n {
-        case 0: "No advertising or tracking companies found."
-        case 1: "1 does advertising or tracking."
-        default: "\(n) do advertising or tracking."
-        }
-    }
-
-    public static func notIdentifiedSentence(_ n: Int) -> String {
-        switch n {
-        case 0: "Every destination was identified."
-        case 1: "1 more destination couldn't be identified."
-        default: "\(n) more destinations couldn't be identified."
-        }
-    }
-
-    public static func unnamedSentences(_ counts: [CompanyCategory: Int]) -> [String] {
-        CompanyCategory.allCases.compactMap { category in
-            guard let n = counts[category], n > 0 else { return nil }
-            let words: (String, String)
-            switch category {
-            case .advertising: words = ("advertising service", "advertising services")
-            case .analytics: words = ("analytics service", "analytics services")
-            case .social: words = ("social media service", "social media services")
-            case .contentDelivery: words = ("content delivery service", "content delivery services")
-            case .cloudService: words = ("cloud or app service", "cloud or app services")
-            case .onlineService: words = ("online service", "online services")
-            case .appleSystem: words = ("Apple system service", "Apple system services")
-            case .unclassified: return nil
-            }
-            return "Plus \(n) \(n == 1 ? words.0 : words.1) that couldn't be named."
-        }
-    }
-
-    public static func headline(
-        app: String, named: Int, adTrack: Int, notIdentified: Int, unnamed: [CompanyCategory: Int]
+    /// the sentences shown when the reader opens an app. `companies` are the parent names in display order (own
+    /// company first, then advertising or tracking, then the rest); `adTrack` the advertising or tracking ones in
+    /// the same order; `untraced` the destinations that could not be traced; `typeKnown` how many of those the
+    /// AdGuard list knows by type. the company part and the untraced part always come together
+    public static func appSentences(
+        app: String, companies: [String], adTrack: [String], untraced: Int, typeKnown: [CompanyCategory: Int]
     ) -> [String] {
-        [companiesSentence(app: app, named: named), adTrackSentence(adTrack), notIdentifiedSentence(notIdentified)]
-            + unnamedSentences(unnamed)
+        var out: [String] = []
+        if companies.isEmpty {
+            guard untraced > 0 else { return [] }
+            out.append(w.text(plural("app.untraced.all", untraced), ["app": app, "count": String(untraced)]))
+        } else {
+            if companies.count <= 3 {
+                out.append(w.text("app.companies.named", ["app": app, "names": names(companies)]))
+            } else {
+                out.append(w.text("app.companies.many", [
+                    "app": app, "count": String(companies.count), "first": companies[0], "second": companies[1],
+                ]))
+            }
+            if adTrack.isEmpty {
+                out.append(w.text("app.tracking.none"))
+            } else if companies.count == 1 {
+                out.append(w.text("app.tracking.only", ["names": adTrack[0]]))
+            } else if adTrack.count <= 3 {
+                out.append(w.text(plural("app.tracking.named", adTrack.count), ["names": names(adTrack)]))
+            } else {
+                out.append(w.text("app.tracking.many", ["count": String(adTrack.count)]))
+            }
+            out.append(w.text(untraced == 0 ? "app.untraced.none" : plural("app.untraced", untraced), ["count": String(untraced)]))
+        }
+        for category in CompanyCategory.allCases where category != .unclassified {
+            guard let k = typeKnown[category], k > 0, untraced > 0 else { continue }
+            let kind = w.text(plural("kind.\(category.rawValue)", k))
+            let key = untraced == 1 && k == 1 ? "app.typeknown.only" : plural("app.typeknown", k)
+            out.append(w.text(key, ["kind": kind, "count": String(k)]))
+        }
+        return out
     }
 
     // MARK: company rows
 
+    /// the own company keeps its categories, so the advertising or tracking count always has a row to point to
     public static func companyRow(parent: String, categories: [CompanyCategory], isOwnCompany: Bool) -> String {
-        if isOwnCompany { return "\(parent) · the app's own company" }
-        let labels = categories.filter { $0 != .unclassified }.map(\.label)
-        return labels.isEmpty ? parent : "\(parent) · \(labels.joined(separator: ", "))"
+        let labels = categories.filter { $0 != .unclassified }.map(\.label).joined(separator: ", ")
+        let values = ["parent": parent, "categories": labels]
+        if isOwnCompany { return w.text(labels.isEmpty ? "company.row.own" : "company.row.own.categories", values) }
+        return w.text(labels.isEmpty ? "company.row.plain" : "company.row", values)
     }
 
     public static func brandText(brand: String, parent: String) -> String? {
-        brand == parent ? nil : "\(brand) (owned by \(parent))"
+        brand == parent ? nil : w.text("company.brand", ["brand": brand, "parent": parent])
     }
 
     public static func seenIn(captures: Bool, report: Bool) -> String {
-        precondition(captures || report, "seenIn needs at least one source")
-        if captures && report { return "Seen in both" }
-        return captures ? "Seen in captures" : "Seen in your App Privacy Report"
+        precondition(captures || report, "a company is seen in at least one source")
+        return w.text(captures && report ? "seen.both" : captures ? "seen.captures" : "seen.report")
     }
 
     // MARK: possible
 
-    public static let possibleHeading = "Possible (not counted)"
-    public static let possibleExplanation = "A lookup for this name was seen, but the server is shared, so it may be a different service."
+    public static var possibleHeading: String { w.text("possible.heading") }
+    public static var possibleExplanation: String { w.text("possible.explanation") }
 
-    // MARK: how much was identified
+    // MARK: how much could be traced
 
+    /// the reason with the most bytes; ties go to the earlier case; nil when nothing is left over
     public static func mainRestReason(summary: CaptureAppSummary) -> CaptureRestReason? {
         let bytes: [(CaptureRestReason, Int)] = [
             (.hiddenByApp, summary.unseen[.echHidden]?.bytes ?? 0),
@@ -152,57 +144,108 @@ public enum SummaryText {
             (.possibleOnly, summary.hinted.bytes),
         ]
         var best: (CaptureRestReason, Int)?
-        for entry in bytes where entry.1 > 0 {
-            if best == nil || entry.1 > best!.1 { best = entry }
-        }
+        for entry in bytes where entry.1 > 0 && entry.1 > (best?.1 ?? 0) { best = entry }
         return best?.0
     }
 
-    public static func captureCoverage(period: String, identifiedBytes: Int, totalBytes: Int, mainReason: CaptureRestReason?) -> String? {
-        guard let p = percent(identifiedBytes, of: totalBytes) else { return nil }
-        var text = "Captures (\(period)): \(p)% of this app's traffic was identified."
-        if p < 100, let mainReason { text += " Most of the rest \(mainReason.text)." }
-        return text
+    /// nil when the app has no traffic to trace
+    public static func captureCoverage(period: String, coverage: CoverageRatio) -> String? {
+        guard let p = percent(coverage.numerator, of: coverage.denominator) else { return nil }
+        if coverage.numerator >= coverage.denominator { return w.text("coverage.captures.all", ["period": period]) }
+        return w.text("coverage.captures", ["period": period, "percent": String(p)])
+    }
+
+    /// the (i) text: the largest cause of the rest. nil when everything was traced or there is no cause
+    public static func captureRestDetail(coverage: CoverageRatio, reason: CaptureRestReason?) -> String? {
+        guard let reason, let p = percent(coverage.numerator, of: coverage.denominator), coverage.numerator < coverage.denominator else { return nil }
+        return w.text("coverage.reason.\(reason.rawValue)", ["percent": String(100 - p)])
     }
 
     public static func reportCoverage(period: String, identified: Int, total: Int) -> String? {
         guard total > 0 else { return nil }
-        let middle = total == 1 ? "1 of 1 destination was identified." : "\(identified) of \(total) destinations were identified."
-        return "App Privacy Report (\(period)): \(middle) The report doesn't show how much data was sent."
+        if total == 1 { return w.text(identified >= 1 ? "coverage.report.single.traced" : "coverage.report.single.untraced", ["period": period]) }
+        return w.text("coverage.report", ["period": period, "identified": String(min(identified, total)), "total": String(total)])
     }
 
-    // MARK: rating lines
+    // MARK: rating lines (the band itself is Part 4)
 
     public static let ratingThreshold = 70
 
     public static func captureRating(percent p: Int) -> String {
-        if p >= ratingThreshold { return "Rated on \(p)% identified traffic." }
-        return "Not enough data to rate: \(p)% of this app's traffic was identified. A rating needs at least \(ratingThreshold)%."
+        w.text(p >= ratingThreshold ? "rating.captures.shown" : "rating.captures.hidden",
+               ["percent": String(p), "threshold": String(ratingThreshold)])
     }
 
     public static func reportRating(identified: Int, total: Int) -> String? {
         guard let p = percent(identified, of: total) else { return nil }
-        if p >= ratingThreshold { return "Rated on \(identified) of \(total) identified destinations (\(p)%)." }
-        return "Not enough data to rate: \(identified) of \(total) destinations (\(p)%) were identified. A rating needs at least \(ratingThreshold)%."
+        let shown = p >= ratingThreshold
+        if total == 1 { return w.text(shown ? "rating.report.shown.single" : "rating.report.hidden.single", ["threshold": String(ratingThreshold)]) }
+        return w.text(shown ? "rating.report.shown" : "rating.report.hidden", [
+            "identified": String(min(identified, total)), "total": String(total), "percent": String(p),
+            "threshold": String(ratingThreshold),
+        ])
     }
 
     // MARK: special entries
 
-    public static let systemDescription = "iOS background services. Apple servers are its own company."
-    public static let appleAppsDescription = "Apple's own apps, together."
-    public static let appleAppsBreakdownHeading = "Each Apple app on its own"
+    public static var systemDescription: String { w.text("special.system") }
+    public static var appleAppsDescription: String { w.text("special.apple") }
+    public static var appleAppsBreakdownHeading: String { w.text("special.apple.breakdown") }
 
     public static func noProcessSentence(_ n: Int) -> String? {
-        switch n {
-        case 0: nil
-        case 1: "1 connection had no app information from iOS."
-        default: "\(n) connections had no app information from iOS."
-        }
+        n == 0 ? nil : w.text(plural("noprocess", n), ["count": String(n)])
     }
 
-    // MARK: data amounts
+    // MARK: data amounts (captures only, with "Show data amounts" on)
 
+    /// the capture day is required, so a bytes sentence can never be made without its date; the report side
+    /// has no such function
     public static func dataAmountSentence(captureDay: String, company: String) -> String {
-        "In the capture from \(captureDay), most of the data went to \(company)."
+        w.text("data.amount", ["day": captureDay, "company": company])
     }
+
+    // MARK: the file's schema
+
+    /// every key the code uses and the placeholders it may contain. a test checks the file against it both ways
+    public static let schema: [String: Set<String>] = {
+        var s: [String: Set<String>] = [
+            "count.app.one": [], "count.app.other": ["count"], "count.company.one": [], "count.company.other": ["count"],
+            "join.two": ["a", "b"], "join.three": ["a", "b", "c"],
+            "overview.source.both": [], "overview.source.captures": [], "overview.source.report": [],
+            "overview.tracking.none": ["source", "period", "apps", "companies"],
+            "overview.tracking.one": ["source", "period", "apps", "companies"],
+            "overview.tracking.other": ["source", "period", "apps", "companies", "count"],
+            "overview.untraced.none": [], "overview.untraced.one": [], "overview.untraced.other": ["count"],
+            "app.companies.named": ["app", "names"], "app.companies.many": ["app", "count", "first", "second"],
+            "app.tracking.none": [], "app.tracking.only": ["names"], "app.tracking.named.one": ["names"],
+            "app.tracking.named.other": ["names"], "app.tracking.many": ["count"],
+            "app.untraced.none": [], "app.untraced.one": [], "app.untraced.other": ["count"],
+            "app.untraced.all.one": ["app"], "app.untraced.all.other": ["app", "count"],
+            "app.typeknown.only": ["kind"], "app.typeknown.one": ["kind"], "app.typeknown.other": ["kind", "count"],
+            "company.row": ["parent", "categories"], "company.row.plain": ["parent"], "company.row.own": ["parent"],
+            "company.row.own.categories": ["parent", "categories"], "company.brand": ["brand", "parent"],
+            "seen.both": [], "seen.captures": [], "seen.report": [],
+            "possible.heading": [], "possible.explanation": [],
+            "coverage.captures": ["period", "percent"], "coverage.captures.all": ["period"],
+            "coverage.report": ["period", "identified", "total"],
+            "coverage.report.single.traced": ["period"], "coverage.report.single.untraced": ["period"],
+            "rating.captures.shown": ["percent"], "rating.captures.hidden": ["percent", "threshold"],
+            "rating.report.shown": ["identified", "total", "percent"], "rating.report.shown.single": [],
+            "rating.report.hidden": ["identified", "total", "percent", "threshold"],
+            "rating.report.hidden.single": ["threshold"],
+            "special.system": [], "special.apple": [], "special.apple.breakdown": [],
+            "noprocess.one": [], "noprocess.other": ["count"], "data.amount": ["day", "company"],
+            "howto.1": [], "howto.2": [], "howto.3": [],
+        ]
+        for reason in CaptureRestReason.allCases { s["coverage.reason.\(reason.rawValue)"] = ["percent"] }
+        for category in CompanyCategory.allCases where category != .unclassified {
+            s["kind.\(category.rawValue).one"] = []
+            s["kind.\(category.rawValue).other"] = []
+        }
+        for n in 1...Glossary.termCount {
+            s["glossary.\(n).term"] = []
+            s["glossary.\(n).text"] = []
+        }
+        return s
+    }()
 }
