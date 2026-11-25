@@ -112,7 +112,10 @@ IDs are used across the design docs.
 | Pipeline | Wires it all; `flows` and `bench` CLI | Done (6 tests, ~620k packets/s) | [PIPELINE.md](PIPELINE.md) |
 | App | Mac screens: connect, access, live capture, settings | Prototype done and live-tested | [APP.md](APP.md) |
 | Capture | Runs rvictl + tcpdump, streams into the pipeline | Done, live-tested (`capture` command, sudo mode) | [CAPTURE.md](CAPTURE.md) |
-| Testing | Fixture captures, count checks, benchmarks | 389 tests, six scripted captures, live runs | [TESTING.md](TESTING.md) |
+| Companies | Domain to company and category, app table | Done (Milestone 3) | [COMPANIES.md](COMPANIES.md) |
+| Privacy Report | Reads the iPhone's App Privacy Report export | Done (Milestone 3) | [PRIVACY_REPORT.md](PRIVACY_REPORT.md) |
+| Summary | Per-app summary, rating and wording | Done (Milestone 3) | [SUMMARY.md](SUMMARY.md) |
+| Testing | Fixture captures, count checks, benchmarks | 707 tests, six scripted captures, live runs | [TESTING.md](TESTING.md) |
 
 ## What we have proven
 
@@ -135,12 +138,12 @@ IDs are used across the design docs.
 
 - Every app exposes process metadata (about 1% of packets have none)
 - Every process can be mapped to an installed app
-- RVI is reliable for sessions longer than 30 minutes (one 30-minute run was clean; a cable pull is detected in 2 to 3 s)
+- RVI is reliable for sessions longer than 30 minutes (one 30-minute run was clean; a cable pull is detected in 2 to 3 s on the command line, and the Mac app stops and saves the capture, checked on a phone 2026-11-24)
 - VPN or tunnel traffic is not counted twice
 
 ## Current status
 
-Updated 2026-11-18.
+Updated 2026-11-25.
 
 ### Milestone 1: capture and analyse on the Mac (done)
 
@@ -182,17 +185,18 @@ Deferred from Milestone 2:
 | Cross-session "same app" rows | No screen shows several sessions together |
 | Automatic reconnect after link loss | Needs more real failure evidence |
 
-### Milestone 3: user-facing product (in progress)
+### Milestone 3: user-facing product (done 2026-11-25)
 
 Decided with the owner on 2026-11-21. Built in the Mac app first; the iPhone app comes later.
 
 | Item | Status | Notes |
 |---|---|---|
-| Company and tracker classification | Done, part 1 | Bundled and offline: the curated list, then Apple's owner string from an imported report, then the AdGuard companiesdb tracker list (CC BY-SA 4.0, in its own folder), with the Public Suffix List. The order was set by measuring each source on its own and checking the disagreements |
-| App Privacy Report import | Committed, part 2 | Network records only (no camera/location/contacts records, no website context). Covers the report's own dates (up to 7 days) while the phone is unplugged; contacts, no bytes |
-| Plain-language summary | Committed, part 3 | One merged view per app: advertising and tracking companies first, then all named companies, always with how many could not be identified. "Possible" names kept separate |
-| Advertising and tracking exposure | Committed, part 4 | A band, not a score: None found, Few (1-2), Some (3-5), Many (6+), hidden when under 70% of an app's domains are identified. Two tips (Background App Refresh, Tracking permission), each checked on a real phone |
-| Mac app polish | Committed, part 5 | App filter, per-connection view; "Show data amounts" toggle (off by default) after a reader test |
+| Company and tracker classification | Done | Bundled and offline: the curated list, then Apple's owner string from an imported report, then the AdGuard companiesdb tracker list (CC BY-SA 4.0, in its own folder), with the Public Suffix List. The order was set by measuring each source on its own and checking the disagreements |
+| App Privacy Report import | Done | Network records only (no camera/location/contacts records, no website context). Covers the report's own dates (up to 7 days) while the phone is unplugged; contacts, no bytes |
+| Plain-language summary | Done | One row per app, short bullets: advertising and tracking companies first, then all named companies, always with how much could not be traced. "Possible" names kept separate. Wording in one file (`wording.toml`). The planned reader test was skipped by the owner |
+| Advertising and tracking exposure | Done | Changed from the planned word bands to a letter grade, always with its count: A 0, B 1, C 2-3, D 4-5, F 6+ companies; "Not enough data" under 70% traced; cut-offs in `rating.toml`. Two tips (Background App Refresh, Tracking permission), shown once at the top, paths checked on a real phone |
+| Mac app polish | Done | App filter, per-connection view, "Show data amounts" switch (off by default, remembered), Stop opens the Summary, a pulled cable is shown on Live and in Sessions |
+| Results table | Done | See [milestone 3 results in the README](../README.md#milestone-3-results) |
 | Exportable report (PDF or web page) | Later | Screen first |
 | History across sessions | Later | |
 | Destination map | Deferred | Location datasets have licence terms and CDN locations mislead |

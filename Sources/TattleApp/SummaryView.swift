@@ -97,6 +97,12 @@ struct SummaryRowView: View {
     var showData = false
     @State private var expanded = false
 
+    /// screenshots without clicking (6.1): in demo mode only, TATTLE_DEMO_OPEN names a row to open at launch
+    private var openedForDemo: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return env["TATTLE_DEMO_SUMMARY"] == "1" && env["TATTLE_DEMO_OPEN"] == row.title
+    }
+
     var body: some View {
         DisclosureGroup(isExpanded: $expanded) {
             VStack(alignment: .leading, spacing: 10) {
@@ -140,6 +146,7 @@ struct SummaryRowView: View {
             }
             .buttonStyle(.plain)
         }
+        .onAppear { if openedForDemo { expanded = true } }
     }
 
     private func group<Content: View>(_ heading: String, @ViewBuilder _ content: () -> Content) -> some View {

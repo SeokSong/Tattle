@@ -141,7 +141,7 @@ Implemented as `migrations[3]` (problem 2.3). One migration for the whole milest
 - **Same file twice:** a file whose `file_sha256` is already stored is a no-op. Tattle reads the export; it never deletes or moves the user's original file
 - **Overlapping exports** (owner decision): a newer import replaces every older import whose period overlaps it (Apple's newer export already contains those days). An older import that does not overlap is kept. This prevents counting the same contacts twice
 - **Retention** (owner decision): imports follow the same retention setting as capture sessions (1, 3 or 7 days), counted from the report's `period_end`. `expire(olderThan:)` and `deleteAll()` get their own `delete from report_import` (contacts follow by cascade), and a test checks that `deleteAll()` empties every table
-- **Data inventory:** bundle ids reveal which apps are installed, so the inventory and README get a row for imported reports when this ships
+- **Data inventory:** bundle ids reveal which apps are installed; the inventory below and the README have a row for imported reports
 - The report's period is shown with its real dates (an export can cover fewer than 7 days)
 - The migration adds the two tables and the index as `migrations[3]` (`create table`, `create index`); the old-database test builds the version 2 schema literally
 - **API** (`Sources/Storage/ReportImportStore.swift`, plain row structs `ReportImportRow` and `ReportContactRow`; Storage does not import the parser): `saveImport(_:contacts:)` returns `.stored(replaced:)`, `.duplicate`, `.empty` or `.olderThanStored(newestPeriodEnd:)`; `imports()`, `contacts(importId:)`, `contacts(since:)`, `deleteImport(sha256:)`

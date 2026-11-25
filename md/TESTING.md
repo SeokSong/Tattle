@@ -1,6 +1,6 @@
 # Testing
 
-**Status:** 389 tests, green with and without fixtures (2026-11-18; Milestone 2 done). By target: Attribution 57, Capture 79, Domains 43, Flows 28, PacketDecoder 21, Pipeline 23, Report 76, Storage 20, TattleApp 19, TattleCLI (includes the PCAPNG reader) 23. Four scripted captures are the fixture set; the baseline is frozen in `Tests/Expected/`.
+**Status:** 707 tests, green with fixtures (2026-11-25; Milestone 3 done). Milestone 2 ended at 389. Four scripted captures are the fixture set; the baseline is frozen in `Tests/Expected/`.
 
 ## Approach
 
@@ -130,6 +130,7 @@ Use: browsing, social apps, about 10 minutes of video, then the phone locked; th
 | Throughput baseline (`bench`, s3-youtube-quic, 83,047 packets, release) | No more than 10% below this after M2 changes | 662,830 packets/s (best of 3, 2026-11-18) |
 | After 5.4 + 6.1 (back to back with the baseline tool, same machine) | Within 10% of the baseline tool | ~598k vs ~655k packets/s: about 9% slower (2026-11-18). After 5.3 the two were level, so 5.4 and 6.1 cost about 9%. Less than 1% budget left: later problems must bench back to back |
 | After 1.3 (company labels at read time; `bench`, s3-youtube-quic, release, 3 back-to-back pairs, 2026-11-22) | Within 1 percentage point of the M2 build | new 648k, 645k, 650k vs pre-M2 baseline tool 654k, 670k, 668k packets/s; new 660k, 624k, 653k vs M2 build 641k, 632k, 613k packets/s. Labels are built at view time, off the packet path |
+| Final Milestone 3 check (`scripts/bench-pairs.sh 3`, s3-youtube-quic, release, 2026-11-25) | Within 1 percentage point of the M2 build; within 10% of the pre-M2 tool | new 646k, 644k, 628k (average 639k) vs M2 build 652k, 637k, 633k (641k): 0.3% slower. Pre-M2 tool 667k, 674k, 674k (672k): 4.9% slower. Pass |
 | Synthetic pipeline throughput (`syntheticThroughput`, 200,000 hand-built UDP packets, `store: nil`) | ≥50,000 packets/s (sanity floor) | ~200,000 packets/s (debug test build, 2026-11-17) |
 | Capture summary (`weekOf100kFlowsUnderOneSecond`, 100,000 synthetic flows, 50 apps and the system, 2026-11-24) | under 1 s release (3.1) | 289 ms release, about 2.6 s debug, with curated and AdGuard-only names in the week so every path is timed. The SQL rollup in Deferred is not needed |
 | Report summary (`reportOf100kContactsUnderOneSecond`, 100,000 contact rows over 5,000 distinct domains, 300 apps, 2026-11-24) | under 1 s release (3.2) | 390 ms release. Worst case, 100,000 distinct domains: about 2.9 s release (about 29 µs to classify one domain; each distinct domain is classified once). A real report has a few thousand distinct domains |
