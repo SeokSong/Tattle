@@ -1486,7 +1486,8 @@ func runGlobePreview(_ args: [String]) {
         exit(2)
     }
     let start = GeoPoint(latitude: 39.83, longitude: -98.58)
-    var centre = start
+    // looking from a little south of the start, so lines that rise off the globe show their curve
+    var centre = GeoPoint(latitude: start.latitude - 15, longitude: start.longitude)
     if args.count > 1 {
         let n = args[1].split(separator: ",").compactMap { Double($0) }
         if n.count == 2 { centre = GeoPoint(latitude: n[0], longitude: n[1]) }

@@ -11,7 +11,7 @@ A head office, never where the servers are. Head-office data: [COMPANIES.md](COM
 | `Orthographic.swift` | The globe as seen from space: `project`, `unproject` (for dragging), `projectOntoRim` (land that goes behind the globe follows the edge), `visiblePieces` (a line breaks where it goes behind) |
 | `WorldOutline.swift` | Land and country borders, Natural Earth 1:110m (public domain), from `Resources/land.txt` and `borders.txt` |
 | `MapLines.swift` | One line per head-office place; connections to companies at the same place (rounded to about 1 km) share it. Brightness and width grow with the logarithm of the count: faint and 1 point at 1 connection, full and 3 points at 32 or more (owner, 2026-11-25). Connections with no company or no known head office are counted, not drawn. `nearestFirst` orders lines for the Summary's replay |
-| `GlobeView.swift` | SwiftUI `Canvas` drawing: space, ocean, land, borders, lines, head-office dots, start point. Camera (centre, zoom) and lines come from outside. Style: Night (owner's choice from three previews) |
+| `GlobeView.swift` | SwiftUI `Canvas` drawing: space, a glow round the globe, shaded ocean and land (lit from the upper left), a faint 15° grid, borders, lines that rise off the surface like flight paths (higher for longer lines, at most 0.18 globe radii) with a soft glow, glowing head-office dots, the start point. Camera (centre, zoom) and lines come from outside. Style: Night (owner's choice from three previews; polished after the owner found the first one plain, 2026-11-25) |
 
 - One projection for every view, so "start at the user, zoom out, spin" is one smooth change of centre and zoom
 - Speed (Part 0): about 1.1 ms per frame with 300 lines, offscreen at 1400x900
