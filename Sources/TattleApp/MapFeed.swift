@@ -42,6 +42,10 @@ final class MapFeed: ObservableObject {
     /// every connection's moment on the map, for its spark; older than a few seconds are dropped
     @Published private(set) var events: [(id: String, time: Date)] = []
     private var seen: Set<UUID> = []
+    /// remote ports of name lookups and network set-up, never drawn or counted: DNS, multicast DNS, DHCP
+    static let lookupPorts: Set<UInt16> = [53, 5353, 67, 68]
+    /// how long a connection with no name yet is tried again before it counts as not drawn
+    static let nameWait: TimeInterval = 10
 
     /// the bundled head offices; nil when they cannot be read (then every connection counts as not drawn)
     nonisolated static let offices: HeadOfficeTable? = try? HeadOfficeTable.loadBundled()
@@ -61,11 +65,21 @@ final class MapFeed: ObservableObject {
         let index = HostnameIndex(dns, flows: flows)
         var cache = LabelCache()
         for (i, flow) in fresh.enumerated() {
+            // link and local traffic is not phone traffic and never goes on the map; nor are name lookups and network
+            // set-up (DNS, multicast DNS, DHCP): they ask for a name or an address, they do not reach a company. found in
+            // the owner's phone test 2026-11-25: in a test capture 108 of 147 "not on the map" were DNS lookups
+            guard Classifier.classify(flow).category.isPhoneTraffic, !Self.lookupPorts.contains(flow.key.remotePort) else {
+                seen.insert(flow.id)
+                continue
+            }
+            let label = FlowLabels.label(for: flow, index: index, cache: &cache)
+            // a connection can reach the snapshot before its name is read from its first packets: it is tried again
+            // at the next refresh, and counted as not drawn only once it is closed or `nameWait` old (found in the
+            // owner's phone test 2026-11-25: lines appeared only after Stop)
+            if label == nil, flow.endReason == nil, now.timeIntervalSince(flow.firstSeen) < Self.nameWait { continue }
             seen.insert(flow.id)
-            // link and local traffic is not phone traffic and never goes on the map
-            guard Classifier.classify(flow).category.isPhoneTraffic else { continue }
             let time = now.addingTimeInterval(spread * Double(i) / Double(fresh.count))
-            let place = Self.place(for: FlowLabels.label(for: flow, index: index, cache: &cache))
+            let place = Self.place(for: label)
             live.add(company: place?.company, place: place?.point, city: place?.city ?? "", country: place?.country ?? "")
             guard let place else { continue }
             let id = MapLines.key(place.point)

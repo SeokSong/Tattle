@@ -43,7 +43,7 @@ public enum CameraDirector {
     public static func target(start: GeoPoint, lines: [MapLine], seconds: Double = 0, spin: Bool = true) -> GlobeCamera {
         if isWorldView(lines) {
             // facing the side of the globe with the most head offices, then turning slowly from there
-            let lon = bestLongitude([start] + lines.map(\.to)) + (spin ? seconds * spinPerSecond : 0)
+            let lon = bestLongitude(lines.map(\.to), keeping: start) + (spin ? seconds * spinPerSecond : 0)
             return GlobeCamera(centre: GeoPoint(latitude: 20, longitude: wrap(lon)), zoom: worldZoom)
         }
         // North America: the start and every line in view. the zoom is fitted round the middle of the points; the
@@ -74,14 +74,16 @@ public enum CameraDirector {
         return GlobeCamera(centre: centre, zoom: zoom)
     }
 
-    /// the longitude (seen from latitude 20) that shows the most of these places on the near side; ties go to the
-    /// one nearest their middle, so the choice is steady
-    static func bestLongitude(_ points: [GeoPoint]) -> Double {
-        let middle = centroid(points).longitude
+    /// the longitude (seen from latitude 20) that shows the most of these places on the near side, among the views
+    /// that keep `start` well inside (so the lines' common start never sits on the edge); ties go to the one nearest
+    /// the places' middle, so the choice is steady
+    static func bestLongitude(_ points: [GeoPoint], keeping start: GeoPoint) -> Double {
+        let middle = centroid(points + [start]).longitude
         var best = (count: -1, gap: 0.0, lon: middle)
         for step in 0..<72 {
             let lon = wrap(middle + Double(step) * 5)
             let eye = GeoPoint(latitude: 20, longitude: lon)
+            guard Geo.angle(eye, start) < 60 * .pi / 180 else { continue }
             let count = points.filter { Geo.angle(eye, $0) < 80 * .pi / 180 }.count
             let gap = abs(wrap(lon - middle))
             if count > best.count || (count == best.count && gap < best.gap) { best = (count, gap, lon) }

@@ -100,3 +100,10 @@ private func lines(_ places: [(String, Double, Double, String)]) -> MapLines {
     #expect(near >= 5 - 1)
     #expect(Geo.angle(eye, GeoPoint(latitude: 51.5, longitude: -0.1)) < .pi / 2)
 }
+
+@Test func worldViewKeepsTheStartInView() {
+    // one head office far away (Tel Aviv): the view turns towards it but keeps the start well inside the globe
+    let map = lines([("Far", 32.1, 34.8, "Israel")])
+    let camera = CameraDirector.target(start: start, lines: map.lines, spin: false)
+    #expect(Geo.angle(camera.centre, start) < 62 * .pi / 180)
+}

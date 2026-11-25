@@ -135,6 +135,7 @@ Target `TattleApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `sw
 - Pressing Stop opens the Summary when the capture has been saved (owner, 2026-11-24); a capture that ends on its own (cable, link lost) stays on Live so its message is seen
 - `TATTLE_START_SCREEN=<summary|connect|live|sessions|import|settings>` opens the app on that screen, for screenshots without clicking
 - `TATTLE_DEMO_MAP=1` turns the map on for that run only (never saved) and gives the Summary and Map screen made-up apps contacting real public companies, for screenshots: `TATTLE_DEMO_MAP=1 scripts/demo-screenshot.sh ~/Desktop/map.png 8 map`
+- `TATTLE_DEMO_LIVE=<capture.pcapng>` plays a capture file through the real pipeline at its recorded pace, with the 2-second flush and Live refresh of a phone capture, map on; no phone, nothing saved. For checking the live map: `TATTLE_DEMO_LIVE=$HOME/dev/tattle-fixtures/captures/s2-two-apps.pcapng scripts/demo-screenshot.sh ~/Desktop/live.png 60 live`
 - `TATTLE_DEMO_OPEN=<row title>` opens that Summary row at launch, in demo mode only (`TATTLE_DEMO_SUMMARY=1`); used for the README screenshots: `TATTLE_DEMO_OPEN=Quillnote scripts/demo-screenshot.sh img/m3-summary-app.png 6`
 - The stored imports are listed on this screen and in Settings; each has a Delete button with a confirmation, which calls `deleteImport` and refreshes the list. Delete all and the retention setting also refresh it
 
@@ -165,7 +166,7 @@ Target `TattleApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `sw
 ## Company map (Milestone 4, Part 4)
 
 - Off until the user turns on Settings > Map > "Show map of company head offices" (owner, 2026-11-25); remembered (`showMap`)
-- Live: the map is fixed at the top, about 80% of the height; the tables scroll under it. Each refresh (2 s) `MapFeed` labels the new connections with the same code as the flow table, off the packet path; only confirmed names (a hint is counted as not drawn); link and local traffic never. Sparks are spread over the refresh interval so they arrive as a stream
+- Live: the map is fixed at the top, about 80% of the height; the tables scroll under it. Each refresh (2 s) `MapFeed` labels the new connections with the same code as the flow table, off the packet path; only confirmed names (a hint is counted as not drawn); link and local traffic and name lookups (DNS, mDNS, DHCP) never, and not counted. A connection whose name is not read yet is retried for 10 s before it counts as not drawn. Sparks are spread over the refresh interval so they arrive as a stream
 - Summary: the map at the top replays its lines nearest first, then holds still; a line is brighter the more apps contacted that company
 - Map screen (in the sidebar while the map is on): the capture while one runs, else the Summary; drag to turn, pinch or the buttons to zoom, point at a head office for its city and companies
 - Under every map: "Lines go to company head offices, not to the servers the data went to.", the default-location note when it is used, and how many connections or companies are not drawn

@@ -209,6 +209,8 @@ final class AppModel: ObservableObject {
         if ProcessInfo.processInfo.environment["TATTLE_DEMO_SUMMARY"] == "1" { selection = .summary }
         // demo screenshots of the map: on for this run only, never written to the saved setting (no didSet in init)
         if ProcessInfo.processInfo.environment["TATTLE_DEMO_MAP"] == "1" { showMap = true }
+        // demo of the live map: replays a capture file through the Live screen at its real pace (no phone, nothing saved)
+        if let path = ProcessInfo.processInfo.environment["TATTLE_DEMO_LIVE"] { demoLive(path: path) }
         // TATTLE_START_SCREEN opens a screen by name (for screenshots without clicking): summary, connect, live,
         // sessions, import, settings
         if let name = ProcessInfo.processInfo.environment["TATTLE_START_SCREEN"]?.lowercased(),
@@ -456,6 +458,26 @@ final class AppModel: ObservableObject {
                 self.summaryReloadPending = false
                 self.refreshSummary()
             }
+        }
+    }
+
+    // MARK: demo of the live map
+
+    /// `TATTLE_DEMO_LIVE=<capture.pcapng>`: plays a capture file through the real pipeline at the pace it was
+    /// recorded, with the same 2-second flush and Live refresh as a phone capture, so names arrive as they would live.
+    /// no store, no phone; for checking the live map
+    private func demoLive(path: String) {
+        showMap = true
+        selection = .live
+        captureState = .capturing(since: Date())
+        let session = CaptureSession(id: UUID(), startedAt: Date(), source: "demo", watchVersion: "demo")
+        let pipeline = CapturePipeline(store: nil, session: session, retainFlows: true)
+        self.pipeline = pipeline
+        mapFeed.reset()
+        startRefreshing()
+        Task {
+            await pipeline.startFlushTimer()
+            _ = try? await pipeline.run(PacedPacketSource(file: FilePacketSource(url: URL(fileURLWithPath: path))))
         }
     }
 
