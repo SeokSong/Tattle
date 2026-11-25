@@ -24,6 +24,14 @@ Each hostname carries its source. `[sni]` means the name was read from that conn
 
 *Design mockup made before the app was built, using numbers from a TikTok + Instagram test capture. More in [md/APP.md](md/APP.md).*
 
+The Summary screen (Milestone 3) turns this into a short report per app: which companies it contacted, which of them do advertising or tracking, how much could not be traced, and a letter grade that always carries its count. The two tips at the top say what you can change on the phone.
+
+![Summary screen](img/m3-summary.png)
+
+![One app opened](img/m3-summary-app.png)
+
+*Screenshots of the app in demo mode: every app and company in them is made up. More in [md/SUMMARY.md](md/SUMMARY.md).*
+
 ## How it works
 
 ![Pipeline](img/pipeline.png)
@@ -65,7 +73,7 @@ These are deliberate limits, or limits of the platform. They are not bugs.
 - **No decryption, no content.** Only DNS answers, TLS/QUIC server names, packet headers and sizes are read. Tattle never parses plain-HTTP bodies, but a diagnostic file (below) contains them.
 - **Raw packets stay off the disk unless the diagnostic switch is on.** tcpdump streams to Tattle through a pipe, and each packet is dropped once decoded. The only exception is a capped buffer (5 packets or 16 KB per connection) that holds packets until the hostname is found. Saving raw packets is a separate opt-in diagnostic switch that is off at every launch. When it is on, the whole stream, including any plain-HTTP bodies, is written to a file in a private `diagnostics` folder next to the database. The app deletes those files after 24 hours and with "Delete all"; the command-line tool does not delete its file.
 - **Device identifier never stored.** The phone's UDID exists only in memory and in a short-lived 0600 script. The database stores a salted SHA-256 hash, and logs and error messages never contain the UDID.
-- **Local only.** Tattle makes no network requests. The database is created with 0600 permissions in a 0700 directory.
+- **Local only.** The app and the command-line tool make no network requests. Company data ships inside the app; only developer scripts (`scripts/fetch-tracker-list.sh`, `scripts/audit-references.sh`) download the public lists, and never with your data. The database is created with 0600 permissions in a 0700 directory.
 - **Limited retention.** Sessions expire after 7 days, and "Delete all" removes every stored session and every diagnostic file made by the app.
 - **Root access kept narrow.** The app itself never runs as root. At Start it runs a generated script through the macOS admin dialog. The script does three things only: start RVI, run tcpdump on that one interface, and stop both. It tears RVI down on every exit path, and its log is kept for debugging.
 - **Nothing is guessed.** "Unknown app" and "unknown hostname" are separate states. A DNS answer is shown as evidence, not as proof that the app connected.
@@ -97,7 +105,7 @@ Full list: [md/STORAGE.md](md/STORAGE.md#data-inventory).
 | Throughput (full pipeline, release build) | About 610,000 to 635,000 packets/s (Milestone 1: about 620,000 to 660,000 on the same machine, within 10%). A busy phone produces about 1,500 packets/s |
 | Live captures on a phone | Streams, attributes and stops cleanly. In one 3-minute run: 26,916 packets, 0 malformed |
 | 30-minute capture of normal use (browsing, video, phone locked) | 551,475 packets, 1,286 connections, 0 packets dropped. Memory stayed between 8.5 and 13.3 MB and was flat over the last 20 minutes (about 0.03 MB per hour). Stopped cleanly at 30 minutes |
-| Tests | 389 (Swift Testing). They use hand-built captures, fake `rvictl`/`tcpdump` scripts and real fixture captures kept outside the repo |
+| Tests | 707 (Swift Testing). They use hand-built captures, fake `rvictl`/`tcpdump` scripts and real fixture captures kept outside the repo |
 
 ### Milestone 2 results
 
@@ -116,6 +124,26 @@ Measured 2026-11-18 on five scripted captures, a 30-minute run and a real cable 
 | Throughput | 620,000 packets/s | 610,000 to 634,000 packets/s (3.5% to 6.2% below the Milestone 1 build) | `bench` |
 
 Not done in Milestone 2: VPN double-counting rule (needs a VPN capture), TCP retransmission counting, naming connections from earlier sessions' DNS, a 2-hour soak, automatic reconnect.
+
+### Milestone 3 results
+
+Measured 2026-11-22 to 2026-11-25 on the six fixture captures, made-up test data and the owner's own App Privacy Report. Numbers from the owner's report are rates only, rounded to whole percents.
+
+| Measure | Milestone 3 | How |
+|---|---|---|
+| Domains named by a company | Curated list alone: 20% to 84% of each capture's named domains. With the AdGuard tracker list: 40% to 100%. Byte coverage moved less than 2 points: the large connections were already named. On the owner's report: about 57%, and about 65% with AdGuard | `tattle companies coverage`; a later source may never lower the frozen curated-only baseline |
+| Company names agree with an independent reference (DuckDuckGo entity map or the server certificate) | Curated list: 99.5% (one-sided 95% upper bound of disagreement 1.7%). Capture domains: 97.4% (38 domains, bound 11.9%). Owner's report: about 97% (bound under 10%). Every disagreement was read by the owner | `tattle companies audit` |
+| Which source wins when they disagree | 25 made-up conflicts resolve as expected; the order is a data file (`precedence.tsv`) | tests |
+| Company labels cost on the packet path | None: 3 back-to-back pairs, 639,000 packets/s average against 641,000 for the Milestone 2 build (0.3% slower) and 672,000 for the pre-Milestone 2 tool (4.9% slower) | `scripts/bench-pairs.sh` |
+| Cost of the company data | Public Suffix List and curated list: about 14 ms to load and 1.3 MB of memory. AdGuard list: about 4.5 MB. Bundled data: 468 KB | load tests |
+| Summary speed | A synthetic week of 100,000 connections: 289 ms. 100,000 report rows: 390 ms (release) | tests |
+| App Privacy Report import | 100,000 lines (31 MB) in about 0.6 s; the same file twice changes nothing; a newer export replaces the days it covers | tests |
+| Report apps matched to a company | Kept at 65% or more of the owner's report apps (a local test) | `tattle import-report --join-rate` |
+| Rating | Letter grade A to F, always with the count it rests on ("C · 3 advertising or tracking companies"); "Not enough data" under 70% traced. The cut-offs are a file (`rating.toml`) | the owner's made-up test apps, approved before the code |
+| Cable pulled during a capture (Mac app, real phone) | The capture stops by itself and is saved as interrupted; Live says why, and Sessions marks it "ended unexpectedly" | real phone |
+| Privacy | No network code in `Sources/`; the repo guard passes; every database table is in the storage inventory; "Delete all" empties every table | tests |
+
+Not done in Milestone 3: a destination map, an iPhone app and an exported report (all moved to a later milestone).
 
 ### Baseline for Milestone 2
 
@@ -175,6 +203,10 @@ scripts/test.sh
 | `Flows` | Connection table with per-process tallies |
 | `Domains` | DNS, TLS SNI, QUIC Initial decryption |
 | `Attribution` | Process evidence to app, system or unknown |
+| `Report` | Quality report and band checks |
+| `Companies` | Domain to company: Public Suffix List, curated list, Apple's owner, AdGuard tracker list, app table |
+| `PrivacyReport` | Reader for the iPhone's App Privacy Report export |
+| `Summary` | Per-app summary, coverage, rating and wording (`Resources/wording.toml`) |
 | `Storage` | SQLite schema, retention, salted device hash |
 | `Pipeline` | Ties the steps together, for live capture and file replay |
 | `Capture` | rvictl/tcpdump control, privileged launcher, device lookup |
@@ -186,7 +218,7 @@ Design notes for each part are in [md/](md/). Start with [OVERVIEW.md](md/OVERVI
 
 ## Status
 
-Milestone 2 is done: capture and analysis on the Mac work end to end, every byte is put in a stated category, hostnames carry their source, and a quality report with committed bands catches regressions. Next (Milestone 3): company and tracker classification, a destination map, an App Privacy Report import (the phone's own 7-day log, shown next to Mac captures), and a signed helper. See the roadmap in [OVERVIEW.md](md/OVERVIEW.md#current-status).
+Milestone 3 is done: each app's connections are named by company and category, the iPhone's App Privacy Report can be imported next to Mac captures, and the Mac app shows a plain-language summary per app with a letter grade, a filter, per-connection detail and an optional data-amounts switch. No Milestone 4 is planned yet; candidates are in [OVERVIEW.md](md/OVERVIEW.md#current-status).
 
 ## Licence
 

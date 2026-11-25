@@ -134,6 +134,7 @@ Target `TattleApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `sw
 - A capture that ends on its own (cable pulled, link lost) keeps the user on Live, which shows why it stopped and that the capture is saved; the Sessions list marks it "ended unexpectedly" (5.3, found in the owner's cable-pull test 2026-11-24: the message was only on Connect and the list never showed the end)
 - Pressing Stop opens the Summary when the capture has been saved (owner, 2026-11-24); a capture that ends on its own (cable, link lost) stays on Live so its message is seen
 - `TATTLE_START_SCREEN=<summary|connect|live|sessions|import|settings>` opens the app on that screen, for screenshots without clicking
+- `TATTLE_DEMO_OPEN=<row title>` opens that Summary row at launch, in demo mode only (`TATTLE_DEMO_SUMMARY=1`); used for the README screenshots: `TATTLE_DEMO_OPEN=Quillnote scripts/demo-screenshot.sh img/m3-summary-app.png 6`
 - The stored imports are listed on this screen and in Settings; each has a Delete button with a confirmation, which calls `deleteImport` and refreshes the list. Delete all and the retention setting also refresh it
 
 ### Tests (`TattleAppTests`, no UI)

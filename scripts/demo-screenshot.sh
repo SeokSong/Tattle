@@ -3,6 +3,7 @@
 # window only (never the whole screen, which can show private windows). the real data folder
 # (~/Library/Application Support/Tattle) is never opened: TATTLE_SUPPORT_BASE points the app elsewhere.
 # usage: scripts/demo-screenshot.sh <output.png> [seconds to wait before the picture, default 4] [screen]
+#        TATTLE_DEMO_OPEN=<row title> before the command opens that Summary row (demo mode only)
 #        screen: summary (default), connect, live, sessions, import, settings. never click at screen positions to
 #        reach a screen: a click can land in another app
 #        leaves the app running so it can be clicked; quit it with Cmd-Q or: pkill -f .build/debug/TattleApp
