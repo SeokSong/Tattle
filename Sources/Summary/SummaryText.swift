@@ -269,6 +269,8 @@ public enum SummaryText {
             "detail.traced.captures": ["percent"], "detail.traced.captures.all": [],
             "detail.traced.report": ["identified", "total"], "detail.traced.report.single": ["identified"],
             "detail.traced.report.help": [], "detail.possible": ["names"],
+            "rating.grade.none": ["grade"], "rating.grade.one": ["grade"], "rating.grade.other": ["grade", "count"],
+            "rating.notenough": ["percent"],
         ]
         for reason in CaptureRestReason.allCases { s["coverage.reason.\(reason.rawValue)"] = ["percent"] }
         for category in CompanyCategory.allCases where category != .unclassified {

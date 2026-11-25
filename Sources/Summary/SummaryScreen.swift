@@ -41,8 +41,11 @@ public struct SummaryRow: Sendable, Equatable, Identifiable {
     public let id: String
     public let kind: CardKind
     public let title: String
-    /// the closed row's text
+    /// the closed row's text: the rating when the app has one ("C · 3 advertising or tracking companies"),
+    /// else the counts
     public let subtitle: String
+    /// nil for iOS system, the merged Apple apps card, and an app with nothing to trace
+    public let rating: RatingResult?
     /// `SummaryText.systemDescription` for iOS system, `appleAppsDescription` for Apple apps, else nil
     public let description: String?
     /// under "Advertising or tracking": the companies with an advertising or analytics category, own company first
@@ -59,7 +62,7 @@ public struct SummaryRow: Sendable, Equatable, Identifiable {
     public let children: [SummaryRow]
 
     public init(
-        id: String, kind: CardKind, title: String, subtitle: String, description: String?,
+        id: String, kind: CardKind, title: String, subtitle: String, rating: RatingResult? = nil, description: String?,
         trackingCompanies: [CompanyLine], otherCompanies: [CompanyLine], untraced: String, traced: [TracedLine],
         possible: String?, children: [SummaryRow]
     ) {
@@ -67,6 +70,7 @@ public struct SummaryRow: Sendable, Equatable, Identifiable {
         self.kind = kind
         self.title = title
         self.subtitle = subtitle
+        self.rating = rating
         self.description = description
         self.trackingCompanies = trackingCompanies
         self.otherCompanies = otherCompanies
@@ -190,8 +194,10 @@ public enum SummaryScreenBuilder {
         }
         let description: String? =
             card.kind == .system ? SummaryText.systemDescription : card.kind == .appleApps ? SummaryText.appleAppsDescription : nil
+        let rating = Rating.rate(card: card)
         return SummaryRow(
-            id: card.key, kind: card.kind, title: card.name, subtitle: subtitle(card), description: description,
+            id: card.key, kind: card.kind, title: card.name, subtitle: rating.map(Rating.text) ?? subtitle(card),
+            rating: rating, description: description,
             trackingCompanies: lines.filter(\.0).map(\.1), otherCompanies: lines.filter { !$0.0 }.map(\.1),
             untraced: untracedBullet(card), traced: traced,
             possible: card.possibleCompanies.isEmpty ? nil : w.text("detail.possible", ["names": card.possibleCompanies.joined(separator: ", ")]),

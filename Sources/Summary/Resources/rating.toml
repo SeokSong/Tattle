@@ -1,0 +1,15 @@
+# The rating's cut-offs (owner, 2026-11-24). Same format as wording.toml: `key = "number"`.
+# A grade counts the advertising or tracking companies an app contacted, from captures and the App Privacy
+# Report together; the app's own company, infrastructure, possible names and untraced destinations never count.
+#
+# To change the scale: edit the numbers (each grade's maximum count, rising), run the tests.
+
+# A: up to this many companies (0 means only "none found" is an A)
+grade.A.max = "0"
+grade.B.max = "1"
+grade.C.max = "3"
+grade.D.max = "5"
+# anything above grade.D.max is F
+
+# an app is rated only when every source with data for it is at least this percent traced
+threshold.percent = "70"
