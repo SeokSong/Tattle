@@ -254,7 +254,10 @@ public enum SummaryText {
             "rating.report.hidden.single": ["threshold"],
             "special.system": [], "special.apple": [], "special.apple.breakdown": [],
             "noprocess.one": [], "noprocess.other": ["count"], "data.amount": ["day", "company"],
-            "howto.1": [], "howto.2": [], "howto.3": [],
+            "howto.1": [], "howto.2": [], "howto.3": [], "howto.heading": [],
+            "list.row": ["companies", "tracking"], "list.tracking.none": [], "list.tracking.one": [],
+            "list.tracking.other": ["count"], "list.untraced.one": [], "list.untraced.other": ["count"],
+            "list.nothing": [], "empty.state": [],
         ]
         for reason in CaptureRestReason.allCases { s["coverage.reason.\(reason.rawValue)"] = ["percent"] }
         for category in CompanyCategory.allCases where category != .unclassified {

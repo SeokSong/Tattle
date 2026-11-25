@@ -29,6 +29,20 @@ overview.untraced.none = "Every destination was traced to a company."
 overview.untraced.one = "Another destination could not be traced to any company."
 overview.untraced.other = "Another {count} destinations could not be traced to any company."
 
+# ---------------------------------------------------------------- the list of apps (closed rows; owner, 2026-11-24)
+# a row reads "Zappy   4 companies · 1 advertising or tracking"; {companies} is count.company.*
+list.row = "{companies} · {tracking}"
+list.tracking.none = "no advertising or tracking found"
+list.tracking.one = "1 advertising or tracking"
+list.tracking.other = "{count} advertising or tracking"
+# an app where nothing could be traced to a company
+list.untraced.one = "1 destination, not traced"
+list.untraced.other = "{count} destinations, none traced"
+# an app with only possible names
+list.nothing = "No companies traced"
+empty.state = "Nothing to show yet. Capture your iPhone's traffic or import an App Privacy Report to see which companies your apps contacted."
+howto.heading = "How to read this"
+
 # ---------------------------------------------------------------- each app, when the reader opens it
 # up to 3 companies are named; with more, the first 2 (own company first, then advertising or tracking)
 app.companies.named = "{app} contacted {names}."
