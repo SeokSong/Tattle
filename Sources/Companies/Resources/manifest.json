@@ -107,6 +107,30 @@
       "sha256": "ef2b5ee7e8f3895a02d6e78bf91d7d7774f0322954315166a0bb3c09b2d9d42e",
       "sourceSHA256": "ef2b5ee7e8f3895a02d6e78bf91d7d7774f0322954315166a0bb3c09b2d9d42e",
       "rules": 60
+    },
+    {
+      "name": "Company head offices, curated parents (Wikidata)",
+      "file": "hq.tsv",
+      "version": "2026-11-25",
+      "commit": "",
+      "sourceURL": "https://query.wikidata.org",
+      "licence": "MIT (own selection; head offices from Wikidata, CC0-1.0)",
+      "fetched": "2026-11-25",
+      "sha256": "d64f8f8f082d7138301d7bdf393d295c81b8906049799f3f08cd73641ee1407a",
+      "sourceSHA256": "d64f8f8f082d7138301d7bdf393d295c81b8906049799f3f08cd73641ee1407a",
+      "rules": 160
+    },
+    {
+      "name": "Company head offices, AdGuard companies (Wikidata)",
+      "file": "tracker/hq.tsv",
+      "version": "2026-11-25",
+      "commit": "",
+      "sourceURL": "https://query.wikidata.org",
+      "licence": "CC-BY-SA-4.0",
+      "fetched": "2026-11-25",
+      "sha256": "f186d6d21610ba9577f23943e7001ee6de079ff7a670add27dccdd9393b0806a",
+      "sourceSHA256": "f186d6d21610ba9577f23943e7001ee6de079ff7a670add27dccdd9393b0806a",
+      "rules": 331
     }
   ]
 }

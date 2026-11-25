@@ -258,3 +258,30 @@ Entity map: 38371 domains. Certificates: 27% of the fetched domains had an organ
 - The 2 curated contradictions were reviewed by the owner and kept: the brand is listed as its own parent, while the reference names a part owner. They stay counted
 - The new contradictions come from AdGuard labels: AdGuard's company name against the company's legal name, and one old brand name of a company that was since merged into another. The owner reviewed them on 2026-11-23 as name noise and kept the labels. They stay counted. They cannot become aliases, because an alias parent must be a curated parent
 - Owner rule (2026-11-23): show the brand, count the parent. A brand whose parent fully owns it (YouTube, Hulu, Blizzard) is counted as the parent; a separately listed company that another company only partly owns keeps its own name; an investment firm is never the parent
+
+## Head offices (Milestone 4, Part 1)
+
+For the company map: where each parent company is based. A head office, never where its servers are.
+
+| File | Covers | Licence |
+|---|---|---|
+| `Resources/hq.tsv` | Curated parents | MIT (Tattle's selection); places from Wikidata (CC0) |
+| `Resources/tracker/hq.tsv` | AdGuard companies that are not curated parents | CC BY-SA 4.0, with the rest of the tracker folder: which companies are listed comes from AdGuard (owner, 2026-11-25) |
+| `Resources/hq-pins.tsv` | Hand pins for curated parents: a Wikidata item, or a place entered by hand | MIT |
+| `Resources/tracker/hq-corrections.tsv` | The owner's corrections for AdGuard companies: drop, move, or rename a building to its city | CC BY-SA 4.0 (keyed by AdGuard's names) |
+
+- Columns of both `hq.tsv` files: parent, city, country, latitude, longitude, wikidata, match. `match` is `pinned` (a curated parent's hand-picked item), `hand` (a place entered by hand, `wikidata` is the item or `none`) or `website` (an AdGuard company found by its website)
+- Keyed by the parent name the Summary counts, so a brand's line goes to its parent's head office (owner, 2026-11-25)
+- `HeadOfficeTable` (`Sources/Companies/HeadOffice.swift`) loads both files strictly; a parent in both fails the load
+- Built by `scripts/hq-data.swift`: `suggest` lists Wikidata search candidates for curated parents; `fetch` asks Wikidata (developer only, answers cached outside the repo in `~/dev/tattle-fixtures/hq/`); `build` writes both files, the manifest entries and a review list
+- Rules: curated parents use only their pin. A hand place is used when Wikidata has no head office, gives only a legal registration address (Tencent: Cayman Islands; Spotify: Luxembourg), or has no item. AdGuard companies match only by website (Wikidata's official website, P856); name matching was dropped because it picked other things with the same name (Apple Records for Apple). A head office that is a whole country is ignored. Several current head offices: the preferred one, flagged when more than 50 km apart
+- Review list (owner checks): hand places, parents with no head office, several head offices or items, a recent move, or a name that differs
+
+### Measured (2026-11-25)
+
+| | With a head office |
+|---|---|
+| Curated parents | 160 of 160 (112 from a pinned item, 48 entered by hand: 21 checked and 27 given or corrected by the owner, 2026-11-25) |
+| AdGuard companies (not curated parents) | 331 of 2,454 (website matches only; 18 corrected and 1 dropped by the owner in `tracker/hq-corrections.tsv`) |
+
+Companies without a head office are counted under the map, never drawn.

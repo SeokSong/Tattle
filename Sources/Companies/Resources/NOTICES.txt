@@ -31,6 +31,21 @@ AdGuard companiesdb tracker list
   trimmed; a tracker with no company whose name is only a domain gets an empty company;
   domains that are public suffixes are not used.
 
+Wikidata (company head offices)
+-------------------------------
+
+- Source: https://www.wikidata.org , through https://query.wikidata.org . Head office (P159),
+  its coordinates (P625) and country (P17) for each parent company.
+- Date and checksum: see manifest.json (hq.tsv and tracker/hq.tsv are built by scripts/hq-data.swift).
+- Two files: hq.tsv covers the curated parents (Tattle's selection, MIT). tracker/hq.tsv covers
+  AdGuard companies; because that selection comes from AdGuard companiesdb, it stays in the
+  tracker folder under CC BY-SA 4.0 (see above).
+- Licence: Wikidata's structured data is released under CC0 1.0 (public domain dedication),
+  https://creativecommons.org/publicdomain/zero/1.0/ . No attribution is required; it is given here
+  so the source can be checked.
+- Changes made: one current head office is picked per company; coordinates rounded to 4 decimals.
+  A head office is where a company is based, not where its servers are.
+
 ------------------------------------------------------------------------------
 
 Mozilla Public License Version 2.0
