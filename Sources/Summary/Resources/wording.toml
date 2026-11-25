@@ -25,9 +25,51 @@ overview.source.report = "In your App Privacy Report"
 overview.tracking.none = "{source} ({period}), {apps} contacted {companies}. No advertising or tracking companies were found."
 overview.tracking.one = "{source} ({period}), {apps} contacted {companies}, 1 of which does advertising or tracking."
 overview.tracking.other = "{source} ({period}), {apps} contacted {companies}, {count} of which do advertising or tracking."
-overview.untraced.none = "Every destination was traced to a company."
+overview.untraced.none = "Every named destination was traced to a company."
 overview.untraced.one = "Another destination could not be traced to any company."
 overview.untraced.other = "Another {count} destinations could not be traced to any company."
+
+# ---------------------------------------------------------------- the list of apps (closed rows; owner, 2026-11-24)
+# a row reads "Zappy   4 companies · 1 advertising or tracking"; {companies} is count.company.*
+list.row = "{companies} · {tracking}"
+list.tracking.none = "no advertising or tracking found"
+list.tracking.one = "1 advertising or tracking"
+list.tracking.other = "{count} advertising or tracking"
+# an app where nothing could be traced to a company
+list.untraced.one = "1 destination, not traced"
+list.untraced.other = "{count} destinations, none traced"
+# an app with only possible names
+list.nothing = "No companies traced"
+empty.state = "Nothing to show yet. Capture your iPhone's traffic or import an App Privacy Report to see which companies your apps contacted."
+howto.heading = "How to read this"
+
+# ---------------------------------------------------------------- bullets (owner, 2026-11-24: bullets, not sentences;
+# a reader spends 10 to 20 seconds per app at most). these are labels, not sentences: no full stop
+overview.bullet.companies.none = "{companies}, no advertising or tracking found"
+overview.bullet.companies.one = "{companies}, 1 of them advertising or tracking"
+overview.bullet.companies.other = "{companies}, {count} of them advertising or tracking"
+overview.bullet.untraced.none = "Every named destination traced"
+overview.bullet.untraced.one = "1 destination not traced"
+overview.bullet.untraced.other = "{count} destinations not traced"
+overview.bullet.captures = "Captures {period}"
+overview.bullet.report = "App Privacy Report {period}"
+detail.heading.tracking = "Advertising or tracking"
+detail.heading.other = "Other companies"
+detail.heading.untraced = "Not traced"
+detail.heading.traced = "Traced"
+detail.untraced.none = "None"
+detail.untraced.one = "1 destination"
+detail.untraced.other = "{count} destinations"
+# the AdGuard list knows the type but not the company; {kind} is kind.*
+detail.untraced.kind.one = "1 {kind}, owner unknown"
+detail.untraced.kind.other = "{count} {kind}, owner unknown"
+detail.untraced.withkinds = "{destinations} ({kinds})"
+detail.traced.captures = "Captures: {percent}% of traffic"
+detail.traced.captures.all = "Captures: all traffic"
+detail.traced.report = "App Privacy Report: {identified} of {total} destinations"
+detail.traced.report.single = "App Privacy Report: {identified} of 1 destination"
+detail.traced.report.help = "The report doesn't show how much data was sent."
+detail.possible = "Possible, not counted: {names}"
 
 # ---------------------------------------------------------------- each app, when the reader opens it
 # up to 3 companies are named; with more, the first 2 (own company first, then advertising or tracking)
@@ -39,7 +81,7 @@ app.tracking.only = "{names} does advertising or tracking."
 app.tracking.named.one = "Of these, {names} does advertising or tracking."
 app.tracking.named.other = "Of these, {names} do advertising or tracking."
 app.tracking.many = "Of these, {count} do advertising or tracking."
-app.untraced.none = "Every destination was traced to a company."
+app.untraced.none = "Every named destination was traced to a company."
 app.untraced.one = "It also contacted 1 destination that could not be traced to any company."
 app.untraced.other = "It also contacted {count} destinations that could not be traced to any company."
 # nothing the app contacted could be traced

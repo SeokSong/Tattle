@@ -86,3 +86,19 @@ private func mode(_ url: URL) -> Int? {
     #expect(path.deletingLastPathComponent().lastPathComponent == "Tattle")
     #expect(marker(path.deletingLastPathComponent()) == "old")
 }
+
+@Test func supportBaseCanBePointedElsewhere() throws {
+    // TATTLE_SUPPORT_BASE moves the whole data folder, so a launch for a check never touches the real data.
+    // only a folder this user owns and no one else can write to is accepted (review of PR #10)
+    let own = FileManager.default.temporaryDirectory.appendingPathComponent("tattle-base-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: own, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+    defer { try? FileManager.default.removeItem(at: own) }
+    #expect(AppIdentity.defaultBase(environment: [AppIdentity.supportBaseVariable: own.path]).path == own.path)
+    // a shared folder anyone can write to, a missing folder and a relative path all fall back to the real folder
+    for refused in ["/tmp", own.path + "-missing", "relative"] {
+        #expect(AppIdentity.defaultBase(environment: [AppIdentity.supportBaseVariable: refused]).path.hasSuffix("Application Support"), "\(refused)")
+    }
+    try FileManager.default.setAttributes([.posixPermissions: 0o777], ofItemAtPath: own.path)
+    #expect(AppIdentity.defaultBase(environment: [AppIdentity.supportBaseVariable: own.path]).path.hasSuffix("Application Support"))
+    #expect(AppIdentity.defaultBase(environment: [:]).path.hasSuffix("Application Support"))
+}

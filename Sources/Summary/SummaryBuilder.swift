@@ -21,6 +21,7 @@ public enum SummaryBuilder {
         var parents: [String: ParentAcc] = [:]
         var possible = Set<String>()
         var unnamed: [CompanyCategory: Set<String>] = [:]
+        var untraced = Set<String>()
         var start: Date
         var end: Date
     }
@@ -41,11 +42,21 @@ public enum SummaryBuilder {
         flows: [Flow], index: HostnameIndex, classifier: CompanyClassifier = CompanyClassifier(),
         apps: AppTable = .bundled
     ) -> CaptureSummary {
+        build(sessions: [(flows: flows, index: index)], classifier: classifier, apps: apps)
+    }
+
+    /// several captures, each with the hostname index built from its own observations: a name seen in one
+    /// capture never names (or hints at) a flow of another capture (review of PR #10)
+    public static func build(
+        sessions: [(flows: [Flow], index: HostnameIndex)], classifier: CompanyClassifier = CompanyClassifier(),
+        apps: AppTable = .bundled
+    ) -> CaptureSummary {
         var cache = LabelCache(classifier: classifier)
         var entries: [String: Accumulator] = [:]
         var noProcess = TrafficCount()
         var excluded: [TrafficCategory: TrafficCount] = [.deviceLink: TrafficCount(), .localNetwork: TrafficCount()]
 
+        for (flows, index) in sessions {
         for flow in flows where flow.key.remotePort == port {
             let bytes = flow.ipBytesIn + flow.ipBytesOut
             let category = Classifier.classify(flow).category
@@ -106,6 +117,7 @@ public enum SummaryBuilder {
                     entry.parents[parent] = p
                 } else {
                     add(&entry.notIdentified, bytes)
+                    entry.untraced.insert(label.hostname)
                     if let registrable = label.registrableDomain,
                        let row = classifier.trackers.unnamedCategoryRow(label.hostname, registrable: registrable) {
                         entry.unnamed[row.category, default: []].insert(registrable)
@@ -118,8 +130,9 @@ public enum SummaryBuilder {
             }
             entries[key] = entry
         }
+        }
 
-        func finish(_ e: Accumulator) -> CaptureAppSummary {
+        func finish(_ e: Accumulator, members: [CaptureAppSummary] = []) -> CaptureAppSummary {
             let companies = e.parents.map { parent, p in
                 CompanyEntry(
                     parent: parent, brands: p.brands.sorted(),
@@ -137,20 +150,60 @@ public enum SummaryBuilder {
             return CaptureAppSummary(
                 key: e.key, name: e.name, company: e.company, companies: companies,
                 possibleCompanies: e.possible.subtracting(e.parents.keys).sorted(),
-                unnamedCategories: e.unnamed.mapValues(\.count),
+                typeKnownDestinations: e.unnamed, untracedDestinations: e.untraced,
                 identified: e.identified, notIdentified: e.notIdentified, hinted: e.hinted, unseen: unseen,
                 coverage: CoverageRatio(numerator: e.identified.bytes, denominator: total),
-                windowStart: e.start, windowEnd: e.end)
+                windowStart: e.start, windowEnd: e.end, members: members)
         }
 
-        let system = entries[CaptureSummary.systemKey].map(finish)
-        let appSummaries = entries.values.filter { $0.key != CaptureSummary.systemKey }.map(finish).sorted {
-            // a non-localized compare: the same order on every Mac. (with the en_US_POSIX locale, Foundation ignores .caseInsensitive)
-            let order = $0.name.compare($1.name, options: [.caseInsensitive, .numeric])
-            return order == .orderedSame ? $0.key < $1.key : order == .orderedAscending
+        func ordered(_ list: [CaptureAppSummary]) -> [CaptureAppSummary] {
+            list.sorted {
+                // a non-localized compare: the same order on every Mac. (with the en_US_POSIX locale, Foundation ignores .caseInsensitive)
+                let order = $0.name.compare($1.name, options: [.caseInsensitive, .numeric])
+                return order == .orderedSame ? $0.key < $1.key : order == .orderedAscending
+            }
+        }
+
+        let system = entries[CaptureSummary.systemKey].map { finish($0) }
+        let isApple: (Accumulator) -> Bool = { $0.key.lowercased().hasPrefix(ReportSummary.applePrefix) }
+        let appleEntries = entries.values.filter(isApple)
+        let appSummaries = ordered(entries.values.filter { $0.key != CaptureSummary.systemKey && !isApple($0) }.map { finish($0) })
+
+        var apple: CaptureAppSummary?
+        if let first = appleEntries.first {
+            var merged = Accumulator(
+                key: ReportSummary.appleKey, name: ReportSummary.appleName, company: ReportSummary.appleCompany,
+                start: first.start, end: first.end)
+            for e in appleEntries {
+                merged.identified.connections += e.identified.connections
+                merged.identified.bytes += e.identified.bytes
+                merged.notIdentified.connections += e.notIdentified.connections
+                merged.notIdentified.bytes += e.notIdentified.bytes
+                merged.hinted.connections += e.hinted.connections
+                merged.hinted.bytes += e.hinted.bytes
+                for (reason, t) in e.unseen {
+                    merged.unseen[reason, default: TrafficCount()].connections += t.connections
+                    merged.unseen[reason, default: TrafficCount()].bytes += t.bytes
+                }
+                for (parent, p) in e.parents {
+                    var m = merged.parents[parent] ?? ParentAcc()
+                    m.brands.formUnion(p.brands)
+                    m.categories.formUnion(p.categories)
+                    m.traffic.connections += p.traffic.connections
+                    m.traffic.bytes += p.traffic.bytes
+                    m.relation = AppTable.relation(appCompany: ReportSummary.appleCompany, labelParent: parent)
+                    merged.parents[parent] = m
+                }
+                merged.possible.formUnion(e.possible)
+                merged.untraced.formUnion(e.untraced)
+                for (category, names) in e.unnamed { merged.unnamed[category, default: []].formUnion(names) }
+                merged.start = min(merged.start, e.start)
+                merged.end = max(merged.end, e.end)
+            }
+            apple = finish(merged, members: ordered(appleEntries.map { finish($0) }))
         }
         return CaptureSummary(
-            apps: appSummaries, system: system, noProcess: noProcess, excluded: excluded,
+            apps: appSummaries, system: system, appleApps: apple, noProcess: noProcess, excluded: excluded,
             curatedVersion: classifier.curated.version, trackerListVersion: classifier.trackers.version)
     }
 }

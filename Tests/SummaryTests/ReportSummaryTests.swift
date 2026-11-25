@@ -134,7 +134,12 @@ private func asCount(_ t: (domains: Int, contacts: Int)) -> DomainCount {
         for child in subject.children {
             let label = child.label ?? ""
             #expect(!label.lowercased().contains("byte"), "\(label)")
-            if label == "domain" || label == "domains" {
+            // the only fields allowed to hold domain names: `untracedDestinations` and `typeKnownDestinations`.
+            // they are kept so a card counts each destination once across sources, and are never shown
+            if label == "untracedDestinations" || label == "typeKnownDestinations" { continue }
+            // brands are names of companies, not domains, so a [String] is fine unless it is named like a domain list
+            #expect(!(child.value is Set<String>), "\(label) holds a set of domains")
+            if label.lowercased().contains("domain") {
                 #expect(!(child.value is [String]), "\(label) holds a list of domains")
             }
         }

@@ -7,12 +7,14 @@ import Foundation
 import PCAPNG
 import Pipeline
 import Storage
+import Summary
 import SwiftUI
 
 // everything the views show. the app never runs as root: the privileged part is PrototypeCaptureLauncher.
 // the udid stays inside startCapture; views get the device name only.
 
 enum SidebarItem: String, CaseIterable, Identifiable {
+    case summary = "Summary"
     case connect = "Connect"
     case live = "Live"
     case sessions = "Sessions"
@@ -23,6 +25,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .summary: return "list.bullet.rectangle"
         case .connect: return "cable.connector"
         case .live: return "waveform"
         case .sessions: return "clock.arrow.circlepath"
@@ -95,6 +98,8 @@ final class AppModel: ObservableObject {
     @Published var moreFlows = 0
     @Published var sessions: [SessionRow] = []
     @Published var storeError: String?
+    @Published var summaryScreen: SummaryScreen?
+    @Published var summaryLoading = false
 
     @Published var retentionDays: Int {
         didSet {
@@ -134,6 +139,7 @@ final class AppModel: ObservableObject {
         importModel.retentionDays = retentionDays
         // views of this model (Settings) also show whether an import is running
         importChange = importModel.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        importModel.storeChanged = { [weak self] in self?.refreshSummary() }
         do {
             let opened = try Store(path: storePath)
             store = opened
@@ -146,9 +152,11 @@ final class AppModel: ObservableObject {
         Task { [weak self] in
             let result = await PrototypeCaptureLauncher.cleanStaleRunDirectories(runRoot: PrototypeCaptureLauncher.defaultRunRoot())
             if !result.failed.isEmpty {
-                self?.storeError = "\(result.failed.count) old capture folder(s) could not be removed. They hold no packets and are safe to delete from ~/Library/Application Support/\(AppIdentity.supportFolder)/run."
+                self?.storeError = "\(result.failed.count) old capture folder(s) could not be removed. They hold no packets and are safe to delete from \(PrototypeCaptureLauncher.defaultRunRoot().path)."
             }
         }
+        // demo mode (made-up data, for screenshots and the reader test) opens on the Summary screen
+        if ProcessInfo.processInfo.environment["TATTLE_DEMO_SUMMARY"] == "1" { selection = .summary }
         DiagnosticFiles.purge(in: DiagnosticFiles.directory(under: storePath.deletingLastPathComponent()), now: Date())
         refreshSessions()
         importModel.refresh()
@@ -356,6 +364,36 @@ final class AppModel: ObservableObject {
         currentSession = nil
         diagnosticActive = false
         refreshSessions()
+        refreshSummary()
+    }
+
+    // MARK: summary
+
+    /// a request while a load runs is kept and run when it ends, so the screen never stays on an older result
+    private var summaryReloadPending = false
+
+    func refreshSummary() {
+        if summaryLoading { summaryReloadPending = true; return }
+        summaryLoading = true
+        let path = storePath
+        let days = retentionDays
+        let excluding = currentSession
+        let demo = ProcessInfo.processInfo.environment["TATTLE_DEMO_SUMMARY"] == "1"
+        Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try SummaryLoader.load(storePath: path, retentionDays: days, now: Date(), excluding: excluding, demo: demo) }
+            }.value
+            guard let self else { return }
+            switch result {
+            case .success(let screen): self.summaryScreen = screen
+            case .failure(let error): self.storeError = "The summary could not be built: \(error.localizedDescription)"
+            }
+            self.summaryLoading = false
+            if self.summaryReloadPending {
+                self.summaryReloadPending = false
+                self.refreshSummary()
+            }
+        }
     }
 
     // MARK: live refresh
@@ -443,6 +481,7 @@ final class AppModel: ObservableObject {
         try? store?.expire(olderThan: TimeInterval(retentionDays) * 86400)
         refreshSessions()
         importModel.refresh()
+        refreshSummary()
     }
 
     /// why Delete all data is off, or nil
@@ -459,6 +498,7 @@ final class AppModel: ObservableObject {
         }
         refreshSessions()
         importModel.refresh()
+        refreshSummary()
     }
 
     // MARK: helpers

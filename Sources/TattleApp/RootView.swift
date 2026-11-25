@@ -19,6 +19,7 @@ struct RootView: View {
             .navigationSplitViewColumnWidth(min: 150, ideal: 170, max: 220)
         } detail: {
             switch model.selection {
+            case .summary: SummaryView()
             case .connect: ConnectView()
             case .live: LiveView()
             case .sessions: SessionsView()

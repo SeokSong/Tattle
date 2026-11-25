@@ -106,7 +106,7 @@ private func labels() -> [String] {
         "It is a known analytics service whose owner is unknown.",
     ])
     #expect(SummaryText.appSentences(app: "Zappy", companies: ["AdCo Holdings"], adTrack: ["AdCo Holdings"], untraced: 0, typeKnown: [:]) == [
-        "Zappy contacted AdCo Holdings.", "AdCo Holdings does advertising or tracking.", "Every destination was traced to a company.",
+        "Zappy contacted AdCo Holdings.", "AdCo Holdings does advertising or tracking.", "Every named destination was traced to a company.",
     ])
     #expect(SummaryText.appSentences(app: "Zappy", companies: ["Zappy Inc", "CdnCo"], adTrack: [], untraced: 2, typeKnown: [.social: 1]) == [
         "Zappy contacted Zappy Inc and CdnCo.", "No advertising or tracking companies were found.",
@@ -132,7 +132,7 @@ private func labels() -> [String] {
     ])
     #expect(SummaryText.overview(period: "14 November", hasCaptures: true, hasReport: false, apps: 1, companies: 1, adTrack: 0, untraced: 0) == [
         "In your captures (14 November), 1 app contacted 1 company. No advertising or tracking companies were found.",
-        "Every destination was traced to a company.",
+        "Every named destination was traced to a company.",
     ])
     #expect(SummaryText.overview(period: period, hasCaptures: false, hasReport: true, apps: 2, companies: 3, adTrack: 1, untraced: 1) == [
         "In your App Privacy Report (14 to 21 November), 2 apps contacted 3 companies, 1 of which does advertising or tracking.",

@@ -48,9 +48,13 @@ public struct CaptureAppSummary: Sendable, Equatable {
     public var adTrackCompanies: Int { companies.filter(\.isAdvertisingOrTracking).count }
     /// parents seen only through a hint (dns or same server), not among `companies`, sorted with `<`
     public let possibleCompanies: [String]
-    /// distinct registrable domains per category, for names no source names a company for but the AdGuard list
+    /// the registrable domains per category, for names no source names a company for but the AdGuard list
     /// gives a category (never `unclassified`). never part of any company count
-    public let unnamedCategories: [CompanyCategory: Int]
+    public let typeKnownDestinations: [CompanyCategory: Set<String>]
+    /// distinct registrable domains per category (the sizes of `typeKnownDestinations`)
+    public var unnamedCategories: [CompanyCategory: Int] { typeKnownDestinations.mapValues(\.count) }
+    /// names kept in memory only so a card can count each destination once across sources; never shown, never saved
+    public let untracedDestinations: Set<String>
     /// every port 443 byte of the entry is in exactly one of the next four
     public let identified: TrafficCount
     public let notIdentified: TrafficCount
@@ -61,19 +65,22 @@ public struct CaptureAppSummary: Sendable, Equatable {
     public let coverage: CoverageRatio
     public let windowStart: Date
     public let windowEnd: Date
+    /// the merged Apple apps entry only: one summary per Apple app, sorted like `apps`; empty otherwise
+    public let members: [CaptureAppSummary]
 
     public init(
         key: String, name: String, company: String?, companies: [CompanyEntry], possibleCompanies: [String],
-        unnamedCategories: [CompanyCategory: Int], identified: TrafficCount, notIdentified: TrafficCount,
+        typeKnownDestinations: [CompanyCategory: Set<String>], untracedDestinations: Set<String>, identified: TrafficCount, notIdentified: TrafficCount,
         hinted: TrafficCount, unseen: [UnnamedReason: TrafficCount], coverage: CoverageRatio,
-        windowStart: Date, windowEnd: Date
+        windowStart: Date, windowEnd: Date, members: [CaptureAppSummary]
     ) {
         self.key = key
         self.name = name
         self.company = company
         self.companies = companies
         self.possibleCompanies = possibleCompanies
-        self.unnamedCategories = unnamedCategories
+        self.typeKnownDestinations = typeKnownDestinations
+        self.untracedDestinations = untracedDestinations
         self.identified = identified
         self.notIdentified = notIdentified
         self.hinted = hinted
@@ -81,6 +88,7 @@ public struct CaptureAppSummary: Sendable, Equatable {
         self.coverage = coverage
         self.windowStart = windowStart
         self.windowEnd = windowEnd
+        self.members = members
     }
 }
 
@@ -89,6 +97,8 @@ public struct CaptureSummary: Sendable, Equatable {
     public let apps: [CaptureAppSummary]
     /// nil when no system traffic went to port 443
     public let system: CaptureAppSummary?
+    /// every Apple app (bundle id starting "com.apple.") merged into one entry; nil when no Apple app is in the captures
+    public let appleApps: CaptureAppSummary?
     /// port 443 traffic with no process information (category unknown)
     public let noProcess: TrafficCount
     /// port 443 traffic left out like in the quality report: keys `.deviceLink` and `.localNetwork`, always both
@@ -101,11 +111,12 @@ public struct CaptureSummary: Sendable, Equatable {
     public static let systemCompany = "Apple"
 
     public init(
-        apps: [CaptureAppSummary], system: CaptureAppSummary?, noProcess: TrafficCount,
+        apps: [CaptureAppSummary], system: CaptureAppSummary?, appleApps: CaptureAppSummary?, noProcess: TrafficCount,
         excluded: [TrafficCategory: TrafficCount], curatedVersion: String, trackerListVersion: String
     ) {
         self.apps = apps
         self.system = system
+        self.appleApps = appleApps
         self.noProcess = noProcess
         self.excluded = excluded
         self.curatedVersion = curatedVersion
