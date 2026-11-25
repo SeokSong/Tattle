@@ -1,6 +1,6 @@
 # Summary
 
-**Status:** Problems 3.1 (captures, `SummaryBuilder`), 3.2 (App Privacy Report, `ReportSummaryBuilder`) and 3.3 (sentences, glossary, wording lint) done. The summary screen (3.4) comes next.
+**Status:** Problems 3.1 (captures), 3.2 (App Privacy Report), 3.3 (sentences, glossary, wording lint) and 3.4 (the Summary screen) done. The reader test (3.5) comes next.
 
 ## Purpose
 
@@ -101,7 +101,11 @@ The format is a small subset of TOML (`key = "text"` lines and `#` comments), re
 | Report | App Privacy Report (18 to 21 November): 6 of this app's 9 destinations could be traced to a company. The report doesn't show how much data was sent. |
 | Data amounts | In the capture from 14 November, the largest share of the data went to Alphabet. (captures only, with the toggle on) |
 
-### Open for 3.4
+## The Summary screen (Problem 3.4)
 
-- The capture summary counts unidentified connections; the wording counts destinations; one card per app (OD8) needs distinct destinations across both sources. How the card combines the two is decided with the owner in 3.4
-- The first view is a list of apps with their counts; an app opens for the sentences and company rows; it must be obvious that an app can be opened (owner, 2026-11-24)
+- `CombinedSummaryBuilder` joins the capture and report summaries into one card per app (OD8 as decided by the owner): by bundle id; an app the app table does not know never merges by guess. Companies are united by parent ignoring case and tagged with where they were seen. Untraced destinations are counted once across both sources from names the summaries keep in memory only (never shown, never saved)
+- Apple's own apps (bundle ids under `com.apple.`) are one "Apple apps" card in both sources, with one row per Apple app that opens to its own details. iOS system is its own card
+- `SummaryScreenBuilder` turns the cards into rows: a closed row shows "4 companies · 1 advertising or tracking"; rows are ordered by the number of advertising or tracking companies, then by name, with Apple apps and iOS system last (owner, 2026-11-24). Opening a row shows the sentences, one coverage line per source with the cause behind an (i) icon, the company lines with "Seen in ...", and the possible names
+- The screen (`Sources/TattleApp/SummaryView.swift`) is the first sidebar item. It loads everything within retention off the main thread (`SummaryLoader`), has Refresh and a "How to read this" sheet. Neutral colours, no rating (Part 4), no byte amounts (Part 5)
+- "Every named destination was traced to a company.": "named", because a row can be fully traced by name while part of its traffic had no name at all (owner, 2026-11-24, after seeing the screen)
+- Demo: `TATTLE_DEMO_SUMMARY=1` shows made-up apps and companies (`SummaryDemo`, all `.test` names) and opens on the Summary screen. `TATTLE_SUPPORT_BASE=<absolute folder>` points the app's whole data folder (database, run folders, diagnostics) elsewhere, so a launch for a check never touches the real data. `scripts/demo-screenshot.sh <out.png>` does both and saves a picture of the app window only

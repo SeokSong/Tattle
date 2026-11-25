@@ -85,9 +85,9 @@ public enum SummaryDemo {
                 reportApp(key: "com.example.lantern", name: "com.example.lantern", company: nil, [],
                     untraced: ["lantern-1.test", "lantern-2.test", "lantern-3.test"], identified: 0, total: 3, now: now),
             ],
-            appleApps: reportApp(key: ReportSummary.appleKey, name: "Apple apps", company: "Apple", apple, identified: 4, total: 5, now: now,
+            appleApps: reportApp(key: ReportSummary.appleKey, name: "Apple apps", company: "Apple", apple, untraced: ["apple-1.test"], identified: 4, total: 5, now: now,
                 members: [
-                    reportApp(key: "com.apple.test.safari", name: "Safari", company: "Apple", safari, identified: 3, total: 4, now: now),
+                    reportApp(key: "com.apple.test.safari", name: "Safari", company: "Apple", safari, untraced: ["apple-1.test"], identified: 3, total: 4, now: now),
                     reportApp(key: "com.apple.test.maps", name: "Maps", company: "Apple", maps, identified: 1, total: 1, now: now),
                 ]),
             curatedVersion: "demo", trackerListVersion: "demo")

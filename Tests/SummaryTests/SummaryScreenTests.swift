@@ -108,3 +108,15 @@ private func everyString(_ screen: SummaryScreen) -> [String] {
         for unit in ["bytes", "KB", "MB", "GB"] { #expect(!s.contains(unit), "\(unit) in \(s)") }
     }
 }
+
+@Test func screenDemoNeverSaysEveryDestinationWithAnUntracedReportLine() {
+    // the demo once had a report entry with 1 untraced destination but an empty untraced list, so the card said
+    // "Every named destination was traced" above "4 of this app's 5 destinations could be traced"
+    func check(_ row: SummaryRow) {
+        if row.sentences.contains(where: { $0.hasPrefix("Every named destination") }), let line = row.reportLine {
+            #expect(!line.contains(" of this app's "), "\(row.title): \(line)")
+        }
+        row.children.forEach(check)
+    }
+    SummaryDemo.screen().rows.forEach(check)
+}
