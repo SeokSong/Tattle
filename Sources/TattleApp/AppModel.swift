@@ -127,6 +127,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var diagnosticActive = false
 
     private static let retentionKey = "retentionDays"
+    /// 5.2: "Show data amounts" on the Summary; off by default, remembered (a display choice, never data)
+    static let showDataAmountsKey = "showDataAmounts"
+    @Published var showDataAmounts: Bool = UserDefaults.standard.bool(forKey: AppModel.showDataAmountsKey) {
+        didSet { UserDefaults.standard.set(showDataAmounts, forKey: Self.showDataAmountsKey) }
+    }
 
     /// the App Privacy Report import screen and list; views observe it directly
     let importModel: ImportModel

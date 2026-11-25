@@ -26,10 +26,15 @@ struct SummaryView: View {
                                 ForEach(Array(screen.tips.enumerated()), id: \.offset) { Bullet(text: $0.element) }
                             }
                         }
-                        Button(SummaryScreen.howToReadHeading) { showHowTo = true }
+                        HStack(spacing: 16) {
+                            Button(SummaryScreen.howToReadHeading) { showHowTo = true }
+                            if screen.hasCaptures {
+                                Toggle(SummaryScreen.dataAmountsToggle, isOn: $model.showDataAmounts)
+                            }
+                        }
                         ForEach(Array(screen.rows.enumerated()), id: \.element.id) { index, row in
                             if index > 0 { Divider() }
-                            SummaryRowView(row: row)
+                            SummaryRowView(row: row, showData: model.showDataAmounts && screen.hasCaptures)
                         }
                         if let noProcess = screen.noProcess {
                             Text(noProcess).font(.caption).foregroundStyle(.secondary)
@@ -88,6 +93,8 @@ struct InfoBullet: View {
 /// grouped bullets (owner, 2026-11-24): a reader spends 10 to 20 seconds per app at most
 struct SummaryRowView: View {
     let row: SummaryRow
+    /// 5.2: show each company's share of the app's captured data
+    var showData = false
     @State private var expanded = false
 
     var body: some View {
@@ -114,7 +121,7 @@ struct SummaryRowView: View {
                 }
                 if !row.children.isEmpty {
                     Text(SummaryScreen.appleAppsBreakdownHeading).font(.caption.bold())
-                    ForEach(row.children) { SummaryRowView(row: $0) }
+                    ForEach(row.children) { SummaryRowView(row: $0, showData: showData) }
                         .padding(.leading, 12)
                 }
             }
@@ -146,7 +153,8 @@ struct SummaryRowView: View {
     private func companies(_ lines: [CompanyLine]) -> some View {
         ForEach(lines) { line in
             VStack(alignment: .leading, spacing: 1) {
-                Bullet(text: line.text, help: line.seenIn)
+                Bullet(text: showData ? [line.text, line.dataShare].compactMap { $0 }.joined(separator: " · ") : line.text,
+                       help: line.seenIn)
                 ForEach(line.brands, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary).padding(.leading, 14) }
             }
         }

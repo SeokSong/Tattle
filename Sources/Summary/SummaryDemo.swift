@@ -14,11 +14,17 @@ public enum SummaryDemo {
         key: String, name: String, company: String?, _ specs: [Spec], untraced: Set<String> = [], typeKnown: [CompanyCategory: Set<String>] = [:],
         identified: Int, total: Int, now: Date, members: [CaptureAppSummary] = []
     ) -> CaptureAppSummary {
-        CaptureAppSummary(
+        // a made-up but realistic split of the traced data: the app's own company most, then the first other
+        // company, then a little for the rest (so "Show data amounts" has something to show)
+        let captured = specs.filter(\.captures)
+        let weights = captured.enumerated().map { i, spec in spec.own ? 20 : (i <= 1 ? 4 : 1) }
+        let sum = max(1, weights.reduce(0, +))
+        return CaptureAppSummary(
             key: key, name: name, company: company,
-            companies: specs.filter(\.captures).map {
-                CompanyEntry(parent: $0.parent, brands: [$0.parent], categories: $0.categories,
-                    relation: relation($0.own, hasCompany: company != nil), traffic: TrafficCount(connections: 3, bytes: 1000))
+            companies: zip(captured, weights).map { spec, weight in
+                CompanyEntry(parent: spec.parent, brands: [spec.parent], categories: spec.categories,
+                    relation: relation(spec.own, hasCompany: company != nil),
+                    traffic: TrafficCount(connections: 3, bytes: identified * weight / sum))
             },
             possibleCompanies: [], typeKnownDestinations: typeKnown, untracedDestinations: untraced,
             identified: TrafficCount(connections: 3, bytes: identified), notIdentified: TrafficCount(connections: 1, bytes: total - identified),

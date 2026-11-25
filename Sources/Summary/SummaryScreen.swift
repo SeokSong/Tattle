@@ -14,12 +14,16 @@ public struct CompanyLine: Sendable, Equatable, Identifiable {
     public let brands: [String]
     /// `SummaryText.seenIn(captures:report:)`, shown on hover only (owner, 2026-11-24)
     public let seenIn: String
+    /// 5.2: the company's share of the app's captured traffic ("12.3% of data", "under 1% of data"), shown only
+    /// with "Show data amounts" on; nil when the company was not seen in captures
+    public let dataShare: String?
 
-    public init(parent: String, text: String, brands: [String], seenIn: String) {
+    public init(parent: String, text: String, brands: [String], seenIn: String, dataShare: String? = nil) {
         self.parent = parent
         self.text = text
         self.brands = brands
         self.seenIn = seenIn
+        self.dataShare = dataShare
     }
 }
 
@@ -88,6 +92,9 @@ public struct SummaryScreen: Sendable, Equatable {
     /// empty unless at least one app contacted an advertising or tracking company
     public let tips: [String]
     public let rows: [SummaryRow]
+    /// 5.2: the "Show data amounts" switch is offered only when there is captured data
+    public let hasCaptures: Bool
+    public static var dataAmountsToggle: String { Wording.bundled.text("toggle.dataAmounts") }
     /// `SummaryText.noProcessSentence(combined.noProcess.connections)`
     public let noProcess: String?
     public var isEmpty: Bool { rows.isEmpty }
@@ -101,9 +108,10 @@ public struct SummaryScreen: Sendable, Equatable {
     public static var tracedHeading: String { Wording.bundled.text("detail.heading.traced") }
     public static var tipsHeading: String { Wording.bundled.text("tips.heading") }
 
-    public init(overview: [String], tips: [String] = [], rows: [SummaryRow], noProcess: String?) {
+    public init(overview: [String], tips: [String] = [], rows: [SummaryRow], hasCaptures: Bool = false, noProcess: String?) {
         self.overview = overview
         self.tips = tips
+        self.hasCaptures = hasCaptures
         self.rows = rows
         self.noProcess = noProcess
     }
@@ -140,7 +148,7 @@ public enum SummaryScreenBuilder {
                 || card.members.contains { !Rating.countedCompanies($0.companies).isEmpty }
         }
         let tips = anyTracking ? [w.text("tip.backgroundRefresh"), w.text("tip.tracking")] : []
-        return SummaryScreen(overview: overview, tips: tips, rows: rows,
+        return SummaryScreen(overview: overview, tips: tips, rows: rows, hasCaptures: combined.captureStart != nil,
                              noProcess: SummaryText.noProcessSentence(combined.noProcess.connections))
     }
 
@@ -167,6 +175,15 @@ public enum SummaryScreenBuilder {
         let untraced = card.untracedDestinations
         if untraced > 0 { return w.text(plural("list.untraced", untraced), ["count": String(untraced)]) }
         return w.text("list.nothing")
+    }
+
+    /// 5.2: a company's share of the app's whole captured traffic (the base of the "Captures: N% of traffic"
+    /// bullet), so the shares never add up to more than the traced part. one decimal, rounded down; a share above
+    /// 0 but under 1% says so. nil without captured bytes
+    public static func dataShare(bytes: Int, of total: Int) -> String? {
+        guard total > 0, bytes > 0 else { return nil }
+        if bytes * 100 < total { return w.text("data.share.small") }
+        return w.text("data.share", ["percent": SummaryText.percentText(bytes, of: total) ?? "0.0"])
     }
 
     /// the "Not traced" bullet: the count, and the types the AdGuard list knows (never more than the count)
@@ -198,12 +215,14 @@ public enum SummaryScreenBuilder {
                 : w.text("detail.traced.report", ["identified": String(identified), "total": String(total)])
             traced.append(TracedLine(text: text, detail: w.text("detail.traced.report.help")))
         }
+        let total = card.capture?.coverage.denominator ?? 0
         let lines = card.companies.map { c in
             (c.isAdvertisingOrTracking, CompanyLine(
                 parent: c.parent,
                 text: SummaryText.companyRow(parent: c.parent, categories: c.categories, isOwnCompany: c.relation == .sameCompanyAsApp),
                 brands: c.brands.compactMap { SummaryText.brandText(brand: $0, parent: c.parent) },
-                seenIn: SummaryText.seenIn(captures: c.inCaptures, report: c.inReport)))
+                seenIn: SummaryText.seenIn(captures: c.inCaptures, report: c.inReport),
+                dataShare: dataShare(bytes: c.captureTraffic.bytes, of: total)))
         }
         let description: String? =
             card.kind == .system ? SummaryText.systemDescription : card.kind == .appleApps ? SummaryText.appleAppsDescription : nil

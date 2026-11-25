@@ -128,3 +128,10 @@ The format is a small subset of TOML (`key = "text"` lines and `#` comments), re
   - "Limit background activity: Settings › General › Background App Refresh (may not stop every connection)"
   - "Check tracking permission: Settings › Privacy & Security › Tracking"
 - The owner checked both Settings paths on iOS 27 on 2026-11-24. The version and date are in `wording.toml` (`tips.checked.*`); `tipsSettingsPathsAreRecheckedEveryYear` fails 365 days later on purpose, so the paths are checked again on a current iOS
+
+## Show data amounts (Problem 5.2; owner, 2026-11-24)
+
+- A switch "Show data amounts" on the Summary, next to How to read this; off by default and remembered (`UserDefaults`, `AppModel.showDataAmountsKey`). Shown only when there is captured data
+- With it on, each company bullet in an opened app adds its share of the app's captured traffic: "12.3% of data", or "under 1% of data" for a share above 0 but under 1%. Captures only: a company seen only in the App Privacy Report has none (the report has no data amounts)
+- The share is of all the app's captured traffic (the base of "Captures: 77.7% of traffic"), so the shares never add up to more than the traced part. One decimal, rounded down
+- Display only: no count, rating or coverage changes with the switch
