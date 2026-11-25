@@ -1,6 +1,6 @@
 # Summary
 
-**Status:** Problems 3.1 (captures, `SummaryBuilder`) and 3.2 (App Privacy Report, `ReportSummaryBuilder`) done. The sentences and glossary (3.3) and the summary screen (3.4) come next.
+**Status:** Problems 3.1 (captures, `SummaryBuilder`), 3.2 (App Privacy Report, `ReportSummaryBuilder`) and 3.3 (sentences, glossary, wording lint) done. The summary screen (3.4) comes next.
 
 ## Purpose
 
@@ -67,3 +67,41 @@ Each entry has:
 - Domains are compared lowercased without a trailing dot, and app ids ignoring case, so one domain or one app is never counted twice. Parents compare ignoring case too; a list's spelling is shown over an Apple owner string that differs only in case
 - Timing: 100,000 contact rows over 5,000 distinct domains build in 390 ms release (budget 1 s); 100,000 distinct domains, far more than a real report, take about 2.9 s
 - Proof: `Tests/TestSupport/ReportSummaryCorpus.swift` (17 rows, every number by hand, every domain checked against the real classifier first) and `Tests/SummaryTests/ReportSummaryTests.swift` (11 tests, including one that no field holds bytes or a list of domains)
+
+## Sentences and glossary (Problem 3.3)
+
+The words live in one file, `Sources/Summary/Resources/wording.toml`; the code (`SummaryText`, `Glossary`) only chooses which sentence applies and fills in the numbers and names (owner, 2026-11-24). The strings were approved by the owner on 2026-11-24.
+
+### Changing what the screen says
+
+1. Edit the text after `=` in `wording.toml`. Keep the key and its `{placeholders}`; write `\"` for a quote
+2. Run the tests. `WordingTests` fails when a key is missing or unknown, a placeholder is one the code never fills, or a sentence breaks a rule
+3. A new case (a new key) needs code: add it to `SummaryText.schema` and to the function that picks it
+
+The format is a small subset of TOML (`key = "text"` lines and `#` comments), read by `Wording` with no library (the project has no third-party dependencies). Each plural or zero case is its own key (`.one`, `.other`, `.none`). A missing key shows as `[key]` on screen, a visible bug and never a made-up sentence. The file ships in `Tattle_Summary.bundle` (Summary target resources); a future `.app` bundle must copy it into `Contents/Resources`, like `Tattle_Companies.bundle`.
+
+### Rules the owner chose
+
+- No speaker: never "Tattle", "we", "our" or "us"; no sentence starts with a number
+- The unit word is "destinations", and one idea has one word: "traced" ("could not be traced to any company")
+- When the reader opens an app, the companies are named (up to 3; with more, the first 2 and the count), then the advertising or tracking part, then the untraced part, always together
+- A destination the AdGuard list knows by type but not by company is "a known advertising service whose owner is unknown"
+- No advertising or tracking found: "No advertising or tracking companies were found." (the owner first wanted "This app doesn't track")
+- The own company row keeps its categories ("Alphabet · the app's own company · Advertising"), so the advertising or tracking count always has a row to point to
+- Coverage: one line per source with the percent traced; the largest cause of the rest is only behind an (i) icon. Percentages have one decimal and round down (77.3%, 0.5%), so a small traced share is never shown as 0 and nothing is overstated; whether a rating is shown is decided on the exact ratio. Dates show the year when it is not the current year. "the largest share", never "most", because the largest cause need not be over half
+- Rating: "Rated on 82.4% traced traffic."; below 70%: "Not enough data to rate: 55.0% of this app's traffic could be traced to a company. A rating needs at least 70%." A hidden rating hides only the band
+- Never used: sells, sold, shared your data, spying, safe, unsafe, stops, blocks, even when not in use, privacy score
+
+| Where | Example |
+|---|---|
+| Overview | In your captures and App Privacy Report (14 to 21 November), 12 apps contacted 31 companies, 9 of which do advertising or tracking. Another 40 destinations could not be traced to any company. |
+| App, opened | Zappy contacted Zappy Inc, AdCo Holdings and CdnCo. Of these, AdCo Holdings does advertising or tracking. It also contacted 3 destinations that could not be traced to any company. Among them, 2 are known advertising services whose owner is unknown. |
+| Company row | AdCo Holdings · Advertising, Analytics / Alphabet · the app's own company · Advertising / YouTube (owned by Alphabet) |
+| Captures | Captures (14 to 21 November): 77.3% of this app's traffic could be traced to a company. (i): Of the remaining 22.7%, the largest share went to destinations whose names the app kept hidden. |
+| Report | App Privacy Report (18 to 21 November): 6 of this app's 9 destinations could be traced to a company. The report doesn't show how much data was sent. |
+| Data amounts | In the capture from 14 November, the largest share of the data went to Alphabet. (captures only, with the toggle on) |
+
+### Open for 3.4
+
+- The capture summary counts unidentified connections; the wording counts destinations; one card per app (OD8) needs distinct destinations across both sources. How the card combines the two is decided with the owner in 3.4
+- The first view is a list of apps with their counts; an app opens for the sentences and company rows; it must be obvious that an app can be opened (owner, 2026-11-24)

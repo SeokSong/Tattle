@@ -32,7 +32,7 @@ let package = Package(
             dependencies: ["PCAPNG", "PacketDecoder", "Flows", "Domains", "Storage", "Attribution", "PrivacyReport"]
         ),
         // read-time labels for the screens and the command line; never imported by the packet path
-        .target(name: "Summary", dependencies: ["Companies", "Flows", "Domains", "Attribution"]),
+        .target(name: "Summary", dependencies: ["Companies", "Flows", "Domains", "Attribution"], resources: [.copy("Resources")]),
         .target(name: "Capture", dependencies: ["PCAPNG", "Storage", "Pipeline"]),
         .executableTarget(name: "TattleCLI", dependencies: ["PCAPNG", "Storage", "Pipeline", "Capture", "Report", "Companies", "Summary"]),
         .executableTarget(
