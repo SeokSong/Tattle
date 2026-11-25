@@ -2,7 +2,7 @@ import Foundation
 import Summary
 import Testing
 
-// OD5 tips (owner, 2026-11-25): shown only on an app that contacted at least one advertising or tracking company
+// OD5 tips (owner, 2026-11-24): shown only on an app that contacted at least one advertising or tracking company
 
 @Test func tipsShowOnlyWhereTheyApply() throws {
     let screen = SummaryDemo.screen()
@@ -40,5 +40,7 @@ import Testing
     f.dateFormat = "yyyy-MM-dd"
     let checked = try #require(f.date(from: date))
     let days = Date().timeIntervalSince(checked) / 86400
+    // never a future date: a typo there would switch the reminder off for years
+    #expect(days >= 0, "tips.checked.date \(date) is after today")
     #expect(days < 365, "the tips' Settings paths were checked on iOS \(ios) on \(date): check them again on a current iOS")
 }

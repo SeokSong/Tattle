@@ -103,7 +103,9 @@ struct SummaryRowView: View {
                     }
                 }
                 if !row.tips.isEmpty {
-                    group(SummaryScreen.tipsHeading) { ForEach(row.tips, id: \.self) { Bullet(text: $0) } }
+                    group(SummaryScreen.tipsHeading) {
+                        ForEach(Array(row.tips.enumerated()), id: \.offset) { Bullet(text: $0.element) }
+                    }
                 }
                 if let possible = row.possible {
                     InfoBullet(text: possible, detail: SummaryScreen.possibleExplanation)
