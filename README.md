@@ -207,6 +207,7 @@ scripts/test.sh
 | `Companies` | Domain to company: Public Suffix List, curated list, Apple's owner, AdGuard tracker list, app table |
 | `PrivacyReport` | Reader for the iPhone's App Privacy Report export |
 | `Summary` | Per-app summary, coverage, rating and wording (`Resources/wording.toml`) |
+| `WorldMap` | The company map: globe math, world outline (Natural Earth) and the drawing |
 | `Storage` | SQLite schema, retention, salted device hash |
 | `Pipeline` | Ties the steps together, for live capture and file replay |
 | `Capture` | rvictl/tcpdump control, privileged launcher, device lookup |
