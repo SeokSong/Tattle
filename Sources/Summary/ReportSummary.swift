@@ -1,8 +1,8 @@
 import Companies
 import Foundation
 
-// read time only. the report has contacts (hits), never bytes, and no type here holds a domain name:
-// only counts, parents, brands and categories, so a bare IP address can never be shown.
+// read time only. the report has contacts (hits), never bytes. the only domain names held are the in-memory sets
+// `untracedDestinations` and `typeKnownDestinations`, kept so a card counts each destination once; never shown.
 
 /// one stored report contact, as the app reads it from the store (Summary does not import Storage)
 public struct ReportContactInput: Sendable, Equatable {
@@ -64,8 +64,13 @@ public struct ReportAppSummary: Sendable, Equatable {
     public let companies: [ReportCompanyEntry]
     public var namedCompanies: Int { companies.count }
     public var adTrackCompanies: Int { companies.filter(\.isAdvertisingOrTracking).count }
-    /// distinct registrable domains per category for names known to the AdGuard list only by category
-    public let unnamedCategories: [CompanyCategory: Int]
+    /// the registrable domains per category for names known to the AdGuard list only by category
+    public let typeKnownDestinations: [CompanyCategory: Set<String>]
+    /// distinct registrable domains per category (the sizes of `typeKnownDestinations`)
+    public var unnamedCategories: [CompanyCategory: Int] { typeKnownDestinations.mapValues(\.count) }
+    /// the combined domain key (lowercased, no trailing dot) of every not-identified row, bare IP addresses included.
+    /// names kept in memory only so a card can count each destination once across sources; never shown, never saved
+    public let untracedDestinations: Set<String>
     /// every distinct domain of the entry is in exactly one of the two
     public let identified: DomainCount
     public let notIdentified: DomainCount
@@ -78,14 +83,15 @@ public struct ReportAppSummary: Sendable, Equatable {
 
     public init(
         key: String, name: String, company: String?, companies: [ReportCompanyEntry],
-        unnamedCategories: [CompanyCategory: Int], identified: DomainCount, notIdentified: DomainCount,
+        typeKnownDestinations: [CompanyCategory: Set<String>], untracedDestinations: Set<String>, identified: DomainCount, notIdentified: DomainCount,
         coverage: CoverageRatio, firstSeen: Date?, lastSeen: Date?, members: [ReportAppSummary]
     ) {
         self.key = key
         self.name = name
         self.company = company
         self.companies = companies
-        self.unnamedCategories = unnamedCategories
+        self.typeKnownDestinations = typeKnownDestinations
+        self.untracedDestinations = untracedDestinations
         self.identified = identified
         self.notIdentified = notIdentified
         self.coverage = coverage
@@ -185,6 +191,7 @@ public enum ReportSummaryBuilder {
             var identified = DomainCount(), notIdentified = DomainCount()
             var parents: [String: ParentAcc] = [:]
             var unnamed: [CompanyCategory: Set<String>] = [:]
+            var untraced = Set<String>()
             var first: Date?, last: Date?
             for row in rows {
                 if let f = row.first { first = first.map { min($0, f) } ?? f }
@@ -210,6 +217,7 @@ public enum ReportSummaryBuilder {
                 } else {
                     notIdentified.domains += 1
                     notIdentified.contacts += row.hits
+                    untraced.insert(row.domain)
                     if let registrable = l.registrableDomain,
                        let tracker = classifier.trackers.unnamedCategoryRow(l.hostname, registrable: registrable) {
                         unnamed[tracker.category, default: []].insert(registrable)
@@ -229,7 +237,7 @@ public enum ReportSummaryBuilder {
             }
             return ReportAppSummary(
                 key: key, name: name, company: company, companies: companies,
-                unnamedCategories: unnamed.mapValues(\.count), identified: identified, notIdentified: notIdentified,
+                typeKnownDestinations: unnamed, untracedDestinations: untraced, identified: identified, notIdentified: notIdentified,
                 coverage: CoverageRatio(numerator: identified.domains, denominator: identified.domains + notIdentified.domains),
                 firstSeen: first, lastSeen: last, members: members)
         }

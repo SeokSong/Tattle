@@ -16,12 +16,13 @@ private typealias Expected = SummaryCorpus.Expected
 /// the failed equalities between the summary and the quality report, as numbers only; empty when all hold
 private func check(_ summary: CaptureSummary, _ report: QualityReport) -> [String] {
     var failures: [String] = []
+    let all443 = summary.apps + (summary.appleApps.map { [$0] } ?? [])
     for reason in UnnamedReason.allCases {
-        let s = summary.apps.reduce(0) { $0 + ($1.unseen[reason]?.bytes ?? 0) }
+        let s = all443.reduce(0) { $0 + ($1.unseen[reason]?.bytes ?? 0) }
         let r = report.hostnames.unnamedShare[reason.rawValue]?.numerator
         if s != r { failures.append("\(reason.rawValue) summary \(s) report \(r.map(String.init) ?? "nil")") }
     }
-    let appsDenominator = summary.apps.reduce(0) { $0 + $1.coverage.denominator }
+    let appsDenominator = all443.reduce(0) { $0 + $1.coverage.denominator }
     for (name, ratio) in report.hostnames.unnamedShare where ratio.denominator != appsDenominator {
         failures.append("app denominator summary \(appsDenominator) report \(ratio.denominator) (\(name))")
     }
@@ -94,11 +95,11 @@ private func corpusSummary(flows: [Flow], observations: [DomainObservation]) thr
     let summary = try corpusSummary(flows: flows, observations: observations)
     let report = ReportBuilder.build(flows: flows, domains: observations, pipeline: nil)
     for reason in UnnamedReason.allCases {
-        let s = summary.apps.reduce(0) { $0 + ($1.unseen[reason]?.bytes ?? 0) }
+        let s = (summary.apps + (summary.appleApps.map { [$0] } ?? [])).reduce(0) { $0 + ($1.unseen[reason]?.bytes ?? 0) }
         let r = try #require(report.hostnames.unnamedShare[reason.rawValue]).numerator
         #expect(s == (reason == .echHidden ? r + 123 : r), "\(reason.rawValue) summary \(s) report \(r)")
     }
-    let appsDenominator = summary.apps.reduce(0) { $0 + $1.coverage.denominator }
+    let appsDenominator = (summary.apps + (summary.appleApps.map { [$0] } ?? [])).reduce(0) { $0 + $1.coverage.denominator }
     #expect(report.hostnames.unnamedShare.values.allSatisfy { $0.denominator == appsDenominator })
     let all = appsDenominator + (summary.system?.coverage.denominator ?? 0) + summary.noProcess.bytes
         + summary.excluded.values.reduce(0) { $0 + $1.bytes }
