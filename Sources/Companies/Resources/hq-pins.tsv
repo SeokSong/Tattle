@@ -12,8 +12,8 @@ Amazon	Q3884
 Amplitude		San Francisco	United States	37.7749	-122.4194	the analytics company is not in Wikidata
 Ant Group	Q21979415					
 Anthropic	Q116758847					
-AppLovin	Q27150212					
 Apple	Q312					
+AppLovin	Q27150212					
 AppsFlyer	Q20050673					
 Atlassian	Q757307					
 Automattic	Q2872634					
@@ -22,8 +22,9 @@ Bilibili	Q3077586
 Block	Q110778747					
 Booking Holdings	Q18674747					
 Box	Q4951483					
+Branch		Hamilton	Canada	43.2557	-79.8711	owner review 2026-11-25
 Braze	Q20880554					
-Bunny.net	Q110644081					
+Bunny.net	Q110644081	Ljubljana	Slovenia	46.0569	14.5058	owner review 2026-11-25
 ByteDance	Q55606242					
 Canva	Q23498528	Sydney	Australia	-33.8688	151.2093	no head office in Wikidata
 Chartboost	Q16986843					
@@ -32,11 +33,12 @@ Cloudflare	Q4778915
 Cloudinary	Q27150151					
 Comcast	Q1113804					
 Comscore	Q734779					
-Crazy Egg	Q142246355					
+Connatix		New York City	United States	40.7128	-74.0060	owner review 2026-11-25
+Crazy Egg	Q142246355	La Mirada	United States	33.9172	-118.0120	owner review 2026-11-25
 Criteo	Q2814507					
-DAZN Group	Q7168181					
 Dailymotion	Q769222					
 Datadog	Q16248637					
+DAZN Group	Q7168181					
 Deezer	Q602243	Paris	France	48.8566	2.3522	no head office in Wikidata
 DigiCert	Q3027764					
 Digital Turbine	Q106295041					
@@ -45,37 +47,48 @@ Disney	Q7414
 DoubleVerify	Q139892781	New York City	United States	40.7128	-74.0060	no head office in Wikidata
 Dropbox	Q15589464					
 DuckDuckGo	Q98446892					
-Electronic Arts	Q173941					
+eBay	Q58024					
+Electronic Arts	Q173941	Redwood City	United States	37.4852	-122.2364	owner review 2026-11-25
 Epic Games	Q739711	Cary	United States	35.7915	-78.7811	no head office in Wikidata
 Equativ	Q120967874					
 Experian	Q692157					
 Fastly	Q34045622					
 Figma	Q96186334					
+Flashtalking		New York City	United States	40.7128	-74.0060	owner review 2026-11-25
 Fox Corporation	Q60238941					
 FullStory	Q140315942	Atlanta	United States	33.7490	-84.3880	no head office in Wikidata
-GlobalSign	Q1283844					
+GlobalSign	Q1283844	Brussels	Belgium	50.8503	4.3517	owner review 2026-11-25
 GoDaddy	Q1416215					
 GumGum	Q140321261	Santa Monica	United States	34.0195	-118.4912	no head office in Wikidata
-Hotjar	Q141629150					
+Heap		San Francisco	United States	37.7749	-122.4194	owner review 2026-11-25
+Hotjar	Q141629150	St. Julian's	Malta	35.9187	14.4890	owner review 2026-11-25
 HubSpot	Q5926631					
-ISRG	Q22905866					
-InMobi	Q6008783					
+ID5		London	United Kingdom	51.5074	-0.1278	owner review 2026-11-25
+imgix	Q114603092	San Francisco	United States	37.7749	-122.4194	owner review 2026-11-25
 Index Exchange		Toronto	Canada	43.6532	-79.3832	not in Wikidata
+InMobi	Q6008783					
 Innovid	Q28134086					
 Integral Ad Science	Q19903345					
 Intercom		San Francisco	United States	37.7749	-122.4194	the messaging company is not in Wikidata
 Intuit	Q1318848					
 Intuition Machines	Q90832980					
+iQIYI	Q15913890					
+ISRG	Q22905866	Redwood City	United States	37.4852	-122.2364	owner review 2026-11-25
+jsDelivr	Q47519378	Kraków	Poland	50.0647	19.9450	owner review 2026-11-25
 Kakao	Q17684312					
 Klarna	Q1165072					
 Kochava	Q132200636	Sandpoint	United States	48.2766	-116.5535	no head office in Wikidata
-LY Corporation	Q86734122					
 Liftoff		Redwood City	United States	37.4852	-122.2364	the mobile ad company is not in Wikidata
 LiveRamp	Q125352505					
+LogRocket		Boston	United States	42.3601	-71.0589	owner review 2026-11-25
+Lotame		Columbia	United States	39.2037	-76.8610	owner review 2026-11-25
+LY Corporation	Q86734122					
 Lyft	Q17077936					
 Magnite	Q4411116					
 Media.net	Q24885109					
+Mediavine		New York City	United States	40.7128	-74.0060	owner review 2026-11-25
 Meta Platforms	Q380					
+MGID		Santa Monica	United States	34.0195	-118.4912	owner review 2026-11-25
 Microsoft	Q2283					
 Mixpanel	Q25048114					
 Mozilla	Q169925					
@@ -85,7 +98,7 @@ New Relic	Q7011152
 NextRoll	Q141854465	San Francisco	United States	37.7749	-122.4194	no head office in Wikidata
 Nielsen	Q540891					
 Nintendo	Q8093					
-Notion	Q60747998					
+Notion	Q60747998	San Francisco	United States	37.7749	-122.4194	owner review 2026-11-25
 OneSignal	Q140701571					
 OpenAI	Q21708200					
 OpenX	Q7095918					
@@ -96,30 +109,34 @@ Paramount	Q76846862
 PayPal	Q483959	San Jose	United States	37.3382	-121.8863	no head office in Wikidata
 Pinterest	Q96095585					
 Plaid	Q30610132					
-Plex	Q7204887					
-PubMatic	Q28172343					
+Plex	Q7204887	Los Gatos	United States	37.2358	-121.9624	owner review 2026-11-25
+PubMatic	Q28172343	Redwood City	United States	37.4852	-122.2364	owner review 2026-11-25
 Quantcast	Q4047758					
-RTB House	Q24963107					
 Reddit	Q1136					
+Revcontent		Sarasota	United States	27.3364	-82.5307	owner review 2026-11-25
 Roblox	Q67186598	San Mateo	United States	37.5630	-122.3255	no head office in Wikidata
 Roku	Q7360089					
+RTB House	Q24963107					
 Salesforce	Q941127					
-Sectigo	Q141253561					
+Sectigo	Q141253561	Scottsdale	United States	33.4942	-111.9261	owner review 2026-11-25
 Sentry	Q140835305					
+Sharethrough		Montreal	Canada	45.5019	-73.5674	owner review 2026-11-25
 Shopify	Q7501150					
 Signal Foundation	Q55074807					
+Singular		San Francisco	United States	37.7749	-122.4194	owner review 2026-11-25
 SiriusXM	Q3277465					
 Smaato	Q18378670					
 SmartBear	Q28406315					
 Snap	Q27022329					
 Sony	Q41187					
-SoundCloud	Q568769					
+SoundCloud	Q568769	Berlin	Germany	52.5200	13.4050	owner review 2026-11-25
 Sovrn	Q22908948					
 Spotify	Q87067874	Stockholm	Sweden	59.3293	18.0686	Wikidata gives the Luxembourg holding company; operates from Stockholm
 Squarespace	Q7582097					
 Stripe	Q7624104					
 Taboola	Q18154756					
 Tapjoy	Q7684697					
+Teads		New York City	United States	40.7128	-74.0060	owner review 2026-11-25
 Tealium	Q18636415					
 Telegram	Q32049814					
 Tencent	Q860580	Shenzhen	China	22.5431	114.0579	Wikidata gives the Cayman Islands registration; operates from Shenzhen
@@ -128,21 +145,17 @@ Tripadvisor	Q1770710
 TripleLift	Q141737098					
 Twilio	Q7858039					
 Uber	Q780442					
-VK	Q1885456					
 Valve	Q193559	Bellevue	United States	47.6101	-122.2015	no head office in Wikidata
 Verisign	Q734338					
 Vimeo	Q156376					
+VK	Q1885456					
 Warner Bros. Discovery	Q107074885					
 Weibo	Q92526	Beijing	China	39.9042	116.4074	no head office in Wikidata
 Wikimedia Foundation	Q180					
 Wix	Q420506					
 X Corp.	Q117617480					
-Yahoo	Q29231846					
+Yahoo	Q29231846	New York City	United States	40.7128	-74.0060	owner review 2026-11-25
 Yandex	Q5281					
 Yieldmo	Q19882033					
 Zendesk	Q15401349					
 Zoom	Q94979732	San Jose	United States	37.3382	-121.8863	Wikidata's company item is missing; the software item has no head office
-eBay	Q58024					
-iQIYI	Q15913890					
-imgix	Q114603092					
-jsDelivr	Q47519378					

@@ -116,9 +116,9 @@
       "sourceURL": "https://query.wikidata.org",
       "licence": "MIT (own selection; head offices from Wikidata, CC0-1.0)",
       "fetched": "2026-11-25",
-      "sha256": "37fd8f2e83e2849d392a0d09e9efdc17accb0fe1624b44f256a283618e340197",
-      "sourceSHA256": "37fd8f2e83e2849d392a0d09e9efdc17accb0fe1624b44f256a283618e340197",
-      "rules": 137
+      "sha256": "d64f8f8f082d7138301d7bdf393d295c81b8906049799f3f08cd73641ee1407a",
+      "sourceSHA256": "d64f8f8f082d7138301d7bdf393d295c81b8906049799f3f08cd73641ee1407a",
+      "rules": 160
     },
     {
       "name": "Company head offices, AdGuard companies (Wikidata)",

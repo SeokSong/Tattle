@@ -22,7 +22,9 @@ Bilibili	Yangpu District	People's Republic of China	31.2617	121.5217	Q3077586	pi
 Block	San Francisco	United States	37.7750	-122.4194	Q110778747	pinned
 Booking Holdings	Norwalk	United States	41.0931	-73.4539	Q18674747	pinned
 Box	Redwood City	United States	37.4828	-122.2361	Q4951483	pinned
+Branch	Hamilton	Canada	43.2557	-79.8711	none	hand
 Braze	New York City	United States	40.7128	-74.0061	Q20880554	pinned
+Bunny.net	Ljubljana	Slovenia	46.0569	14.5058	Q110644081	hand
 ByteDance	Beijing	People's Republic of China	39.9040	116.4075	Q55606242	pinned
 Canva	Sydney	Australia	-33.8688	151.2093	Q23498528	hand
 Chartboost	San Francisco	United States	37.7750	-122.4194	Q16986843	pinned
@@ -31,6 +33,8 @@ Cloudflare	San Francisco	United States	37.7750	-122.4194	Q4778915	pinned
 Cloudinary	Santa Clara	United States	37.3500	-121.9667	Q27150151	pinned
 Comcast	Philadelphia	United States	39.9526	-75.1652	Q1113804	pinned
 Comscore	Reston	United States	38.9589	-77.3586	Q734779	pinned
+Connatix	New York City	United States	40.7128	-74.0060	none	hand
+Crazy Egg	La Mirada	United States	33.9172	-118.0120	Q142246355	hand
 Criteo	Paris	France	48.8567	2.3522	Q2814507	pinned
 DAZN Group	Feltham	United Kingdom	51.4496	-0.4089	Q7168181	pinned
 Dailymotion	Paris	France	48.8567	2.3522	Q769222	pinned
@@ -43,19 +47,23 @@ Disney	Burbank	United States	34.1569	-118.3251	Q7414	pinned
 DoubleVerify	New York City	United States	40.7128	-74.0060	Q139892781	hand
 Dropbox	San Francisco	United States	37.7750	-122.4194	Q15589464	pinned
 DuckDuckGo	Paoli	United States	40.0412	-75.4870	Q98446892	pinned
-Electronic Arts	Redwood Shores	United States	37.5233	-122.2540	Q173941	pinned
+Electronic Arts	Redwood City	United States	37.4852	-122.2364	Q173941	hand
 Epic Games	Cary	United States	35.7915	-78.7811	Q739711	hand
 Equativ	Paris	France	48.8567	2.3522	Q120967874	pinned
 Experian	Dublin	Ireland	53.3419	-6.2481	Q692157	pinned
 Fastly	San Francisco	United States	37.7750	-122.4194	Q34045622	pinned
 Figma	San Francisco	United States	37.7750	-122.4194	Q96186334	pinned
+Flashtalking	New York City	United States	40.7128	-74.0060	none	hand
 Fox Corporation	New York City	United States	40.7587	-73.9824	Q60238941	pinned
 FullStory	Atlanta	United States	33.7490	-84.3880	Q140315942	hand
-GlobalSign	Tokyo	Japan	35.6894	139.6917	Q1283844	pinned
+GlobalSign	Brussels	Belgium	50.8503	4.3517	Q1283844	hand
 GoDaddy	Tempe	United States	33.6174	-111.9048	Q1416215	pinned
 GumGum	Santa Monica	United States	34.0195	-118.4912	Q140321261	hand
+Heap	San Francisco	United States	37.7749	-122.4194	none	hand
+Hotjar	St. Julian's	Malta	35.9187	14.4890	Q141629150	hand
 HubSpot	Cambridge	United States	42.3750	-71.1061	Q5926631	pinned
-ISRG	San Francisco	United States	37.7750	-122.4194	Q22905866	pinned
+ID5	London	United Kingdom	51.5074	-0.1278	none	hand
+ISRG	Redwood City	United States	37.4852	-122.2364	Q22905866	hand
 InMobi	Bengaluru	India	12.9791	77.5913	Q6008783	pinned
 Index Exchange	Toronto	Canada	43.6532	-79.3832	none	hand
 Innovid	New York City	United States	40.7128	-74.0061	Q28134086	pinned
@@ -69,9 +77,13 @@ Kochava	Sandpoint	United States	48.2766	-116.5535	Q132200636	hand
 LY Corporation	Tokyo	Japan	35.6894	139.6917	Q86734122	pinned
 Liftoff	Redwood City	United States	37.4852	-122.2364	none	hand
 LiveRamp	San Francisco	United States	37.7750	-122.4194	Q125352505	pinned
+LogRocket	Boston	United States	42.3601	-71.0589	none	hand
+Lotame	Columbia	United States	39.2037	-76.8610	none	hand
 Lyft	San Francisco	United States	37.7750	-122.4194	Q17077936	pinned
+MGID	Santa Monica	United States	34.0195	-118.4912	none	hand
 Magnite	Los Angeles	United States	34.0522	-118.2437	Q4411116	pinned
 Media.net	Dubai	United Arab Emirates	25.2697	55.3094	Q24885109	pinned
+Mediavine	New York City	United States	40.7128	-74.0060	none	hand
 Meta Platforms	Menlo Park	United States	37.4850	-122.1475	Q380	pinned
 Microsoft	Redmond	United States	47.6400	-122.1281	Q2283	pinned
 Mixpanel	San Francisco	United States	37.7750	-122.4194	Q25048114	pinned
@@ -82,6 +94,7 @@ New Relic	San Francisco	United States	37.7750	-122.4194	Q7011152	pinned
 NextRoll	San Francisco	United States	37.7749	-122.4194	Q141854465	hand
 Nielsen	New York City	United States	40.7128	-74.0061	Q540891	pinned
 Nintendo	Kyoto	Japan	34.9697	135.7561	Q8093	pinned
+Notion	San Francisco	United States	37.7749	-122.4194	Q60747998	hand
 OneSignal	San Mateo	United States	37.5542	-122.3131	Q140701571	pinned
 OpenAI	San Francisco	United States	37.7622	-122.4147	Q21708200	pinned
 OpenX	Pasadena	United States	34.1475	-118.1439	Q7095918	pinned
@@ -92,26 +105,34 @@ Paramount	New York City	United States	40.7128	-74.0061	Q76846862	pinned
 PayPal	San Jose	United States	37.3382	-121.8863	Q483959	hand
 Pinterest	San Francisco	United States	37.7750	-122.4194	Q96095585	pinned
 Plaid	San Francisco	United States	37.7750	-122.4194	Q30610132	pinned
+Plex	Los Gatos	United States	37.2358	-121.9624	Q7204887	hand
+PubMatic	Redwood City	United States	37.4852	-122.2364	Q28172343	hand
 Quantcast	San Francisco	United States	37.7750	-122.4194	Q4047758	pinned
 RTB House	Warsaw	Poland	52.2300	21.0111	Q24963107	pinned
 Reddit	San Francisco	United States	37.7750	-122.4194	Q1136	pinned
+Revcontent	Sarasota	United States	27.3364	-82.5307	none	hand
 Roblox	San Mateo	United States	37.5630	-122.3255	Q67186598	hand
 Roku	Los Gatos	United States	37.2361	-121.9617	Q7360089	pinned
 Salesforce	Salesforce Tower	United States	37.7899	-122.3970	Q941127	pinned
+Sectigo	Scottsdale	United States	33.4942	-111.9261	Q141253561	hand
 Sentry	San Francisco	United States	37.7750	-122.4194	Q140835305	pinned
+Sharethrough	Montreal	Canada	45.5019	-73.5674	none	hand
 Shopify	Ottawa	Canada	45.4247	-75.6950	Q7501150	pinned
 Signal Foundation	Mountain View	United States	37.3928	-122.0419	Q55074807	pinned
+Singular	San Francisco	United States	37.7749	-122.4194	none	hand
 SiriusXM	New York City	United States	40.7594	-73.9821	Q3277465	pinned
 Smaato	San Francisco	United States	37.7750	-122.4194	Q18378670	pinned
 SmartBear	Somerville	United States	42.3875	-71.1000	Q28406315	pinned
 Snap	Santa Monica	United States	34.0219	-118.4814	Q27022329	pinned
 Sony	Minato	Japan	35.6312	139.7438	Q41187	pinned
+SoundCloud	Berlin	Germany	52.5200	13.4050	Q568769	hand
 Sovrn	Boulder	United States	40.0194	-105.2928	Q22908948	pinned
 Spotify	Stockholm	Sweden	59.3293	18.0686	Q87067874	hand
 Squarespace	New York City	United States	40.7128	-74.0061	Q7582097	pinned
 Stripe	San Francisco	United States	37.7750	-122.4194	Q7624104	pinned
 Taboola	New York City	United States	40.7128	-74.0061	Q18154756	pinned
 Tapjoy	San Francisco	United States	37.7750	-122.4194	Q7684697	pinned
+Teads	New York City	United States	40.7128	-74.0060	none	hand
 Tealium	San Diego	United States	32.7150	-117.1625	Q18636415	pinned
 Telegram	Dubai Media City	United Arab Emirates	25.0928	55.1528	Q32049814	pinned
 Tencent	Shenzhen	China	22.5431	114.0579	Q860580	hand
@@ -129,10 +150,12 @@ Weibo	Beijing	China	39.9042	116.4074	Q92526	hand
 Wikimedia Foundation	San Francisco	United States	37.7892	-122.4034	Q180	pinned
 Wix	Tel Aviv	Israel	32.0800	34.7800	Q420506	pinned
 X Corp.	Bastrop	United States	30.1119	-97.3169	Q117617480	pinned
-Yahoo	Sunnyvale	United States	37.3689	-122.0369	Q29231846	pinned
+Yahoo	New York City	United States	40.7128	-74.0060	Q29231846	hand
 Yandex	Moscow	Russia	55.7506	37.6175	Q5281	pinned
 Yieldmo	New York City	United States	40.7128	-74.0061	Q19882033	pinned
 Zendesk	San Francisco	United States	37.7750	-122.4194	Q15401349	pinned
 Zoom	San Jose	United States	37.3382	-121.8863	Q94979732	hand
 eBay	San Jose	United States	37.2953	-121.9261	Q58024	pinned
 iQIYI	Beijing	People's Republic of China	39.9040	116.4075	Q15913890	pinned
+imgix	San Francisco	United States	37.7749	-122.4194	Q114603092	hand
+jsDelivr	Kraków	Poland	50.0647	19.9450	Q47519378	hand

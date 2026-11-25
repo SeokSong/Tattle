@@ -280,7 +280,7 @@ For the company map: where each parent company is based. A head office, never wh
 
 | | With a head office |
 |---|---|
-| Curated parents | 137 of 160 (116 from a pinned item, 21 entered by hand) |
+| Curated parents | 160 of 160 (112 from a pinned item, 48 entered by hand: 21 checked and 27 given or corrected by the owner, 2026-11-25) |
 | AdGuard companies (not curated parents) | 332 of 2,454 (website matches only) |
 
 Companies without a head office are counted under the map, never drawn.
