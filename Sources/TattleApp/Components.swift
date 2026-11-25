@@ -96,10 +96,16 @@ struct FlowTable: View {
     var flows: [FlowLine]
     /// flows left out of the table, shown as one "N more flows" line
     var moreFlows = 0
+    /// an app filter is on: an empty table then means no connections for that app, not no capture
+    var filtered = false
+    /// the connection whose detail sheet is open
+    @State private var detail: FlowLine?
 
     var body: some View {
+        // one container that stays, so an open detail sheet survives a refresh that empties the table
+        Group {
         if flows.isEmpty {
-            Text("No flows yet").foregroundStyle(.secondary)
+            Text(filtered ? "No connections for this app" : "No flows yet").foregroundStyle(.secondary)
         } else {
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
                 GridRow {
@@ -108,6 +114,7 @@ struct FlowTable: View {
                     Text("Address").bold()
                     Text("App").bold()
                     Text("IP bytes").bold().gridColumnAlignment(.trailing)
+                    Text("")
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -142,13 +149,18 @@ struct FlowTable: View {
                             }
                         }
                         Text(formatBytes(flow.ipBytes)).monospacedDigit()
+                        Button { detail = flow } label: { Image(systemName: "info.circle") }
+                            .buttonStyle(.borderless)
+                            .help("Connection details")
                     }
                 }
                 if let fold = FlowRows(lines: [], moreFlows: moreFlows).foldLine {
-                    GridRow { Text(fold).foregroundStyle(.secondary).gridCellColumns(5) }
+                    GridRow { Text(fold).foregroundStyle(.secondary).gridCellColumns(6) }
                 }
             }
         }
+        }
+        .sheet(item: $detail) { FlowDetailView(line: $0) }
     }
 }
 

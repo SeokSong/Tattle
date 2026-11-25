@@ -51,7 +51,8 @@ struct LiveView: View {
                     ? groupByProcess(from: [] as [TallyInput]).setAside : model.grouping.setAside)
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Top 10 flows by bytes").font(.headline)
-                    FlowTable(flows: model.topFlowLines, moreFlows: model.moreFlows)
+                    AppFilterPicker(selection: $model.liveAppFilter, names: model.liveAppNames)
+                    FlowTable(flows: model.topFlowLines, moreFlows: model.moreFlows, filtered: model.liveAppFilter != nil)
                     Text("A name seen in the connection was read from that connection. A name from DNS is a lookup answer for the same server address and may be another service on that server.")
                         .font(.caption).foregroundStyle(.secondary)
                 }

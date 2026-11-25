@@ -42,7 +42,8 @@ struct SessionsView: View {
                             ProcessTable(rows: detail.grouping.rows)
                             SetAsideSection(rows: detail.grouping.setAside)
                             Text("Top flows by bytes").font(.headline)
-                            FlowTable(flows: detail.flows)
+                            AppFilterPicker(selection: $model.sessionsAppFilter, names: detail.appNames)
+                            FlowTable(flows: detail.flows, moreFlows: detail.moreFlows, filtered: model.sessionsAppFilter != nil)
                             Text("A name seen in the connection was read from that connection. A name from DNS is a lookup answer for the same server address and may be another service on that server.")
                                 .font(.caption).foregroundStyle(.secondary)
                             Text("Byte totals per process are shared out by packet count from stored flow totals. Each flow is placed in one category as a whole.")
@@ -60,6 +61,8 @@ struct SessionsView: View {
         }
         .onAppear { model.refreshSessions() }
         .onChange(of: selected) { id in detail = id.flatMap { model.detail(for: $0) } }
+        // the filter changes what the table shows: read the session again with it
+        .onChange(of: model.sessionsAppFilter) { _ in detail = selected.flatMap { model.detail(for: $0) } }
         .onChange(of: model.sessions) { rows in
             if let selected, !rows.contains(where: { $0.id == selected }) {
                 self.selected = nil

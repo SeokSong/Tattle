@@ -184,6 +184,12 @@ struct FlowLine: Identifiable {
     var setAsideLabel: String?
     /// the company behind the name; nil when the flow has no name (the reason is shown instead)
     var companyLabel: FlowLabel?
+    /// the app filter's name for the flow (`flowAppName`)
+    var appName = ""
+    var packets = 0
+    var firstSeen: Date?
+    var lastSeen: Date?
+    var transport = ""
 
     /// the company cell: the company and one category word, "Possible: ..." when the name is only a
     /// hint, "Not identified" when no source knows the name. nil for a flow with no name. the source
@@ -224,6 +230,32 @@ struct FlowLine: Identifiable {
         }
         return text
     }
+
+    /// the connection detail (5.1): label and value, in display order. the company's source and list version and
+    /// the name's source are here, kept off the row (review 04-8)
+    var detailRows: [(label: String, value: String)] {
+        var rows: [(String, String)] = []
+        rows.append(("Name", hostname ?? (unnamedReason ?? .noDNSMatch).label))
+        // an unnamed connection's reason is already its Name row
+        if hostname != nil { rows.append(("Where the name came from", hostnameDetail)) }
+        if let company = companyText { rows.append(("Company", company)) }
+        if let source = companyDetail { rows.append(("Company source", source)) }
+        rows.append(("App", attribution))
+        if let label = setAsideLabel { rows.append(("Kind of traffic", label)) }
+        rows.append(("Address", "\(address) (\(transport))"))
+        rows.append(("Packets", String(packets)))
+        rows.append(("IP bytes", formatBytes(ipBytes)))
+        if let firstSeen { rows.append(("First seen", Self.time.string(from: firstSeen))) }
+        if let lastSeen { rows.append(("Last seen", Self.time.string(from: lastSeen))) }
+        return rows
+    }
+
+    private static let time: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .medium
+        return f
+    }()
 }
 
 func describeAttribution(_ result: AttributionResult) -> String {
@@ -238,18 +270,47 @@ func describeAttribution(_ result: AttributionResult) -> String {
     return text
 }
 
-/// builds the hostname index once, then looks up each of the shown flows. `makeIndex` is a seam for tests
+/// the app a flow belongs to, as the app filter names it (5.1): the app (or the app a system process worked
+/// for), "iOS system", or "No process info"
+func flowAppName(_ flow: Flow) -> String {
+    switch Attributor.attribute(flow.tally).primary {
+    case .app(let name, _): return ProcessNames.displayName(name)
+    case .onBehalfOf(let app, _): return ProcessNames.displayName(app)
+    case .system: return "iOS system"
+    case .unknown: return "No process info"
+    }
+}
+
+/// the names the app filter offers, sorted ignoring case
+func appNames(in flows: [Flow]) -> [String] {
+    Set(flows.map(flowAppName)).sorted { $0.compare($1, options: [.caseInsensitive, .numeric]) == .orderedAscending }
+}
+
+/// "Showing 1 of 12 apps" when one app is picked; nil for all apps
+func filterCaption(app: String?, appCount: Int) -> String? {
+    app == nil ? nil : "Showing 1 of \(appCount) \(appCount == 1 ? "app" : "apps")"
+}
+
+/// builds the hostname index once from every flow (a hint can come from another app's connection), then looks up
+/// each of the shown flows. `app` keeps only that app's flows (nil: all); it never changes stored data.
+/// `makeIndex` is a seam for tests
 func topFlows(
-    _ flows: [Flow], observations: [DomainObservation] = [], limit: Int = 10,
+    _ flows: [Flow], observations: [DomainObservation] = [], limit: Int = 10, app: String? = nil,
     classifier: CompanyClassifier = CompanyClassifier(),
     makeIndex: ([DomainObservation], [Flow]) -> HostnameIndex = { HostnameIndex($0, flows: $1) }
 ) -> [FlowLine] {
-    let index = makeIndex(observations, flows)
+    flowRows(flows, observations: observations, limit: limit, app: app, classifier: classifier, makeIndex: makeIndex).lines
+}
+
+private func lines(
+    _ flows: [(flow: Flow, app: String)], index: HostnameIndex, limit: Int, classifier: CompanyClassifier
+) -> [FlowLine] {
     // one label per distinct hostname for this refresh; dropped when the rows are built
     var cache = LabelCache(classifier: classifier)
-    return flows.sorted { $0.ipBytesIn + $0.ipBytesOut > $1.ipBytesIn + $1.ipBytesOut }
+    return flows.sorted { $0.flow.ipBytesIn + $0.flow.ipBytesOut > $1.flow.ipBytesIn + $1.flow.ipBytesOut }
         .prefix(limit)
-        .map { flow in
+        .map { tagged in
+            let flow = tagged.flow
             let category = Classifier.classify(flow).category
             var line = FlowLine(
                 id: flow.id,
@@ -258,6 +319,11 @@ func topFlows(
                 attribution: describeAttribution(Attributor.attribute(flow.tally)),
                 setAsideLabel: category.isPhoneTraffic ? nil : category.label)
             line.companyLabel = FlowLabels.label(for: flow, index: index, cache: &cache)
+            line.appName = tagged.app
+            line.packets = flow.packetsIn + flow.packetsOut
+            line.firstSeen = flow.firstSeen
+            line.lastSeen = flow.lastSeen
+            line.transport = flow.key.transport == .tcp ? "TCP" : "UDP"
             switch index.outcome(for: flow) {
             case .named(let resolved):
                 line.hostname = resolved.name
@@ -288,13 +354,17 @@ struct FlowRows {
 let liveRowLimit = 500
 
 func flowRows(
-    _ flows: [Flow], observations: [DomainObservation] = [], limit: Int = liveRowLimit,
+    _ flows: [Flow], observations: [DomainObservation] = [], limit: Int = liveRowLimit, app: String? = nil,
     classifier: CompanyClassifier = CompanyClassifier(),
     makeIndex: ([DomainObservation], [Flow]) -> HostnameIndex = { HostnameIndex($0, flows: $1) }
 ) -> FlowRows {
-    FlowRows(
-        lines: topFlows(flows, observations: observations, limit: limit, classifier: classifier, makeIndex: makeIndex),
-        moreFlows: max(0, flows.count - limit))
+    // the index is built from every flow (a hint can come from another app's connection); each flow's app is
+    // worked out once and used for the filter, the count and the row
+    let index = makeIndex(observations, flows)
+    let tagged = flows.map { (flow: $0, app: flowAppName($0)) }.filter { app == nil || $0.app == app }
+    return FlowRows(
+        lines: lines(tagged, index: index, limit: limit, classifier: classifier),
+        moreFlows: max(0, tagged.count - limit))
 }
 
 func formatBytes(_ count: Int) -> String {
