@@ -7,12 +7,14 @@ import Foundation
 import PCAPNG
 import Pipeline
 import Storage
+import Summary
 import SwiftUI
 
 // everything the views show. the app never runs as root: the privileged part is PrototypeCaptureLauncher.
 // the udid stays inside startCapture; views get the device name only.
 
 enum SidebarItem: String, CaseIterable, Identifiable {
+    case summary = "Summary"
     case connect = "Connect"
     case live = "Live"
     case sessions = "Sessions"
@@ -23,6 +25,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .summary: return "list.bullet.rectangle"
         case .connect: return "cable.connector"
         case .live: return "waveform"
         case .sessions: return "clock.arrow.circlepath"
@@ -95,6 +98,8 @@ final class AppModel: ObservableObject {
     @Published var moreFlows = 0
     @Published var sessions: [SessionRow] = []
     @Published var storeError: String?
+    @Published var summaryScreen: SummaryScreen?
+    @Published var summaryLoading = false
 
     @Published var retentionDays: Int {
         didSet {
@@ -356,6 +361,28 @@ final class AppModel: ObservableObject {
         currentSession = nil
         diagnosticActive = false
         refreshSessions()
+    }
+
+    // MARK: summary
+
+    func refreshSummary() {
+        if summaryLoading { return }
+        summaryLoading = true
+        let path = storePath
+        let days = retentionDays
+        let excluding = currentSession
+        let demo = ProcessInfo.processInfo.environment["TATTLE_DEMO_SUMMARY"] == "1"
+        Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try SummaryLoader.load(storePath: path, retentionDays: days, now: Date(), excluding: excluding, demo: demo) }
+            }.value
+            guard let self else { return }
+            switch result {
+            case .success(let screen): self.summaryScreen = screen
+            case .failure(let error): self.storeError = "The summary could not be built: \(error.localizedDescription)"
+            }
+            self.summaryLoading = false
+        }
     }
 
     // MARK: live refresh
