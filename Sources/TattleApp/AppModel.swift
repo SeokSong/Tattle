@@ -304,6 +304,9 @@ final class AppModel: ObservableObject {
         await runTask?.value
         await finish(reason: .captureStopped)
         captureState = .idle
+        // a capture the user stopped opens the Summary, which finish() has started to reload (owner, 2026-11-24).
+        // a capture that ended on its own stays on Live, so its message (why it stopped) is seen
+        selection = .summary
     }
 
     /// run returned: a stop in progress finishes it; otherwise the capture died on its own

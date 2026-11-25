@@ -129,6 +129,7 @@ Target `TattleApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `sw
 - Dates are shown in the user's time zone and locale ("Nov 18 – Nov 21"), not UTC
 - An import may run while a capture records (owner, 2026-11-24; was off during a capture): both write one database, the import in one short transaction, and a capture save waits up to 5 seconds for the write lock and retries instead of failing; `importAndCaptureSavesRunAtTheSameTime` proves both finish. Delete all data stays off during a capture and while an import runs, so an import never stores its result after a delete.
 - The Sessions screen's two panes are narrow enough (200 + 300 points minimum) to fit the 880-point window beside the sidebar; wider panes squeezed the sidebar and pushed its icons out of view (seen by the owner, 2026-11-24)
+- Pressing Stop opens the Summary when the capture has been saved (owner, 2026-11-24); a capture that ends on its own (cable, link lost) stays on Live so its message is seen
 - `TATTLE_START_SCREEN=<summary|connect|live|sessions|import|settings>` opens the app on that screen, for screenshots without clicking
 - The stored imports are listed on this screen and in Settings; each has a Delete button with a confirmation, which calls `deleteImport` and refreshes the list. Delete all and the retention setting also refresh it
 
