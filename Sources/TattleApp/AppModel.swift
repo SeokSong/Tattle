@@ -66,6 +66,15 @@ struct SessionRow: Identifiable, Equatable {
     var duration: TimeInterval? { endedAt.map { $0.timeIntervalSince(startedAt) } }
 }
 
+/// the Sessions list line: duration, packets, flows, and "ended unexpectedly" for a capture that did not end by
+/// Stop (cable pulled, link lost, or the app quit during it), so it is never mistaken for a complete one
+func sessionCaption(_ session: SessionRow) -> String {
+    let duration = session.duration.map(durationText) ?? "unfinished"
+    var text = "\(duration) · \(session.packets) packets · \(session.flows) flows"
+    if session.endReason == FlowEndReason.interrupted.rawValue { text += " · ended unexpectedly" }
+    return text
+}
+
 struct SessionDetail {
     var grouping: ProcessGrouping
     var flows: [FlowLine]

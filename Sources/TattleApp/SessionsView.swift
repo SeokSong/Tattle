@@ -71,8 +71,5 @@ struct SessionsView: View {
         }
     }
 
-    private func summary(_ session: SessionRow) -> String {
-        let duration = session.duration.map(durationText) ?? "unfinished"
-        return "\(duration) · \(session.packets) packets · \(session.flows) flows"
-    }
+    private func summary(_ session: SessionRow) -> String { sessionCaption(session) }
 }
