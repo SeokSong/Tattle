@@ -127,7 +127,9 @@ Target `TattleApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `sw
 - "Choose report file..." opens an `NSOpenPanel`; the app keeps no path. The import runs in a detached task with its own store connection, so the main thread is never held; the button is disabled and a progress line shows while it runs, and a second start is ignored
 - The result shows counts and dates only: records kept, apps and domains read, the period, lines that could not be read, records of other kinds skipped, and "Access records (camera, location and similar) were not kept". A duplicate, an empty file and an older overlapping report (with the newer report's end date) each get a plain sentence; a newer format version shows a warning. Failures are plain sentences with no path, app id or domain
 - Dates are shown in the user's time zone and locale ("Nov 18 – Nov 21"), not UTC
-- Choose report file is off while a capture is starting, running or saving, with the reason shown under it. Delete all data is off while an import runs, so an import never stores its result after a delete.
+- An import may run while a capture records (owner, 2026-11-24; was off during a capture): both write one database, the import in one short transaction, and a capture save waits up to 5 seconds for the write lock and retries instead of failing; `importAndCaptureSavesRunAtTheSameTime` proves both finish. Delete all data stays off during a capture and while an import runs, so an import never stores its result after a delete.
+- The Sessions screen's two panes are narrow enough (200 + 300 points minimum) to fit the 880-point window beside the sidebar; wider panes squeezed the sidebar and pushed its icons out of view (seen by the owner, 2026-11-24)
+- `TATTLE_START_SCREEN=<summary|connect|live|sessions|import|settings>` opens the app on that screen, for screenshots without clicking
 - The stored imports are listed on this screen and in Settings; each has a Delete button with a confirmation, which calls `deleteImport` and refreshes the list. Delete all and the retention setting also refresh it
 
 ### Tests (`TattleAppTests`, no UI)

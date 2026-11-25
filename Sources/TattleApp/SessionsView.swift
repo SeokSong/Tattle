@@ -22,7 +22,9 @@ struct SessionsView: View {
                     }
                 }
             }
-            .frame(minWidth: 250, idealWidth: 280, maxWidth: 360)
+            // with the sidebar (150 to 220) the two panes must fit the 880-point window, or the sidebar is squeezed and
+            // its icons are pushed out of view (seen by the owner on 2026-11-24)
+            .frame(minWidth: 200, idealWidth: 260, maxWidth: 340)
 
             Group {
                 if let detail {
@@ -54,7 +56,7 @@ struct SessionsView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(minWidth: 400)
+            .frame(minWidth: 300)
         }
         .onAppear { model.refreshSessions() }
         .onChange(of: selected) { id in detail = id.flatMap { model.detail(for: $0) } }

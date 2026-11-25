@@ -90,10 +90,10 @@ final class ImportModel: ObservableObject {
 
     var isRunning: Bool { state == .running }
 
-    /// why the Import action is off, or nil when it is on
-    var importUnavailableReason: String? {
-        captureBusy ? "Import is unavailable while a capture is running." : nil
-    }
+    /// why the Import action is off, or nil when it is on. an import may run while a capture records (owner,
+    /// 2026-11-24): both write one database, the import in one short transaction, and a capture save waits for the
+    /// write lock instead of failing (`importAndCaptureSavesRunAtTheSameTime`). Delete all stays off during a capture
+    var importUnavailableReason: String? { nil }
 
     /// why Delete all data is off, or nil when it is on. an import task that is in flight would store its
     /// result after the delete, so the two never overlap: this is the one place that enforces it

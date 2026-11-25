@@ -183,17 +183,15 @@ private final class Probe: @unchecked Sendable {
     #expect(cardOf(m.state)?.kind == .stored)
 }
 
-@MainActor @Test func importIsOffWhileACaptureIsBusy() async throws {
+@MainActor @Test func importRunsWhileACaptureIsBusy() async throws {
+    // owner, 2026-11-24: importing while a capture records is allowed; Delete all stays off during a capture
     let dir = tempDir()
     let m = model(dir)
     m.captureBusy = true
-    #expect(m.importUnavailableReason == "Import is unavailable while a capture is running.")
-    await m.runImport(file: try write(sample, in: dir))
-    #expect(m.state == .idle && m.items.isEmpty)
-    m.captureBusy = false
     #expect(m.importUnavailableReason == nil)
     await m.runImport(file: try write(sample, in: dir))
     #expect(m.items.count == 1)
+    #expect(m.deleteAllUnavailableReason(captureBusy: true) != nil)
 }
 
 @MainActor @Test func deleteAllWaitsForARunningImport() async throws {

@@ -157,6 +157,12 @@ final class AppModel: ObservableObject {
         }
         // demo mode (made-up data, for screenshots and the reader test) opens on the Summary screen
         if ProcessInfo.processInfo.environment["TATTLE_DEMO_SUMMARY"] == "1" { selection = .summary }
+        // TATTLE_START_SCREEN opens a screen by name (for screenshots without clicking): summary, connect, live,
+        // sessions, import, settings
+        if let name = ProcessInfo.processInfo.environment["TATTLE_START_SCREEN"]?.lowercased(),
+           let item = SidebarItem.allCases.first(where: { $0.rawValue.lowercased() == name || ($0 == .importReport && name == "import") }) {
+            selection = item
+        }
         DiagnosticFiles.purge(in: DiagnosticFiles.directory(under: storePath.deletingLastPathComponent()), now: Date())
         refreshSessions()
         importModel.refresh()
