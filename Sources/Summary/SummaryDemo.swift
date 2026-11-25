@@ -17,7 +17,8 @@ public enum SummaryDemo {
         // a made-up but realistic split of the traced data: the app's own company most, then the first other
         // company, then a little for the rest (so "Show data amounts" has something to show)
         let captured = specs.filter(\.captures)
-        let weights = captured.enumerated().map { i, spec in spec.own ? 20 : (i <= 1 ? 4 : 1) }
+        let firstOther = captured.firstIndex { !$0.own }
+        let weights = captured.indices.map { i in captured[i].own ? 20 : (i == firstOther ? 4 : 1) }
         let sum = max(1, weights.reduce(0, +))
         return CaptureAppSummary(
             key: key, name: name, company: company,

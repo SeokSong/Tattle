@@ -178,10 +178,10 @@ public enum SummaryScreenBuilder {
     }
 
     /// 5.2: a company's share of the app's whole captured traffic (the base of the "Captures: N% of traffic"
-    /// bullet), so the shares never add up to more than the traced part. one decimal, rounded down; a share above
-    /// 0 but under 1% says so. nil without captured bytes
-    public static func dataShare(bytes: Int, of total: Int) -> String? {
-        guard total > 0, bytes > 0 else { return nil }
+    /// bullet), so the shares never add up to more than the traced part. one decimal, rounded down; a share under 1%
+    /// says so, also at 0 bytes for a company seen in captures. nil only for a company not seen in captures
+    public static func dataShare(bytes: Int, of total: Int, inCaptures: Bool = true) -> String? {
+        guard inCaptures, total > 0 else { return nil }
         if bytes * 100 < total { return w.text("data.share.small") }
         return w.text("data.share", ["percent": SummaryText.percentText(bytes, of: total) ?? "0.0"])
     }
@@ -222,7 +222,7 @@ public enum SummaryScreenBuilder {
                 text: SummaryText.companyRow(parent: c.parent, categories: c.categories, isOwnCompany: c.relation == .sameCompanyAsApp),
                 brands: c.brands.compactMap { SummaryText.brandText(brand: $0, parent: c.parent) },
                 seenIn: SummaryText.seenIn(captures: c.inCaptures, report: c.inReport),
-                dataShare: dataShare(bytes: c.captureTraffic.bytes, of: total)))
+                dataShare: dataShare(bytes: c.captureTraffic.bytes, of: total, inCaptures: c.inCaptures)))
         }
         let description: String? =
             card.kind == .system ? SummaryText.systemDescription : card.kind == .appleApps ? SummaryText.appleAppsDescription : nil

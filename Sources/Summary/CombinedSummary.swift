@@ -142,7 +142,9 @@ public enum CombinedSummaryBuilder {
             a.categories.formUnion(c.categories)
             note(c.relation, &a)
             a.inCaptures = true
-            a.traffic = c.traffic
+            // added, not replaced: two capture parents that differ only in case are one company (review of PR #14)
+            a.traffic.connections += c.traffic.connections
+            a.traffic.bytes += c.traffic.bytes
             acc[c.parent.lowercased()] = a
         }
         for c in report?.companies ?? [] {
@@ -151,7 +153,8 @@ public enum CombinedSummaryBuilder {
             a.categories.formUnion(c.categories)
             note(c.relation, &a)
             a.inReport = true
-            a.count = c.count
+            a.count.domains += c.count.domains
+            a.count.contacts += c.count.contacts
             acc[c.parent.lowercased()] = a
         }
         let companies = acc.values.map { a in
