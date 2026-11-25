@@ -43,6 +43,13 @@ list.nothing = "No companies traced"
 empty.state = "Nothing to show yet. Capture your iPhone's traffic or import an App Privacy Report to see which companies your apps contacted."
 howto.heading = "How to read this"
 
+# ---------------------------------------------------------------- the rating on the closed row (owner, 2026-11-24)
+# a letter grade, always with the count; cut-offs in rating.toml
+rating.grade.none = "{grade} · no advertising or tracking found"
+rating.grade.one = "{grade} · 1 advertising or tracking company"
+rating.grade.other = "{grade} · {count} advertising or tracking companies"
+rating.notenough = "Not enough data to rate ({percent}% traced)"
+
 # ---------------------------------------------------------------- bullets (owner, 2026-11-24: bullets, not sentences;
 # a reader spends 10 to 20 seconds per app at most). these are labels, not sentences: no full stop
 overview.bullet.companies.none = "{companies}, no advertising or tracking found"

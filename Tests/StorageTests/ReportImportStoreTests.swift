@@ -1,4 +1,6 @@
+import Flows
 import Foundation
+import PacketDecoder
 import SQLite3
 import Testing
 
@@ -420,4 +422,37 @@ private final class StoreBox: @unchecked Sendable {
     #expect(try b.saveImport(r, contacts: contacts(r)) == .stored(replaced: 0))
     try #require(done.wait(timeout: .now() + 10) == .success)
     #expect(try a.store.imports().count == 1)
+}
+
+@Test func importAndCaptureSavesRunAtTheSameTime() async throws {
+    // the owner wants to import a report while a capture records (2026-11-24). both write to one database: the
+    // import is one transaction and a capture save waits for the write lock (5 s) instead of failing, so neither
+    // loses data. a separate connection for each, as the app has
+    let path = tempPath()
+    defer { cleanup(path) }
+    let session = CaptureSession(id: UUID(), startedAt: Date(), source: "rvi", watchVersion: "test")
+    try Store(path: path).beginSession(session)
+    let row = importRow(start: 25, end: 29)
+    let many = contacts(row, count: 20_000)
+    let sessionID = session.id
+    async let imported = Task.detached { try Store(path: path).saveImport(row, contacts: many) }.value
+    async let saved = Task.detached { () throws -> Int in
+        let store = try Store(path: path)
+        for i in 0..<50 {
+            let key = FlowKey(transport: .tcp, localAddress: .v4(0x0A00_0002), localPort: UInt16(2000 + i),
+                              remoteAddress: .v4(0xC000_0201), remotePort: 443)
+            var f = Flow(key: key, interface: "en0", at: Date())
+            f.ipBytesIn = 100
+            try store.save(flows: [f], domains: [], session: sessionID)
+        }
+        return 50
+    }.value
+    #expect(try await saved == 50)
+    guard case .stored = try await imported else {
+        Issue.record("the import was not stored")
+        return
+    }
+    let check = try Store(path: path)
+    #expect(try check.flows(session: sessionID).count == 50)
+    #expect(try check.contacts(importId: row.id).count == 20_000)
 }

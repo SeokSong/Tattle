@@ -35,9 +35,11 @@ private func everyString(_ screen: SummaryScreen) -> [String] {
 
 @Test func screenSubtitles() throws {
     let screen = SummaryDemo.screen(timeZone: utc)
-    #expect(try row(screen, "Pinwheel").subtitle == "4 companies · 2 advertising or tracking")
-    #expect(try row(screen, "Bobbin").subtitle == "1 company · no advertising or tracking found")
-    #expect(try row(screen, "com.example.lantern").subtitle == "3 destinations, none traced")
+    // rated apps show the grade with the count (owner, 2026-11-24); iOS system and Apple apps keep the counts
+    #expect(try row(screen, "Pinwheel").subtitle == "C · 2 advertising or tracking companies")
+    #expect(try row(screen, "Bobbin").subtitle == "A · no advertising or tracking found")
+    #expect(try row(screen, "com.example.lantern").subtitle == "Not enough data to rate (0.0% traced)")
+    #expect(try row(screen, "iOS system").subtitle == "2 companies · 1 advertising or tracking")
 }
 
 @Test func screenOpenedRowIsGroupedBullets() throws {

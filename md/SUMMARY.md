@@ -1,6 +1,6 @@
 # Summary
 
-**Status:** Problems 3.1 (captures), 3.2 (App Privacy Report), 3.3 (sentences, glossary, wording lint) and 3.4 (the Summary screen) done. The reader test (3.5) comes next.
+**Status:** Problems 3.1 (captures), 3.2 (App Privacy Report), 3.3 (sentences, glossary, wording lint), 3.4 (the Summary screen) and 4.2 (the rating) done. The reader test (3.5) is with the owner.
 
 ## Purpose
 
@@ -111,3 +111,13 @@ The format is a small subset of TOML (`key = "text"` lines and `#` comments), re
 - The screen (`Sources/TattleApp/SummaryView.swift`) is the first sidebar item. It loads everything within retention off the main thread (`SummaryLoader`), with one hostname index per capture so a name seen in one capture never names a flow of another; it reloads after a capture ends, an import changes, retention changes or Delete all, has Refresh and a "How to read this" sheet. Neutral colours, no rating (Part 4), no byte amounts (Part 5)
 - "Every named destination was traced to a company.": "named", because a row can be fully traced by name while part of its traffic had no name at all (owner, 2026-11-24, after seeing the screen)
 - Demo: `TATTLE_DEMO_SUMMARY=1` shows made-up apps and companies (`SummaryDemo`, all `.test` names) and opens on the Summary screen. `TATTLE_SUPPORT_BASE=<absolute folder>` points the app's whole data folder (database, run folders, diagnostics) elsewhere, so a launch for a check never touches the real data; it is accepted only for an existing folder this user owns that no one else can write to (the capture's run folders live there). `scripts/demo-screenshot.sh <out.png>` does both and saves a picture of the app window only
+
+## The rating (Problem 4.2; owner, 2026-11-24, revising OD4's word bands)
+
+- A letter grade, always with the count: "C · 3 advertising or tracking companies", "A · no advertising or tracking found". Never the letter alone, never "safe": it counts companies the app contacted and says nothing about what the app does with data
+- Counts every advertising or analytics company on the card, from captures and the App Privacy Report together (one grade per app), the app's own company included (owner, 2026-11-24, after the review of PR #11: the closed row must never say "none found" above an advertiser in the opened row; OD4 had left it out). Never counted: content delivery, cloud, online and Apple system companies, possible names, untraced destinations
+- Cut-offs in `Sources/Summary/Resources/rating.toml`, editable without code: A = 0, B = 1, C = 2-3, D = 4-5, F = 6 or more. A curve (top 10% A, bottom 50% F) was considered and not used: most apps have 0 such companies, so a curve would split identical apps into A and F, and grades would move when other apps change
+- Rated only when every source with data for the app is at least 70% traced (`threshold.percent`); otherwise "Not enough data to rate (65.0% traced)" with the lowest share. Only the grade is hidden; every company and count is still shown
+- iOS system and the merged Apple apps card get no grade (a grade judges one app); each Apple app inside does
+- Proof: `Tests/SummaryTests/RatingTests.swift` checks the 14 made-up test apps the owner approved before the code was written (OwnAds changed from A to B with the own-company decision)
+- The threshold lives only in `rating.toml`; the older rating sentences read it too. A broken file is reported on standard error and the built-in scale is used

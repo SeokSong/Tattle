@@ -28,9 +28,9 @@ public enum SummaryText {
 
     static func tenths(_ value: Int) -> String { "\(value / 10).\(value % 10)" }
 
-    /// the exact ratio decides, never the shown text: 69.98% is not rated
+    /// the exact ratio decides, never the shown text: 69.98% is not rated. the threshold comes from rating.toml
     public static func meetsRatingThreshold(_ numerator: Int, of denominator: Int) -> Bool {
-        denominator > 0 && min(numerator, denominator) * 100 >= ratingThreshold * denominator
+        RatingScale.bundled.meetsThreshold(CoverageRatio(numerator: numerator, denominator: denominator))
     }
 
     /// the year is shown when the two dates are in different years, or not in the current year (`now`)
@@ -187,7 +187,8 @@ public enum SummaryText {
 
     // MARK: rating lines (the band itself is Part 4)
 
-    public static let ratingThreshold = 70
+    /// from rating.toml (`threshold.percent`), the one place it is set
+    public static var ratingThreshold: Int { RatingScale.bundled.thresholdPercent }
 
     public static func captureRating(coverage: CoverageRatio) -> String? {
         guard let p = percentText(coverage.numerator, of: coverage.denominator) else { return nil }
@@ -269,6 +270,8 @@ public enum SummaryText {
             "detail.traced.captures": ["percent"], "detail.traced.captures.all": [],
             "detail.traced.report": ["identified", "total"], "detail.traced.report.single": ["identified"],
             "detail.traced.report.help": [], "detail.possible": ["names"],
+            "rating.grade.none": ["grade"], "rating.grade.one": ["grade"], "rating.grade.other": ["grade", "count"],
+            "rating.notenough": ["percent"],
         ]
         for reason in CaptureRestReason.allCases { s["coverage.reason.\(reason.rawValue)"] = ["percent"] }
         for category in CompanyCategory.allCases where category != .unclassified {

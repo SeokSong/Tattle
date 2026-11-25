@@ -2,16 +2,19 @@
 # launches the Mac app with the made-up demo summary and a throwaway data folder, and saves a picture of its
 # window only (never the whole screen, which can show private windows). the real data folder
 # (~/Library/Application Support/Tattle) is never opened: TATTLE_SUPPORT_BASE points the app elsewhere.
-# usage: scripts/demo-screenshot.sh <output.png> [seconds to wait before the picture, default 4]
+# usage: scripts/demo-screenshot.sh <output.png> [seconds to wait before the picture, default 4] [screen]
+#        screen: summary (default), connect, live, sessions, import, settings. never click at screen positions to
+#        reach a screen: a click can land in another app
 #        leaves the app running so it can be clicked; quit it with Cmd-Q or: pkill -f .build/debug/TattleApp
 set -eu
 out=${1:?usage: scripts/demo-screenshot.sh <output.png> [wait-seconds]}
 wait=${2:-4}
+screen=${3:-summary}
 case $wait in ''|*[!0-9]*) echo "wait-seconds must be a whole number" >&2; exit 2 ;; esac
 cd "$(dirname "$0")/.." || exit 1
 base=$(mktemp -d "${TMPDIR:-/tmp}/tattle-demo-base.XXXXXX")
 swift build --product TattleApp >/dev/null
-TATTLE_DEMO_SUMMARY=1 TATTLE_SUPPORT_BASE="$base" nohup .build/debug/TattleApp >"$base/app.log" 2>&1 &
+TATTLE_DEMO_SUMMARY=1 TATTLE_START_SCREEN="$screen" TATTLE_SUPPORT_BASE="$base" nohup .build/debug/TattleApp >"$base/app.log" 2>&1 &
 pid=$!
 perl -e 'select(undef, undef, undef, $ARGV[0])' "$wait"
 # the window of the process started above, matched by its pid, never by name: another TattleApp window may show
@@ -21,9 +24,14 @@ import CoreGraphics
 import Foundation
 let pid = Int(ProcessInfo.processInfo.environment["TATTLE_PID"] ?? "") ?? -1
 let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+// the largest window: the app also owns small menu bar windows
+var best: (id: Int, area: Double)?
 for w in list where (w[kCGWindowOwnerPID as String] as? Int) == pid && (w[kCGWindowLayer as String] as? Int) == 0 {
-    print(w[kCGWindowNumber as String] ?? "")
+    let b = w[kCGWindowBounds as String] as? [String: Double] ?? [:]
+    let area = (b["Width"] ?? 0) * (b["Height"] ?? 0)
+    if area > (best?.area ?? 0), let id = w[kCGWindowNumber as String] as? Int { best = (id, area) }
 }
+if let best { print(best.id) }
 SWIFT
 )
 id=$(printf '%s\n' "$id" | head -1)
