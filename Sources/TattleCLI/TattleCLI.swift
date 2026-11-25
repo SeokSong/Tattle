@@ -1479,7 +1479,7 @@ if arguments.count == 5 && arguments[1] == "flows" && arguments[3] == "--db" {
 
 /// `tattle globe-preview <out.png> [lat,lon] [zoom]`: draws the globe with made-up connections to real head
 /// offices from the bundled table, for choosing and checking the look without the app. no capture data is read.
-/// `tattle globe-preview <out.gif> [live|replay]`: the camera's motion as an animation (Part 3)
+/// `tattle globe-preview <out.gif> [live|replay]`: the camera's motion as an animation (Part 3), each live connection a spark
 /// the start point is the middle of the contiguous US, never a real person's place
 @MainActor
 func runGlobePreview(_ args: [String]) {
@@ -1572,6 +1572,9 @@ func writeGlobeAnimation(out: String, replay: Bool, traffic: [(String, Int)], ta
     var worldSince: Double?
     var next = 0
     var live = MapLines()
+    // when each line first appeared (it draws in over 0.4 s) and every connection's time, for the activity effect
+    var firstSeenAt: [String: Double] = [:]
+    var happened: [(id: String, time: Double)] = []
     for f in 0..<frames {
         let t = Double(f) / fps
         let shown: [MapLine], progress: [String: Double], target: GlobeCamera
@@ -1583,16 +1586,23 @@ func writeGlobeAnimation(out: String, replay: Bool, traffic: [(String, Int)], ta
             target = CameraDirector.target(start: start, lines: started, seconds: 0, spin: false)
         } else {
             while next < events.count, events[next].time <= t {
-                if let (p, city, country) = place(events[next].company) { live.add(company: events[next].company, place: p, city: city, country: country) }
+                if let (p, city, country) = place(events[next].company) {
+                    live.add(company: events[next].company, place: p, city: city, country: country)
+                    let id = MapLines.key(p)
+                    if firstSeenAt[id] == nil { firstSeenAt[id] = events[next].time }
+                    happened.append((id, events[next].time))
+                }
                 next += 1
             }
             shown = live.lines
-            progress = [:]
+            progress = firstSeenAt.mapValues { min(1, (t - $0) / 0.4) }
             if CameraDirector.isWorldView(shown), worldSince == nil { worldSince = t }
             target = CameraDirector.target(start: start, lines: shown, seconds: t - (worldSince ?? t))
         }
         camera = CameraDirector.step(from: camera, to: target, seconds: 1 / fps)
-        let view = GlobeView(centre: camera.centre, zoom: camera.zoom, lines: shown, start: start, progress: progress)
+        let recent = replay ? [] : happened.filter { t - $0.time < 1 }.map { LineActivity(lineID: $0.id, age: t - $0.time) }
+        let view = GlobeView(centre: camera.centre, zoom: camera.zoom, lines: shown, start: start, progress: progress,
+                             activity: recent)
             .frame(width: 720, height: 480)
         guard let image = ImageRenderer(content: view).cgImage else { continue }
         CGImageDestinationAddImage(dest, image, frameProps)

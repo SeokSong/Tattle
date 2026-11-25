@@ -53,7 +53,8 @@ public struct MapLines: Sendable, Equatable {
 
     public init() {}
 
-    static func key(_ p: GeoPoint) -> String {
+    /// the line id for a place: the same rounding `add` uses
+    public static func key(_ p: GeoPoint) -> String {
         String(format: "%.2f,%.2f", p.latitude, p.longitude)
     }
 

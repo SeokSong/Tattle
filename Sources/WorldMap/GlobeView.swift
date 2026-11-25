@@ -23,6 +23,23 @@ public struct GlobeStyle: Sendable {
         office: Color(red: 1.0, green: 0.78, blue: 0.45), start: Color(red: 0.40, green: 0.80, blue: 1.0))
 }
 
+
+/// one connection that just happened: on which line, and how long ago. it shows as a spark running along the line
+/// from the start to the head office (owner, 2026-11-25, chosen over a flash of the line and a ring at the office:
+/// a repeat to the same place only brightened the line a little, too slowly to see)
+public struct LineActivity: Sendable, Equatable {
+    public let lineID: String
+    public let age: Double
+
+    public init(lineID: String, age: Double) {
+        self.lineID = lineID
+        self.age = age
+    }
+
+    /// how long a spark takes from the start to the head office (owner, 2026-11-25)
+    public static let lifetime = 0.7
+}
+
 /// the globe with its lines. pure drawing: the camera (centre and zoom) and the lines come from outside, so the
 /// Live screen, the Summary and the Map screen all draw the same way
 public struct GlobeView: View {
@@ -36,9 +53,11 @@ public struct GlobeView: View {
     public var progress: [String: Double]
     public var style: GlobeStyle
     public var outline: WorldOutline
+    /// connections that just happened, drawn as sparks
+    public var activity: [LineActivity]
 
     public init(centre: GeoPoint, zoom: Double, lines: [MapLine], start: GeoPoint?, progress: [String: Double] = [:],
-                style: GlobeStyle = .night, outline: WorldOutline = .bundled) {
+                style: GlobeStyle = .night, outline: WorldOutline = .bundled, activity: [LineActivity] = []) {
         self.centre = centre
         self.zoom = zoom
         self.lines = lines
@@ -46,6 +65,7 @@ public struct GlobeView: View {
         self.progress = progress
         self.style = style
         self.outline = outline
+        self.activity = activity
     }
 
     /// how high a line rises at its middle, in globe radii: longer lines rise higher, like flight paths
@@ -108,6 +128,8 @@ public struct GlobeView: View {
 
             // lines: arcs that rise off the surface, with a soft glow under each; brighter and thicker with repeats
             var arcs: [(path: Path, line: MapLine)] = []
+            // the full arc of every line as screen points (nil behind the globe), for sparks travelling along it
+            var tracks: [String: [CGPoint?]] = [:]
             if let start {
                 for line in lines {
                     let shown = max(0, min(1, progress[line.id] ?? 1))
@@ -115,11 +137,15 @@ public struct GlobeView: View {
                     let ground = Geo.greatCircle(from: start, to: line.to, steps: 64)
                     let cut = Int((Double(ground.count - 1) * shown).rounded())
                     let peak = Self.arcHeight(start, line.to)
-                    var path = Path(), pen = false
-                    for (i, p) in ground[0...cut].enumerated() {
+                    let track: [CGPoint?] = ground.enumerated().map { i, p in
                         let f = Double(i) / Double(ground.count - 1)
-                        if let s = globe.project(p, height: peak * sin(.pi * f)) {
-                            pen ? path.addLine(to: CGPoint(x: s.x, y: s.y)) : path.move(to: CGPoint(x: s.x, y: s.y))
+                        return globe.project(p, height: peak * sin(.pi * f)).map { CGPoint(x: $0.x, y: $0.y) }
+                    }
+                    tracks[line.id] = track
+                    var path = Path(), pen = false
+                    for point in track[0...cut] {
+                        if let point {
+                            pen ? path.addLine(to: point) : path.move(to: point)
                             pen = true
                         } else { pen = false }
                     }
@@ -135,6 +161,31 @@ public struct GlobeView: View {
             }
             for arc in arcs {
                 ctx.stroke(arc.path, with: .color(style.line.opacity(arc.line.opacity)), style: StrokeStyle(lineWidth: arc.line.width, lineCap: .round))
+            }
+
+            // connections happening now
+            let life = LineActivity.lifetime
+            let live = activity.filter { $0.age >= 0 && $0.age < life }
+            ctx.drawLayer { glow in
+                glow.addFilter(.blur(radius: 3))
+                for a in live {
+                    guard let track = tracks[a.lineID] else { continue }
+                    let f = a.age / life
+                    // the spark and a short tail behind it
+                    let head = Int(Double(track.count - 1) * f), tail = max(0, head - track.count / 8)
+                    var path = Path(), pen = false
+                    for point in track[tail...head] {
+                        if let point { pen ? path.addLine(to: point) : path.move(to: point); pen = true } else { pen = false }
+                    }
+                    glow.stroke(path, with: .color(style.office.opacity(0.9)), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    if let p = track[head] {
+                        glow.fill(Path(ellipseIn: CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10)), with: .color(.white))
+                    }
+                }
+            }
+            for a in live {
+                guard let track = tracks[a.lineID], let p = track[Int(Double(track.count - 1) * a.age / life)] else { continue }
+                ctx.fill(Path(ellipseIn: CGRect(x: p.x - 2.5, y: p.y - 2.5, width: 5, height: 5)), with: .color(.white))
             }
 
             // head offices: a glowing dot, larger with more connections
