@@ -180,10 +180,12 @@ public enum CombinedSummaryBuilder {
 
     /// rule 1: one card per key over both lists
     private static func joined(_ captures: [CaptureAppSummary], _ reports: [ReportAppSummary]) -> [AppCard] {
+        // bundle ids compare ignoring case, as the app table and the report builder do (review of PR #10);
+        // the card shows the capture's spelling when there is one
         var byKey: [String: (CaptureAppSummary?, ReportAppSummary?)] = [:]
-        for c in captures { byKey[c.key] = (c, byKey[c.key]?.1) }
-        for r in reports { byKey[r.key] = (byKey[r.key]?.0, r) }
-        return byKey.map { card(key: $0.key, kind: .app, capture: $0.value.0, report: $0.value.1) }.sorted(by: before)
+        for c in captures { byKey[c.key.lowercased()] = (c, byKey[c.key.lowercased()]?.1) }
+        for r in reports { byKey[r.key.lowercased()] = (byKey[r.key.lowercased()]?.0, r) }
+        return byKey.values.map { card(key: $0.0?.key ?? $0.1?.key ?? "", kind: .app, capture: $0.0, report: $0.1) }.sorted(by: before)
     }
 
     public static func build(capture: CaptureSummary?, report: ReportSummary?) -> CombinedSummary {

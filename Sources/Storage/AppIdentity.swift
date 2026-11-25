@@ -11,9 +11,11 @@ public enum AppIdentity {
     /// somewhere else, so the app can be launched for a check or a screenshot without touching the real data
     public static let supportBaseVariable = "TATTLE_SUPPORT_BASE"
 
-    /// the user's Application Support directory, or `TATTLE_SUPPORT_BASE` when it holds an absolute path
+    /// the user's Application Support directory, or `TATTLE_SUPPORT_BASE` when it names an existing folder that
+    /// this user owns and no one else can write to. the capture's run folders live under it, so a shared folder
+    /// such as /tmp itself is refused and the real folder is used (review of PR #10)
     public static func defaultBase(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
-        if let override = environment[supportBaseVariable], override.hasPrefix("/") {
+        if let override = environment[supportBaseVariable], override.hasPrefix("/"), isPrivateFolder(override) {
             return URL(fileURLWithPath: override, isDirectory: true)
         }
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -31,6 +33,13 @@ public enum AppIdentity {
             try? FileManager.default.moveItem(at: old, to: new)
         }
         return new
+    }
+
+    /// a real directory (not a symlink) owned by this user, with no group or other write permission
+    static func isPrivateFolder(_ path: String) -> Bool {
+        var st = stat()
+        guard lstat(path, &st) == 0, (st.st_mode & S_IFMT) == S_IFDIR else { return false }
+        return st.st_uid == getuid() && (st.st_mode & (S_IWGRP | S_IWOTH)) == 0
     }
 
     // lstat, so a symlink (even a dangling one) counts as present and is never followed

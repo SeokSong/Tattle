@@ -77,6 +77,9 @@ final class ImportModel: ObservableObject {
     let timeZone: TimeZone
     let locale: Locale
 
+    /// called after an import or a deleted import changed the stored reports (the Summary reloads)
+    var storeChanged: (() -> Void)?
+
     init(storePath: URL, timeZone: TimeZone = .current, locale: Locale = .current, runner: Runner? = nil) {
         self.storePath = storePath
         self.timeZone = timeZone
@@ -130,6 +133,7 @@ final class ImportModel: ObservableObject {
         case .failure(let error): state = .failed(Self.sentence(for: error))
         }
         refresh()
+        storeChanged?()
     }
 
     /// resets a finished screen to the start
@@ -160,6 +164,7 @@ final class ImportModel: ObservableObject {
             return
         }
         refresh()
+        storeChanged?()
     }
 
     // MARK: text

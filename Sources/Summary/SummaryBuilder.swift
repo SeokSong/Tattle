@@ -42,11 +42,21 @@ public enum SummaryBuilder {
         flows: [Flow], index: HostnameIndex, classifier: CompanyClassifier = CompanyClassifier(),
         apps: AppTable = .bundled
     ) -> CaptureSummary {
+        build(sessions: [(flows: flows, index: index)], classifier: classifier, apps: apps)
+    }
+
+    /// several captures, each with the hostname index built from its own observations: a name seen in one
+    /// capture never names (or hints at) a flow of another capture (review of PR #10)
+    public static func build(
+        sessions: [(flows: [Flow], index: HostnameIndex)], classifier: CompanyClassifier = CompanyClassifier(),
+        apps: AppTable = .bundled
+    ) -> CaptureSummary {
         var cache = LabelCache(classifier: classifier)
         var entries: [String: Accumulator] = [:]
         var noProcess = TrafficCount()
         var excluded: [TrafficCategory: TrafficCount] = [.deviceLink: TrafficCount(), .localNetwork: TrafficCount()]
 
+        for (flows, index) in sessions {
         for flow in flows where flow.key.remotePort == port {
             let bytes = flow.ipBytesIn + flow.ipBytesOut
             let category = Classifier.classify(flow).category
@@ -119,6 +129,7 @@ public enum SummaryBuilder {
                 add(&entry.unseen[.echHidden, default: TrafficCount()], bytes)
             }
             entries[key] = entry
+        }
         }
 
         func finish(_ e: Accumulator, members: [CaptureAppSummary] = []) -> CaptureAppSummary {

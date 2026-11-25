@@ -16,13 +16,13 @@ private func captureSummary() throws -> CaptureSummary {
         classifier: CompanyClassifier(curated: curated, trackers: trackers), apps: try AppTable(parsing: SummaryCorpus.appsTSV))
 }
 
-private func reportSummary() throws -> ReportSummary {
+private func reportSummary(appId: (String) -> String = { $0 }) throws -> ReportSummary {
     let trackers = try TrackerList(parsing: ReportSummaryCorpus.trackerTSV,
         categories: try TrackerCategoryMap(parsing: ReportSummaryCorpus.trackerCategoriesTSV),
         aliases: try TrackerOwnerAliases(parsing: ReportSummaryCorpus.trackerAliasesTSV), version: "")
     let classifier = CompanyClassifier(curated: try CuratedList(parsing: ReportSummaryCorpus.curatedTSV, version: ""),
         appleOwners: try AppleOwnerTable(parsing: ReportSummaryCorpus.appleOwnersTSV), trackers: trackers)
-    let inputs = ReportSummaryCorpus.rows().map { ReportContactInput(appId: $0.appId, domain: $0.domain, domainOwner: $0.domainOwner,
+    let inputs = ReportSummaryCorpus.rows().map { ReportContactInput(appId: appId($0.appId), domain: $0.domain, domainOwner: $0.domainOwner,
         hits: $0.hits, firstSeen: $0.firstSeen, lastSeen: $0.lastSeen) }
     return ReportSummaryBuilder.build(contacts: inputs, classifier: classifier, apps: try AppTable(parsing: ReportSummaryCorpus.appsTSV))
 }
@@ -164,4 +164,41 @@ private func company(_ c: AppCard, _ parent: String) throws -> CombinedCompany {
         c.members.forEach(visit)
     }
     s.cards.forEach(visit)
+}
+
+@Test func combinedJoinsBundleIdsIgnoringCase() throws {
+    // review of PR #10: the report may spell a bundle id with other capitals than the app table
+    let report = try reportSummary { $0 == ReportSummaryCorpus.zappy ? "TEST.Zappy.APP" : $0 }
+    let c = CombinedSummaryBuilder.build(capture: try captureSummary(), report: report)
+    let zappy = c.cards.filter { $0.name == "Zappy" }
+    #expect(zappy.count == 1)
+    #expect(zappy.first?.key == ReportSummaryCorpus.zappy)
+    #expect(zappy.first?.capture != nil && zappy.first?.report != nil)
+    #expect(c.apps == 6)
+}
+
+@Test func combinedHintsNeverCrossCaptures() throws {
+    // review of PR #10: a name seen in one capture never names a flow of another capture. capture A has a flow
+    // to 192.0.2.250 named ads.test; capture B has an unnamed flow to the same address from the same app
+    let t0 = SummaryCorpus.t0
+    func flow(_ port: UInt16, name: String?) -> Flow {
+        let key = FlowKey(transport: .tcp, localAddress: .v4(0xCB00_7102), localPort: port,
+                          remoteAddress: .v4(0xC000_02FA), remotePort: 443)
+        var f = Flow(key: key, interface: "en0", at: t0)
+        f.serverName = name
+        f.ipBytesIn = 100
+        f.tally[ProcessPair("Quill", 201, nil, nil)] = 3
+        return f
+    }
+    let a = [flow(40001, name: "ads.test")], b = [flow(40002, name: nil)]
+    let classifier = CompanyClassifier(curated: try CuratedList(parsing: SummaryCorpus.curatedTSV), trackers: .empty)
+    let apps = try AppTable(parsing: SummaryCorpus.appsTSV)
+    let separate = SummaryBuilder.build(sessions: [(a, HostnameIndex([], flows: a)), (b, HostnameIndex([], flows: b))],
+                                        classifier: classifier, apps: apps)
+    let quill = try #require(separate.apps.first)
+    #expect(quill.hinted == TrafficCount())
+    #expect(quill.unseen[.noDNSMatch] == TrafficCount(connections: 1, bytes: 100))
+    // one shared index would have hinted it: the difference is the point of keeping them apart
+    let shared = SummaryBuilder.build(flows: a + b, index: HostnameIndex([], flows: a + b), classifier: classifier, apps: apps)
+    #expect(shared.apps.first?.hinted.connections == 1)
 }

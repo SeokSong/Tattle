@@ -139,6 +139,7 @@ final class AppModel: ObservableObject {
         importModel.retentionDays = retentionDays
         // views of this model (Settings) also show whether an import is running
         importChange = importModel.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        importModel.storeChanged = { [weak self] in self?.refreshSummary() }
         do {
             let opened = try Store(path: storePath)
             store = opened
@@ -151,7 +152,7 @@ final class AppModel: ObservableObject {
         Task { [weak self] in
             let result = await PrototypeCaptureLauncher.cleanStaleRunDirectories(runRoot: PrototypeCaptureLauncher.defaultRunRoot())
             if !result.failed.isEmpty {
-                self?.storeError = "\(result.failed.count) old capture folder(s) could not be removed. They hold no packets and are safe to delete from ~/Library/Application Support/\(AppIdentity.supportFolder)/run."
+                self?.storeError = "\(result.failed.count) old capture folder(s) could not be removed. They hold no packets and are safe to delete from \(PrototypeCaptureLauncher.defaultRunRoot().path)."
             }
         }
         // demo mode (made-up data, for screenshots and the reader test) opens on the Summary screen
@@ -363,12 +364,16 @@ final class AppModel: ObservableObject {
         currentSession = nil
         diagnosticActive = false
         refreshSessions()
+        refreshSummary()
     }
 
     // MARK: summary
 
+    /// a request while a load runs is kept and run when it ends, so the screen never stays on an older result
+    private var summaryReloadPending = false
+
     func refreshSummary() {
-        if summaryLoading { return }
+        if summaryLoading { summaryReloadPending = true; return }
         summaryLoading = true
         let path = storePath
         let days = retentionDays
@@ -384,6 +389,10 @@ final class AppModel: ObservableObject {
             case .failure(let error): self.storeError = "The summary could not be built: \(error.localizedDescription)"
             }
             self.summaryLoading = false
+            if self.summaryReloadPending {
+                self.summaryReloadPending = false
+                self.refreshSummary()
+            }
         }
     }
 
@@ -472,6 +481,7 @@ final class AppModel: ObservableObject {
         try? store?.expire(olderThan: TimeInterval(retentionDays) * 86400)
         refreshSessions()
         importModel.refresh()
+        refreshSummary()
     }
 
     /// why Delete all data is off, or nil
@@ -488,6 +498,7 @@ final class AppModel: ObservableObject {
         }
         refreshSessions()
         importModel.refresh()
+        refreshSummary()
     }
 
     // MARK: helpers
