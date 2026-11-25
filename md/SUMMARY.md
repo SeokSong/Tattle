@@ -124,8 +124,7 @@ The format is a small subset of TOML (`key = "text"` lines and `#` comments), re
 
 ## Tips (Problem 4.3, OD5)
 
-- Shown under "What you can do" in an opened app that contacted at least one advertising or tracking company (the companies the rating counts):
+- Shown once under "What you can do" at the top of the Summary, when at least one app contacted an advertising or tracking company (owner, 2026-11-24: the same two tips on every app added nothing):
   - "Limit background activity: Settings › General › Background App Refresh (may not stop every connection)"
   - "Check tracking permission: Settings › Privacy & Security › Tracking"
-- Apple's own apps get only the first (they never ask to track); iOS system and the merged Apple apps row get none
 - The owner checked both Settings paths on iOS 27 on 2026-11-24. The version and date are in `wording.toml` (`tips.checked.*`); `tipsSettingsPathsAreRecheckedEveryYear` fails 365 days later on purpose, so the paths are checked again on a current iOS

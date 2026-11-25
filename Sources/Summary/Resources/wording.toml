@@ -44,7 +44,7 @@ empty.state = "Nothing to show yet. Capture your iPhone's traffic or import an A
 howto.heading = "How to read this"
 
 # ---------------------------------------------------------------- tips (OD5; owner, 2026-11-24)
-# shown on an opened app that contacted at least one advertising or tracking company. both Settings paths were
+# shown once at the top of the Summary when at least one app contacted an advertising or tracking company. both Settings paths were
 # checked by the owner on iOS 27 on 2026-11-24; re-check them every year (a test fails after 365 days on purpose:
 # check both paths on a current iOS, then update tips.checked.ios and tips.checked.date)
 tips.heading = "What you can do"

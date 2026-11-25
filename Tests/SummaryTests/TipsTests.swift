@@ -2,29 +2,18 @@ import Foundation
 import Summary
 import Testing
 
-// OD5 tips (owner, 2026-11-24): shown only on an app that contacted at least one advertising or tracking company
+// OD5 tips (owner, 2026-11-24): shown once at the top when at least one app contacted an advertising or tracking company
 
-@Test func tipsShowOnlyWhereTheyApply() throws {
-    let screen = SummaryDemo.screen()
-    func row(_ title: String) throws -> SummaryRow { try #require(screen.rows.first { $0.title == title }) }
+@Test func tipsShowOnceAtTheTop() throws {
+    // owner, 2026-11-24: the same tips on every app added nothing, so they are shown once at the top
     let both = [
         "Limit background activity: Settings › General › Background App Refresh (may not stop every connection)",
         "Check tracking permission: Settings › Privacy & Security › Tracking",
     ]
-    #expect(try row("Pinwheel").tips == both)
-    #expect(try row("Quillnote").tips == both)
-    // no advertising or tracking company: no tips
-    #expect(try row("Bobbin").tips.isEmpty)
-    #expect(try row("com.example.lantern").tips.isEmpty)
-    // iOS system and the merged Apple apps row are not one app
-    #expect(try row("iOS system").tips.isEmpty)
-    let apple = try row("Apple apps")
-    #expect(apple.tips.isEmpty)
-    // Apple's own apps never ask to track: only the background tip
-    let safari = try #require(apple.children.first { $0.title == "Safari" })
-    #expect(safari.tips == [both[0]])
-    #expect(try #require(apple.children.first { $0.title == "Maps" }).tips.isEmpty)
+    #expect(SummaryDemo.screen().tips == both)
     #expect(SummaryScreen.tipsHeading == "What you can do")
+    // nothing to show, or no app with an advertising or tracking company: no tips
+    #expect(SummaryScreenBuilder.build(CombinedSummaryBuilder.build(capture: nil, report: nil)).tips.isEmpty)
 }
 
 @Test func tipsSettingsPathsAreRecheckedEveryYear() throws {
