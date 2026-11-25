@@ -58,13 +58,15 @@ public struct SummaryRow: Sendable, Equatable, Identifiable {
     public let traced: [TracedLine]
     /// "Possible, not counted: ..." or nil; its (i) text is `SummaryScreen.possibleExplanation`
     public let possible: String?
+    /// under "What you can do" (OD5): only for an app that contacted at least one advertising or tracking company
+    public let tips: [String]
     /// Apple apps only: one row per Apple app, ordered like the list
     public let children: [SummaryRow]
 
     public init(
         id: String, kind: CardKind, title: String, subtitle: String, rating: RatingResult? = nil, description: String?,
         trackingCompanies: [CompanyLine], otherCompanies: [CompanyLine], untraced: String, traced: [TracedLine],
-        possible: String?, children: [SummaryRow]
+        possible: String?, tips: [String] = [], children: [SummaryRow]
     ) {
         self.id = id
         self.kind = kind
@@ -77,6 +79,7 @@ public struct SummaryRow: Sendable, Equatable, Identifiable {
         self.untraced = untraced
         self.traced = traced
         self.possible = possible
+        self.tips = tips
         self.children = children
     }
 }
@@ -96,6 +99,7 @@ public struct SummaryScreen: Sendable, Equatable {
     public static var otherHeading: String { Wording.bundled.text("detail.heading.other") }
     public static var untracedHeading: String { Wording.bundled.text("detail.heading.untraced") }
     public static var tracedHeading: String { Wording.bundled.text("detail.heading.traced") }
+    public static var tipsHeading: String { Wording.bundled.text("tips.heading") }
 
     public init(overview: [String], rows: [SummaryRow], noProcess: String?) {
         self.overview = overview
@@ -156,6 +160,15 @@ public enum SummaryScreenBuilder {
         return w.text("list.nothing")
     }
 
+    /// OD5: the two tips for one app that contacted at least one advertising or tracking company. iOS system and
+    /// the merged Apple apps card get none (they are not one app); Apple's own apps never ask to track, so they
+    /// get only the background tip
+    static func tips(_ card: AppCard) -> [String] {
+        guard card.kind == .app, !Rating.countedCompanies(card.companies).isEmpty else { return [] }
+        let apple = card.key.lowercased().hasPrefix(ReportSummary.applePrefix)
+        return [w.text("tip.backgroundRefresh")] + (apple ? [] : [w.text("tip.tracking")])
+    }
+
     /// the "Not traced" bullet: the count, and the types the AdGuard list knows (never more than the count)
     static func untracedBullet(_ card: AppCard) -> String {
         let n = card.untracedDestinations
@@ -201,6 +214,7 @@ public enum SummaryScreenBuilder {
             trackingCompanies: lines.filter(\.0).map(\.1), otherCompanies: lines.filter { !$0.0 }.map(\.1),
             untraced: untracedBullet(card), traced: traced,
             possible: card.possibleCompanies.isEmpty ? nil : w.text("detail.possible", ["names": card.possibleCompanies.joined(separator: ", ")]),
+            tips: tips(card),
             children: ordered(card.members).map { row($0) })
     }
 }

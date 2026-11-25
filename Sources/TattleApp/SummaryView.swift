@@ -102,6 +102,9 @@ struct SummaryRowView: View {
                         ForEach(row.traced) { InfoBullet(text: $0.text, detail: $0.detail) }
                     }
                 }
+                if !row.tips.isEmpty {
+                    group(SummaryScreen.tipsHeading) { ForEach(row.tips, id: \.self) { Bullet(text: $0) } }
+                }
                 if let possible = row.possible {
                     InfoBullet(text: possible, detail: SummaryScreen.possibleExplanation)
                         .font(.callout).foregroundStyle(.secondary)

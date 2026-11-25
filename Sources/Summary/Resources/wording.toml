@@ -43,6 +43,15 @@ list.nothing = "No companies traced"
 empty.state = "Nothing to show yet. Capture your iPhone's traffic or import an App Privacy Report to see which companies your apps contacted."
 howto.heading = "How to read this"
 
+# ---------------------------------------------------------------- tips (OD5; owner, 2026-11-25)
+# shown on an opened app that contacted at least one advertising or tracking company. both Settings paths were
+# checked by the owner on iOS 27.2.1 on 2026-11-25; re-check them every year (a test reminds after 365 days)
+tips.heading = "What you can do"
+tip.backgroundRefresh = "Limit background activity: Settings › General › Background App Refresh (may not stop every connection)"
+tip.tracking = "Check tracking permission: Settings › Privacy & Security › Tracking"
+tips.checked.ios = "27.2.1"
+tips.checked.date = "2026-11-25"
+
 # ---------------------------------------------------------------- the rating on the closed row (owner, 2026-11-24)
 # a letter grade, always with the count; cut-offs in rating.toml
 rating.grade.none = "{grade} · no advertising or tracking found"
