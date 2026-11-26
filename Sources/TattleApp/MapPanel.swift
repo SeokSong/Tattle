@@ -33,6 +33,7 @@ struct MapPanel: View {
     /// the Map screen: where the user turned the globe to, and the zoom
     @State private var dragFrom: GlobeCamera?
     @State private var hover: CGPoint?
+    @State private var showNotes = false
     /// the last drag, pinch or zoom button on a live map. no scroll-to-zoom: an app-wide scroll monitor took the
     /// tables' scrolling under a live map for zooming and kept the camera from following (owner's test 2026-11-25)
     @State private var lastInput: Date?
@@ -69,15 +70,29 @@ struct MapPanel: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 10))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(MapText.notServers)
-                if start.isDefault { Text(MapText.defaultStart) }
-                if let notDrawnText { Text(notDrawnText) }
-                if let controlsText { Text(controlsText) }
+            // the notes behind an (i) on the map (owner, 2026-11-25: the text under the map took too much room)
+            .overlay(alignment: .topTrailing) {
+                Button { showNotes.toggle() } label: { Image(systemName: "info.circle").font(.title3) }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.white.opacity(0.85))
+                    .padding(10)
+                    .help("About this map")
+                    .popover(isPresented: $showNotes, arrowEdge: .bottom) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(notes, id: \.self) { Text($0).fixedSize(horizontal: false, vertical: true) }
+                        }
+                        .font(.callout)
+                        .padding(14)
+                        .frame(width: 340, alignment: .leading)
+                    }
             }
-            .font(.caption).foregroundStyle(.secondary)
         }
         .onChange(of: lines.lines.count) { _ in if mode == .replay { replayStarted = Date() } }
+    }
+
+    /// what the (i) on the map says
+    private var notes: [String] {
+        [MapText.notServers, start.isDefault ? MapText.defaultStart : nil, notDrawnText, controlsText].compactMap { $0 }
     }
 
     /// the camera and the line state for one frame

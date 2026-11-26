@@ -36,24 +36,23 @@ struct LiveView: View {
 
     @ViewBuilder
     private var content: some View {
-        if model.showMap {
-            // the map stays at the top, about 80% of the height; the tables scroll under it (owner, 2026-11-25)
-            GeometryReader { geo in
-                VStack(spacing: 0) {
-                    LiveMap(feed: model.mapFeed, start: model.mapStart)
-                        .padding([.horizontal, .top], 16)
-                        .frame(height: geo.size.height * 0.8)
-                    Divider()
+        // the map is the top 80% of the screen at first and scrolls away with the page (owner, 2026-11-25; it was
+        // fixed before, which left the tables only a fifth of the screen)
+        GeometryReader { geo in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if model.showMap {
+                        LiveMap(feed: model.mapFeed, start: model.mapStart)
+                            .padding([.horizontal, .top], 16)
+                            .frame(height: geo.size.height * 0.8)
+                    }
                     tables
                 }
             }
-        } else {
-            tables
         }
     }
 
     private var tables: some View {
-        ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Live · this session").font(.headline).foregroundStyle(.secondary)
                 if model.liveStats.retainedDropped > 0 {
@@ -86,7 +85,6 @@ struct LiveView: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
     }
 }
 
