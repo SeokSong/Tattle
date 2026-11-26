@@ -154,6 +154,10 @@ public actor CapturePipeline {
     /// final state of every flow seen, only when retainFlows is set. call after stop
     public func flowsSnapshot() -> [Flow] { Array(retained.values) }
 
+    /// connections new or changed since the last flush, only when retainFlows is set; nothing is drained or saved.
+    /// the live map reads it between flushes so a new connection shows in under a second, not after the next flush
+    public func unflushedFlowsSnapshot() -> [Flow] { retainFlows ? flowTable.peekDirty() : [] }
+
     /// every domain observation flushed so far, only when retainDomains is set. call after stop
     public func domainsSnapshot() -> [DomainObservation] { retainedDomains }
 

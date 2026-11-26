@@ -19,8 +19,10 @@ public struct GlobeCamera: Sendable, Equatable {
 public enum CameraDirector {
     /// the whole globe in view, a little smaller than the view so the glow and rising lines fit
     public static let worldZoom = 0.42
-    /// the closest the camera goes: about 1,300 km across the middle of the view
-    public static let closestZoom = 2.5
+    /// the closest the camera goes: about 4,500 km across the middle of the view, the width of the contiguous US, so
+    /// the first lines from the start are on screen at once (owner, 2026-11-25: it started at 1,300 km and the first
+    /// line often landed outside the view)
+    public static let closestZoom = 1.4
     /// at most this many degrees south of the middle the camera looks from, so lines that rise off the globe show their curve
     public static let tilt = 12.0
 

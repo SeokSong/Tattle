@@ -12,7 +12,7 @@ private func lines(_ places: [(String, Double, Double, String)]) -> MapLines {
     return map
 }
 
-@Test func cameraStartsCloseOnTheUser() {
+@Test func cameraStartsOnTheUserWithTheUSInView() {
     let camera = CameraDirector.target(start: start, lines: [])
     #expect(camera.zoom == CameraDirector.closestZoom)
     // looked at from a little south, the start still in the middle's longitude and still in view up close
@@ -23,13 +23,14 @@ private func lines(_ places: [(String, Double, Double, String)]) -> MapLines {
 
 @Test func cameraZoomsOutToFitNorthAmericanLines() throws {
     let near = CameraDirector.target(start: start, lines: lines([("Adlantic", 39.1, -94.6, "United States")]).lines)
+    // Anchorage is farther than the starting view shows, so the camera zooms out to fit it
     let wider = CameraDirector.target(start: start, lines: lines([("Adlantic", 39.1, -94.6, "United States"),
-                                                                  ("Trackwise", 37.4, -122.1, "United States")]).lines)
+                                                                  ("Trackwise", 61.2, -149.9, "United States")]).lines)
     #expect(near.zoom > wider.zoom)
     // still the North America view: not the whole globe
     #expect(wider.zoom > CameraDirector.worldZoom)
     // every point is inside the view at that zoom: its angle from the centre fits in the view's half-width
-    for p in [start, GeoPoint(latitude: 37.4, longitude: -122.1)] {
+    for p in [start, GeoPoint(latitude: 61.2, longitude: -149.9)] {
         #expect(sin(Geo.angle(wider.centre, p)) * wider.zoom < 0.5)
     }
     // Canada and Mexico keep the North America view
@@ -113,4 +114,12 @@ private func lines(_ places: [(String, Double, Double, String)]) -> MapLines {
     #expect(Geo.angle(toLondon.centre, london) < .pi / 2 && Geo.angle(toLondon.centre, start) < .pi / 2)
     // nothing recent: nothing to follow
     #expect(CameraDirector.follow(start: start, recent: []) == nil)
+}
+
+@Test func theStartingViewShowsTheContiguousUS() {
+    // from the middle of the US, both coasts are in the starting view, so the first lines are on screen at once
+    let camera = CameraDirector.target(start: start, lines: [])
+    for coast in [GeoPoint(latitude: 37.8, longitude: -122.4), GeoPoint(latitude: 40.7, longitude: -74.0)] {
+        #expect(sin(Geo.angle(camera.centre, coast)) * camera.zoom < 0.5)
+    }
 }

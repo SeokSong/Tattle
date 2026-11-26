@@ -413,6 +413,8 @@ final class AppModel: ObservableObject {
     private func finish(reason: FlowEndReason) async {
         refreshTask?.cancel()
         refreshTask = nil
+        mapTask?.cancel()
+        mapTask = nil
         watchdogTask?.cancel()
         watchdogTask = nil
         if let pipeline {
@@ -483,7 +485,27 @@ final class AppModel: ObservableObject {
 
     // MARK: live refresh
 
+    /// the live map's own quick look, between the 2-second refreshes: connections not yet saved, every half second.
+    /// it reads only; what is saved, and when, does not change (owner, 2026-11-25: the first ping took 10 to 20 s)
+    private var mapTask: Task<Void, Never>?
+
+    private func startMapPeeking() {
+        mapTask?.cancel()
+        mapTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                guard !Task.isCancelled, let self, let pipeline = self.pipeline else { return }
+                guard self.showMap else { continue }
+                let fresh = await pipeline.unflushedFlowsSnapshot()
+                let dns = await pipeline.dnsSnapshot()
+                if Task.isCancelled { return }
+                self.mapFeed.ingest(flows: fresh, dns: dns, now: Date(), spread: 0.5)
+            }
+        }
+    }
+
     private func startRefreshing() {
+        startMapPeeking()
         refreshTask?.cancel()
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {

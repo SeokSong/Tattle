@@ -449,3 +449,19 @@ private func firstFlow(_ spec: Spec) async throws -> Flow {
     #expect(flow.tally.values.reduce(0, +) == 70)
     #expect(table.tallyRowsFolded == 6)
 }
+
+// Milestone 4: the live map peeks at unsaved flows between saves; a peek must change nothing the save sees
+@Test func peekDirtyShowsWhatADrainWouldWithoutDraining() async throws {
+    let p = try await decode([Spec(), Spec(dir: .inbound, at: 1, flags: 4)])
+    var table = FlowTable()
+    _ = table.add(p[0])
+    let peeked = table.peekDirty()
+    #expect(peeked.count == 1)
+    // peeking twice gives the same; the drain still returns it
+    #expect(table.peekDirty().map(\.id) == peeked.map(\.id))
+    #expect(table.drainDirty().map(\.id) == peeked.map(\.id))
+    #expect(table.peekDirty().isEmpty)
+    // a flow closed since the last drain is in the peek too
+    _ = table.add(p[1])
+    #expect(table.peekDirty().count == 1 && table.peekDirty()[0].endReason == .rst)
+}

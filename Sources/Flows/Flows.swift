@@ -303,6 +303,13 @@ public struct FlowTable: Sendable {
     }
 
     /// every flow changed since the last drain, open or closed. a closed flow appears in exactly one drain
+    /// the flows `drainDirty` would return, without draining them: closed flows waiting to be saved, and open flows
+    /// changed since the last drain. read-only, so the live map can look between saves (Milestone 4) without changing
+    /// what or when the pipeline saves
+    public func peekDirty() -> [Flow] {
+        closedPending + dirty.compactMap { entries[$0]?.flow }
+    }
+
     public mutating func drainDirty() -> [Flow] {
         var out = closedPending
         closedPending.removeAll()
