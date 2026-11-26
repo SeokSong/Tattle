@@ -1,7 +1,7 @@
 import Foundation
 
 /// the globe as seen from space: an orthographic projection. one projection for every view, so "start at the user,
-/// zoom out, spin" is one smooth change of `centre` and `radius`, never a switch between maps (Milestone 4 plan)
+/// zoom out, follow" is one smooth change of `centre` and `radius`, never a switch between maps (Milestone 4 plan)
 public struct Orthographic: Sendable, Equatable {
     /// the point in the middle of the view
     public var centre: GeoPoint

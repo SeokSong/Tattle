@@ -9,7 +9,7 @@ struct LiveMap: View {
 
     var body: some View {
         MapPanel(mode: mode, lines: feed.live, start: start, firstSeen: feed.firstSeen, events: feed.events,
-                 notDrawnText: MapText.notDrawn(feed.live.notDrawn))
+                 notDrawnText: MapText.notDrawn(feed.live.notDrawn), controlsText: mode == .live ? MapText.liveControls : nil)
     }
 }
 

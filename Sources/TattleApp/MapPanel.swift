@@ -4,7 +4,8 @@ import WorldMap
 /// the company map as placed in the app (Milestone 4, Part 4): on top of Live and the Summary, and on the Map screen
 struct MapPanel: View {
     enum Mode: Equatable {
-        /// follows a capture: the camera rules and a spark for every connection
+        /// follows a capture: the camera rules and a spark for every connection. the user can also turn and zoom it; the
+        /// camera then leaves the view alone until `userHold` seconds after the last input (owner, 2026-11-25)
         case live
         /// the Summary: one near-to-far replay, then still
         case replay
@@ -19,15 +20,26 @@ struct MapPanel: View {
     var events: [(id: String, time: Date)] = []
     /// connections (live) or companies (Summary) that cannot be drawn
     var notDrawnText: String?
+    /// how to turn and zoom, under a live map
+    var controlsText: String?
     /// what a line's count counts: connections (live) or apps (the Summary)
     var unit = (one: "connection", many: "connections")
 
     @State private var camera: GlobeCamera?
+    /// the live world view's last aim: held when nothing happens, so a quiet moment never freezes a move half done
+    @State private var aim: GlobeCamera?
     @State private var lastFrame: Date?
     @State private var replayStarted = Date()
     /// the Map screen: where the user turned the globe to, and the zoom
     @State private var dragFrom: GlobeCamera?
     @State private var hover: CGPoint?
+    /// the last drag, pinch or zoom button on a live map. no scroll-to-zoom: an app-wide scroll monitor took the
+    /// tables' scrolling under a live map for zooming and kept the camera from following (owner's test 2026-11-25)
+    @State private var lastInput: Date?
+    /// how long a live map stays where the user put it before it follows connections again (owner, 2026-11-25)
+    static let userHold: TimeInterval = 10
+    /// the user can turn and zoom every map but the Summary's replay
+    private var takesInput: Bool { mode != .replay }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -40,14 +52,14 @@ struct MapPanel: View {
                         .overlay(alignment: .topLeading) { hoverLabel(size: geo.size, camera: shown.camera) }
                 }
                 .contentShape(Rectangle())
-                .gesture(mode == .interactive ? drag(size: geo.size) : nil)
-                .gesture(mode == .interactive ? pinch : nil)
+                .gesture(takesInput ? drag(size: geo.size) : nil)
+                .gesture(takesInput ? pinch : nil)
                 .onContinuousHover { phase in
-                    guard mode == .interactive else { return }
+                    guard takesInput else { return }
                     if case .active(let p) = phase { hover = p } else { hover = nil }
                 }
                 .overlay(alignment: .bottomTrailing) {
-                    if mode == .interactive { zoomButtons.padding(10) }
+                    if takesInput { zoomButtons.padding(10) }
                 }
                 .overlay(alignment: .bottomLeading) {
                     if start.isDefault {
@@ -61,6 +73,7 @@ struct MapPanel: View {
                 Text(MapText.notServers)
                 if start.isDefault { Text(MapText.defaultStart) }
                 if let notDrawnText { Text(notDrawnText) }
+                if let controlsText { Text(controlsText) }
             }
             .font(.caption).foregroundStyle(.secondary)
         }
@@ -71,53 +84,62 @@ struct MapPanel: View {
     private func frame(now: Date) -> (camera: GlobeCamera, progress: [String: Double], activity: [LineActivity]) {
         let dt = lastFrame.map { min(0.1, now.timeIntervalSince($0)) } ?? 0
         var progress: [String: Double] = [:], activity: [LineActivity] = [], target: GlobeCamera
-        // the quiet spin is already a smooth motion: applied as it is, not eased (easing would almost stop it)
+        // the user's own view is applied as it is, never eased
         var direct = mode == .interactive
+        var newAim = aim
         switch mode {
+        case .live where lastInput.map { now.timeIntervalSince($0) < Self.userHold } ?? false:
+            // the user is looking around: the view stays where they put it; lines and sparks go on
+            progress = firstSeen.mapValues { min(1, max(0, now.timeIntervalSince($0) / 0.4)) }
+            activity = events.map { LineActivity(lineID: $0.id, age: now.timeIntervalSince($0.time)) }
+            target = camera ?? CameraDirector.target(start: start.point, lines: lines.lines)
+            direct = true
+            newAim = target
         case .live:
             progress = firstSeen.mapValues { min(1, max(0, now.timeIntervalSince($0) / 0.4)) }
             activity = events.map { LineActivity(lineID: $0.id, age: now.timeIntervalSince($0.time)) }
             let drawn = lines.lines.filter { (progress[$0.id] ?? 1) > 0 }
             if CameraDirector.isWorldView(drawn) {
-                // the world view follows the latest connections; when it is quiet, it spins slowly from where it is
+                // the world view follows the latest connections; when it is quiet it holds still (owner, 2026-11-25)
                 let byID = Dictionary(uniqueKeysWithValues: lines.lines.map { ($0.id, $0.to) })
                 let recentIDs = Set(events.filter { let age = now.timeIntervalSince($0.time); return age >= 0 && age < CameraDirector.followSeconds }.map(\.id))
-                let lastPing = events.map(\.time).filter { $0 <= now }.max()
                 if let follow = CameraDirector.follow(start: start.point, recent: recentIDs.compactMap { byID[$0] }) {
                     target = follow
-                } else if let lastPing, now.timeIntervalSince(lastPing) < CameraDirector.quietSeconds, let camera {
-                    target = camera
                 } else {
-                    target = CameraDirector.drift(camera ?? CameraDirector.target(start: start.point, lines: drawn, spin: false), seconds: dt)
-                    direct = true
+                    target = aim ?? CameraDirector.target(start: start.point, lines: drawn)
                 }
+                newAim = target
             } else {
                 target = CameraDirector.target(start: start.point, lines: drawn)
+                newAim = nil
             }
         case .replay:
             let replay = Replay(lines: lines, start: start.point)
             let t = now.timeIntervalSince(replayStarted)
             progress = replay.progress(at: t)
-            target = CameraDirector.target(start: start.point, lines: replay.started(at: t), spin: false)
+            target = CameraDirector.target(start: start.point, lines: replay.started(at: t))
         case .interactive:
-            target = camera ?? CameraDirector.target(start: start.point, lines: lines.lines, spin: false)
+            target = camera ?? CameraDirector.target(start: start.point, lines: lines.lines)
         }
         let current = camera ?? target
         let next = direct ? target : CameraDirector.step(from: current, to: target, seconds: dt)
         DispatchQueue.main.async {
-            camera = next
+            // a drag or pinch in progress owns the camera; a frame drawn just before it must not undo it
+            if dragFrom == nil { camera = next }
+            if aim != newAim { aim = newAim }
             lastFrame = now
         }
         return (next, progress, activity)
     }
 
-    // MARK: the Map screen's controls
+    // MARK: turning and zooming (the Map screen, and a live map)
 
     private func drag(size: CGSize) -> some Gesture {
         DragGesture()
             .onChanged { value in
-                let base = dragFrom ?? camera ?? CameraDirector.target(start: start.point, lines: lines.lines, spin: false)
+                let base = dragFrom ?? camera ?? CameraDirector.target(start: start.point, lines: lines.lines)
                 if dragFrom == nil { dragFrom = base }
+                lastInput = Date()
                 // one view-width of drag turns the globe by the angle the view spans
                 let radius = min(size.width, size.height) * base.zoom
                 let dLon = -value.translation.width / radius * 180 / .pi
@@ -131,8 +153,9 @@ struct MapPanel: View {
     private var pinch: some Gesture {
         MagnificationGesture()
             .onChanged { scale in
-                let base = dragFrom ?? camera ?? CameraDirector.target(start: start.point, lines: lines.lines, spin: false)
+                let base = dragFrom ?? camera ?? CameraDirector.target(start: start.point, lines: lines.lines)
                 if dragFrom == nil { dragFrom = base }
+                lastInput = Date()
                 camera = GlobeCamera(centre: base.centre, zoom: clampZoom(base.zoom * scale))
             }
             .onEnded { _ in dragFrom = nil }
@@ -142,13 +165,19 @@ struct MapPanel: View {
         HStack(spacing: 6) {
             Button { zoom(by: 1 / 1.4) } label: { Image(systemName: "minus.magnifyingglass") }
             Button { zoom(by: 1.4) } label: { Image(systemName: "plus.magnifyingglass") }
-            Button { camera = nil } label: { Image(systemName: "location") }.help("Back to the start")
+            Button {
+                // back to the start (Map screen), or back to following connections now (Live)
+                camera = mode == .live ? camera : nil
+                lastInput = nil
+            } label: { Label(mode == .live ? "Follow" : "Reset", systemImage: mode == .live ? "scope" : "arrow.counterclockwise") }
+                .help(mode == .live ? "Follow new connections again now" : "Back to the starting view")
         }
         .buttonStyle(.bordered)
     }
 
     private func zoom(by factor: Double) {
-        let base = camera ?? CameraDirector.target(start: start.point, lines: lines.lines, spin: false)
+        let base = camera ?? CameraDirector.target(start: start.point, lines: lines.lines)
+        lastInput = Date()
         camera = GlobeCamera(centre: base.centre, zoom: clampZoom(base.zoom * factor))
     }
 
@@ -164,7 +193,7 @@ struct MapPanel: View {
     /// on the Map screen: the city and companies of the head office under the pointer
     @ViewBuilder
     private func hoverLabel(size: CGSize, camera: GlobeCamera) -> some View {
-        if mode == .interactive, let hover {
+        if takesInput, let hover {
             let globe = Orthographic(centre: camera.centre, radius: min(size.width, size.height) * camera.zoom,
                                      originX: size.width / 2, originY: size.height / 2)
             let near = lines.lines.compactMap { line -> (MapLine, Double, CGPoint)? in

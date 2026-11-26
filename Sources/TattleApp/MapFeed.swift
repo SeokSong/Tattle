@@ -19,6 +19,7 @@ struct MapStart: Equatable {
 /// the words under every map
 enum MapText {
     static let notServers = "Lines go to company head offices, not to the servers the data went to."
+    static let liveControls = "Drag to turn the globe, pinch or use the buttons to zoom. It follows new connections again 10 seconds after you stop, or at once with Follow."
     static let defaultStart = "Default location: Colorado Springs. Allow location in System Settings to start from your place."
 
     static func notDrawn(_ n: Int) -> String? {

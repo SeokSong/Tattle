@@ -37,18 +37,13 @@ private func lines(_ places: [(String, Double, Double, String)]) -> MapLines {
     #expect(!CameraDirector.isWorldView(continent))
 }
 
-@Test func aHeadOfficeOutsideNorthAmericaShowsTheWholeGlobeAndSpins() {
+@Test func aHeadOfficeOutsideNorthAmericaShowsTheWholeGlobe() {
     let map = lines([("Adlantic", 37.4, -122.1, "United States"), ("Pixelbeam", 51.5, -0.1, "United Kingdom")])
     #expect(CameraDirector.isWorldView(map.lines))
-    let now = CameraDirector.target(start: start, lines: map.lines, seconds: 0)
-    let later = CameraDirector.target(start: start, lines: map.lines, seconds: 10)
-    #expect(now.zoom == CameraDirector.worldZoom)
-    // ten seconds turn the globe 30 degrees east
-    var turned = later.centre.longitude - now.centre.longitude
-    if turned < -180 { turned += 360 }
-    #expect(abs(turned - 10 * CameraDirector.spinPerSecond) < 1e-9)
-    // held still once the Summary's replay has ended
-    #expect(CameraDirector.target(start: start, lines: map.lines, seconds: 10, spin: false) == now)
+    let camera = CameraDirector.target(start: start, lines: map.lines)
+    #expect(camera.zoom == CameraDirector.worldZoom)
+    // the same lines give the same view: nothing turns on its own
+    #expect(CameraDirector.target(start: start, lines: map.lines) == camera)
 }
 
 @Test func countryDecidesAndTheBoxIsOnlyTheFallback() {
@@ -94,7 +89,7 @@ private func lines(_ places: [(String, Double, Double, String)]) -> MapLines {
     // four in Europe, one in the US: the world view faces Europe's side, so most lines are on the near side
     let map = lines([("A", 51.5, -0.1, "United Kingdom"), ("B", 48.9, 2.35, "France"), ("C", 52.5, 13.4, "Germany"),
                      ("D", 59.3, 18.1, "Sweden"), ("E", 37.4, -122.1, "United States")])
-    let camera = CameraDirector.target(start: start, lines: map.lines, spin: false)
+    let camera = CameraDirector.target(start: start, lines: map.lines)
     let eye = camera.centre
     let near = map.lines.filter { Geo.angle(eye, $0.to) < .pi / 2 }.count
     #expect(near >= 5 - 1)
@@ -104,7 +99,7 @@ private func lines(_ places: [(String, Double, Double, String)]) -> MapLines {
 @Test func worldViewKeepsTheStartInView() {
     // one head office far away (Tel Aviv): the view turns towards it but keeps the start well inside the globe
     let map = lines([("Far", 32.1, 34.8, "Israel")])
-    let camera = CameraDirector.target(start: start, lines: map.lines, spin: false)
+    let camera = CameraDirector.target(start: start, lines: map.lines)
     #expect(Geo.angle(camera.centre, start) < 62 * .pi / 180)
 }
 
@@ -118,7 +113,4 @@ private func lines(_ places: [(String, Double, Double, String)]) -> MapLines {
     #expect(Geo.angle(toLondon.centre, london) < .pi / 2 && Geo.angle(toLondon.centre, start) < .pi / 2)
     // nothing recent: nothing to follow
     #expect(CameraDirector.follow(start: start, recent: []) == nil)
-    // quiet: the spin goes on from where the camera is
-    let drifted = CameraDirector.drift(toSeattle, seconds: 2)
-    #expect(abs(drifted.centre.longitude - toSeattle.centre.longitude - 2 * CameraDirector.spinPerSecond) < 1e-9)
 }

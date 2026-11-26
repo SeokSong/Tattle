@@ -13,8 +13,9 @@ public struct GlobeCamera: Sendable, Equatable {
 }
 
 /// the camera rules (owner, 2026-11-25): start on the user, zoom out to fit each line, stay on North America;
-/// once a head office is outside North America, zoom far out and spin the globe slowly. pure, so it is tested
-/// without drawing
+/// once a head office is outside North America, show the whole globe and follow the latest connections; when nothing
+/// happens the globe holds still (a slow spin was tried and dropped: it turned away from new connections). pure, so it
+/// is tested without drawing
 public enum CameraDirector {
     /// the whole globe in view, a little smaller than the view so the glow and rising lines fit
     public static let worldZoom = 0.42
@@ -22,8 +23,6 @@ public enum CameraDirector {
     public static let closestZoom = 2.5
     /// at most this many degrees south of the middle the camera looks from, so lines that rise off the globe show their curve
     public static let tilt = 12.0
-    /// how fast the globe turns in the world view, degrees of longitude per second (a full turn in two minutes)
-    public static let spinPerSecond = 3.0
 
     /// countries that keep the North America view; the head-office data names them this way (Wikidata and the pins)
     static let northAmerica: Set<String> = ["United States", "Canada", "Mexico", "United States of America"]
@@ -35,16 +34,15 @@ public enum CameraDirector {
         return (7...84).contains(line.to.latitude) && (-170 ... -50).contains(line.to.longitude)
     }
 
-    /// true once any line goes outside North America: the camera then shows the whole globe and spins
+    /// true once any line goes outside North America: the camera then shows the whole globe
     public static func isWorldView(_ lines: [MapLine]) -> Bool { lines.contains { !inNorthAmerica($0) } }
 
-    /// where the camera should be. `seconds` is the time since the world view began, and turns the globe in it;
-    /// `spin: false` holds the world view still (the Summary, once its replay ends)
-    public static func target(start: GeoPoint, lines: [MapLine], seconds: Double = 0, spin: Bool = true) -> GlobeCamera {
+    /// where the camera should be: close on North America while every head office is there, else the whole globe facing
+    /// the side with the most head offices (the live map then follows connections instead, `follow`)
+    public static func target(start: GeoPoint, lines: [MapLine]) -> GlobeCamera {
         if isWorldView(lines) {
-            // facing the side of the globe with the most head offices, then turning slowly from there
-            let lon = bestLongitude(lines.map(\.to), keeping: start) + (spin ? seconds * spinPerSecond : 0)
-            return GlobeCamera(centre: GeoPoint(latitude: 20, longitude: wrap(lon)), zoom: worldZoom)
+            // facing the side of the globe with the most head offices
+            return GlobeCamera(centre: GeoPoint(latitude: 20, longitude: bestLongitude(lines.map(\.to), keeping: start)), zoom: worldZoom)
         }
         // North America: the start and every line in view. the zoom is fitted round the middle of the points; the
         // 1.3 leaves room round them and for the rising arcs
@@ -60,8 +58,6 @@ public enum CameraDirector {
         return GlobeCamera(centre: centre, zoom: zoom)
     }
 
-    /// how long after the last connection the live world view keeps following before the slow spin takes over
-    public static let quietSeconds = 8.0
     /// how far back connections count for following: the camera aims between the start and these head offices
     public static let followSeconds = 3.0
 
@@ -72,12 +68,6 @@ public enum CameraDirector {
         guard !recent.isEmpty else { return nil }
         let middle = centroid([start] + recent)
         return GlobeCamera(centre: GeoPoint(latitude: max(-10, min(45, middle.latitude)), longitude: middle.longitude), zoom: worldZoom)
-    }
-
-    /// the live world view when it is quiet: the slow spin, from wherever the camera is
-    public static func drift(_ camera: GlobeCamera, seconds dt: Double) -> GlobeCamera {
-        GlobeCamera(centre: GeoPoint(latitude: camera.centre.latitude, longitude: wrap(camera.centre.longitude + dt * spinPerSecond)),
-                    zoom: worldZoom)
     }
 
     /// one animation step from `current` towards `target`: eases in so a change of view is a smooth glide, never a
