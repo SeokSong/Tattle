@@ -1535,10 +1535,10 @@ func runGlobePreview(_ args: [String]) {
 }
 
 /// renders the camera's motion as a GIF: `live` plays made-up connections arriving (North American head offices
-/// first, then one abroad turns on the spinning world view); `replay` plays the Summary's near-to-far replay
+/// first, then one abroad turns on the world view, which follows the latest connections); `replay` plays the Summary's near-to-far replay
 @MainActor
 func writeGlobeAnimation(out: String, replay: Bool, traffic: [(String, Int)], table: HeadOfficeTable, start: GeoPoint) {
-    let fps = 15.0, seconds = replay ? 12.0 : 26.0
+    let fps = 15.0, seconds = replay ? 12.0 : 36.0
     func place(_ company: String) -> (GeoPoint, String, String)? {
         table.office(forParent: company).map { (GeoPoint(latitude: $0.latitude, longitude: $0.longitude), $0.city, $0.country) }
     }
@@ -1546,12 +1546,13 @@ func writeGlobeAnimation(out: String, replay: Bool, traffic: [(String, Int)], ta
     var events: [(time: Double, company: String)] = []
     let firstSeen: [String: Double] = [
         "Apple": 1, "Alphabet": 2, "Meta Platforms": 3.5, "Amazon": 5, "Microsoft": 6.5, "AppLovin": 7.5, "Cloudflare": 8.5,
-        "Snap": 9.5, "Criteo": 11, "Adform": 12.5, "Spotify": 14, "ByteDance": 15.5, "Tencent": 17, "Yandex": 18, "Atlassian": 19,
+        "Snap": 9.5, "Criteo": 11, "Adform": 16, "Spotify": 17, "ByteDance": 18, "Tencent": 19, "Yandex": 20, "Atlassian": 21,
     ]
     for (company, n) in traffic {
         guard let t0 = firstSeen[company] else { continue }
         for i in 0..<n { events.append((t0 + Double(i) * 0.25, company)) }
     }
+    for i in 0..<8 { events.append((12 + Double(i) * 0.3, "Amazon")) }
     events.sort { $0.time < $1.time }
     var all = MapLines()
     for (company, n) in traffic {
@@ -1569,7 +1570,6 @@ func writeGlobeAnimation(out: String, replay: Bool, traffic: [(String, Int)], ta
     CGImageDestinationSetProperties(dest, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
     let frameProps = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 1 / fps]] as CFDictionary
     var camera = CameraDirector.target(start: start, lines: [])
-    var worldSince: Double?
     var next = 0
     var live = MapLines()
     // when each line first appeared (it draws in over 0.4 s) and every connection's time, for the activity effect
@@ -1582,8 +1582,7 @@ func writeGlobeAnimation(out: String, replay: Bool, traffic: [(String, Int)], ta
             let started = replayPlan.started(at: t)
             shown = replayPlan.order
             progress = replayPlan.progress(at: t)
-            if CameraDirector.isWorldView(started), worldSince == nil { worldSince = t }
-            target = CameraDirector.target(start: start, lines: started, seconds: 0, spin: false)
+            target = CameraDirector.target(start: start, lines: started)
         } else {
             while next < events.count, events[next].time <= t {
                 if let (p, city, country) = place(events[next].company) {
@@ -1596,8 +1595,19 @@ func writeGlobeAnimation(out: String, replay: Bool, traffic: [(String, Int)], ta
             }
             shown = live.lines
             progress = firstSeenAt.mapValues { min(1, (t - $0) / 0.4) }
-            if CameraDirector.isWorldView(shown), worldSince == nil { worldSince = t }
-            target = CameraDirector.target(start: start, lines: shown, seconds: t - (worldSince ?? t))
+            if CameraDirector.isWorldView(shown) {
+                // the same rule as the app's Live map: follow the last few seconds' head offices; still when quiet
+                let byID = Dictionary(uniqueKeysWithValues: shown.map { ($0.id, $0.to) })
+                let recent = Set(happened.filter { t - $0.time >= 0 && t - $0.time < CameraDirector.followSeconds }.map(\.id))
+                if let follow = CameraDirector.follow(start: start, recent: recent.compactMap { byID[$0] }) {
+                    target = follow
+                } else {
+                    // quiet: the globe holds still
+                    target = camera
+                }
+            } else {
+                target = CameraDirector.target(start: start, lines: shown)
+            }
         }
         camera = CameraDirector.step(from: camera, to: target, seconds: 1 / fps)
         let recent = replay ? [] : happened.filter { t - $0.time < 1 }.map { LineActivity(lineID: $0.id, age: t - $0.time) }

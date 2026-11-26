@@ -88,6 +88,7 @@ These are deliberate limits, or limits of the platform. They are not bugs.
 | Salted device hash, device name | Same database | Same as sessions | Sessions yes; the install salt is kept so that device hashes stay stable |
 | Raw-packet diagnostic files (opt-in) | App: `diagnostics` folder next to the database. Command line: the file you name with `--diagnostic` | App: 24 hours. Command line: user-managed | App files yes; command-line files no |
 | Retention setting (a number of days) | The app's preferences (UserDefaults) | Until changed | No |
+| Map switch (on or off) | The app's preferences (UserDefaults) | Until changed | No |
 | Short-lived temporary files: device list from `devicectl` (holds the device name and id), output of `rvictl` and `ifconfig` | The per-user temporary folder (0700; the tool-output file is also 0600) | Deleted when the command finishes; a crash can leave one until the system clears the temporary folder | No |
 | Band files (`report --write-bands`): counts and ratios per test capture, numbers only | The file you name | User-managed | No |
 | Capture script log and run folder | The root script's run folder | Removed by `stop()`; a directory a crashed app left is stopped and removed at the next launch. The script log moves to `logs/` (newest 10 kept) | No; no packets or hostnames in it |

@@ -134,6 +134,8 @@ Target `TattleApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `sw
 - A capture that ends on its own (cable pulled, link lost) keeps the user on Live, which shows why it stopped and that the capture is saved; the Sessions list marks it "ended unexpectedly" (5.3, found in the owner's cable-pull test 2026-11-24: the message was only on Connect and the list never showed the end)
 - Pressing Stop opens the Summary when the capture has been saved (owner, 2026-11-24); a capture that ends on its own (cable, link lost) stays on Live so its message is seen
 - `TATTLE_START_SCREEN=<summary|connect|live|sessions|import|settings>` opens the app on that screen, for screenshots without clicking
+- `TATTLE_DEMO_MAP=1` turns the map on for that run only (never saved) and gives the Summary and Map screen made-up apps contacting real public companies, for screenshots: `TATTLE_DEMO_MAP=1 scripts/demo-screenshot.sh ~/Desktop/map.png 8 map`
+- `TATTLE_DEMO_LIVE=<capture.pcapng>` plays a capture file through the real pipeline at its recorded pace, with the 2-second flush and Live refresh of a phone capture, map on; no phone, nothing saved. For checking the live map: `TATTLE_DEMO_LIVE=$HOME/dev/tattle-fixtures/captures/s2-two-apps.pcapng scripts/demo-screenshot.sh ~/Desktop/live.png 60 live`
 - `TATTLE_DEMO_OPEN=<row title>` opens that Summary row at launch, in demo mode only (`TATTLE_DEMO_SUMMARY=1`); used for the README screenshots: `TATTLE_DEMO_OPEN=Quillnote scripts/demo-screenshot.sh img/m3-summary-app.png 6`
 - The stored imports are listed on this screen and in Settings; each has a Delete button with a confirmation, which calls `deleteImport` and refreshes the list. Delete all and the retention setting also refresh it
 
@@ -160,3 +162,13 @@ Target `TattleApp` (SwiftUI, SwiftPM executable, no app bundle yet; run with `sw
 ## See also
 
 [CAPTURE.md](CAPTURE.md) · [ATTRIBUTION.md](ATTRIBUTION.md) · [STORAGE.md](STORAGE.md)
+
+## Company map (Milestone 4, Part 4)
+
+- Off until the user turns on Settings > Map > "Show map of company head offices" (owner, 2026-11-25); remembered (`showMap`)
+- Live: the map is the top 80% of the screen at first and scrolls away with the page (owner, 2026-11-25; it was fixed at first). Each refresh (2 s) `MapFeed` labels the new connections with the same code as the flow table, off the packet path; only confirmed names (a hint is counted as not drawn); link and local traffic and name lookups (DNS, mDNS, DHCP) never, and not counted. A connection whose name is not read yet is retried for 10 s before it counts as not drawn. Between refreshes the map also peeks every 0.5 s at connections not saved yet (`CapturePipeline.unflushedFlowsSnapshot`, read-only: what is saved and when does not change), so a new connection shows in under a second; sparks are spread over that half second so they arrive as a stream. The first line still waits for the phone to open a new connection: connections already open before Start have no readable name (in the test captures the first drawable connection came 0 to 11 s after the start)
+- Summary: the map at the top replays its lines nearest first, then holds still; a line is brighter the more apps contacted that company
+- Map screen (in the sidebar while the map is on): the capture while one runs, else the Summary; drag to turn, pinch or the buttons to zoom, point at a head office for its city and companies
+- The Live map takes the same input (owner, 2026-11-25); after the last input it stays where the user put it for 10 s, then follows connections again. With no new connections it holds still
+- Behind the (i) on every map (owner, 2026-11-25: the text under the map took too much room): "Lines go to company head offices, not to the servers the data went to.", the default-location note when it is used, how many connections or companies are not drawn, and on Live how to turn and zoom. The "Default location" label stays on the map itself
+- Start point: the default (Colorado Springs city centre), labelled on the map and under it, until Part 5 adds the user's location

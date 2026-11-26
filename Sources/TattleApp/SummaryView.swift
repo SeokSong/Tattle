@@ -17,6 +17,12 @@ struct SummaryView: View {
                     if screen.isEmpty {
                         Text(SummaryScreen.emptyText).foregroundStyle(.secondary)
                     } else {
+                        if model.showMap {
+                            let map = model.summaryMap
+                            MapPanel(mode: .replay, lines: map.lines, start: model.mapStart,
+                                     notDrawnText: MapText.notDrawnApps(map.notDrawn), unit: ("app", "apps"))
+                                .frame(height: 380)
+                        }
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(screen.overview, id: \.self) { Bullet(text: $0).font(.title3) }
                         }

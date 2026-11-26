@@ -12,7 +12,7 @@ private func lines(_ places: [(String, Double, Double, String)]) -> MapLines {
     return map
 }
 
-@Test func cameraStartsCloseOnTheUser() {
+@Test func cameraStartsOnTheUserWithTheUSInView() {
     let camera = CameraDirector.target(start: start, lines: [])
     #expect(camera.zoom == CameraDirector.closestZoom)
     // looked at from a little south, the start still in the middle's longitude and still in view up close
@@ -23,13 +23,14 @@ private func lines(_ places: [(String, Double, Double, String)]) -> MapLines {
 
 @Test func cameraZoomsOutToFitNorthAmericanLines() throws {
     let near = CameraDirector.target(start: start, lines: lines([("Adlantic", 39.1, -94.6, "United States")]).lines)
+    // Anchorage is farther than the starting view shows, so the camera zooms out to fit it
     let wider = CameraDirector.target(start: start, lines: lines([("Adlantic", 39.1, -94.6, "United States"),
-                                                                  ("Trackwise", 37.4, -122.1, "United States")]).lines)
+                                                                  ("Trackwise", 61.2, -149.9, "United States")]).lines)
     #expect(near.zoom > wider.zoom)
     // still the North America view: not the whole globe
     #expect(wider.zoom > CameraDirector.worldZoom)
     // every point is inside the view at that zoom: its angle from the centre fits in the view's half-width
-    for p in [start, GeoPoint(latitude: 37.4, longitude: -122.1)] {
+    for p in [start, GeoPoint(latitude: 61.2, longitude: -149.9)] {
         #expect(sin(Geo.angle(wider.centre, p)) * wider.zoom < 0.5)
     }
     // Canada and Mexico keep the North America view
@@ -37,18 +38,13 @@ private func lines(_ places: [(String, Double, Double, String)]) -> MapLines {
     #expect(!CameraDirector.isWorldView(continent))
 }
 
-@Test func aHeadOfficeOutsideNorthAmericaShowsTheWholeGlobeAndSpins() {
+@Test func aHeadOfficeOutsideNorthAmericaShowsTheWholeGlobe() {
     let map = lines([("Adlantic", 37.4, -122.1, "United States"), ("Pixelbeam", 51.5, -0.1, "United Kingdom")])
     #expect(CameraDirector.isWorldView(map.lines))
-    let now = CameraDirector.target(start: start, lines: map.lines, seconds: 0)
-    let later = CameraDirector.target(start: start, lines: map.lines, seconds: 10)
-    #expect(now.zoom == CameraDirector.worldZoom)
-    // ten seconds turn the globe 30 degrees east
-    var turned = later.centre.longitude - now.centre.longitude
-    if turned < -180 { turned += 360 }
-    #expect(abs(turned - 10 * CameraDirector.spinPerSecond) < 1e-9)
-    // held still once the Summary's replay has ended
-    #expect(CameraDirector.target(start: start, lines: map.lines, seconds: 10, spin: false) == now)
+    let camera = CameraDirector.target(start: start, lines: map.lines)
+    #expect(camera.zoom == CameraDirector.worldZoom)
+    // the same lines give the same view: nothing turns on its own
+    #expect(CameraDirector.target(start: start, lines: map.lines) == camera)
 }
 
 @Test func countryDecidesAndTheBoxIsOnlyTheFallback() {
@@ -94,9 +90,36 @@ private func lines(_ places: [(String, Double, Double, String)]) -> MapLines {
     // four in Europe, one in the US: the world view faces Europe's side, so most lines are on the near side
     let map = lines([("A", 51.5, -0.1, "United Kingdom"), ("B", 48.9, 2.35, "France"), ("C", 52.5, 13.4, "Germany"),
                      ("D", 59.3, 18.1, "Sweden"), ("E", 37.4, -122.1, "United States")])
-    let camera = CameraDirector.target(start: start, lines: map.lines, spin: false)
+    let camera = CameraDirector.target(start: start, lines: map.lines)
     let eye = camera.centre
     let near = map.lines.filter { Geo.angle(eye, $0.to) < .pi / 2 }.count
     #expect(near >= 5 - 1)
     #expect(Geo.angle(eye, GeoPoint(latitude: 51.5, longitude: -0.1)) < .pi / 2)
+}
+
+@Test func worldViewKeepsTheStartInView() {
+    // one head office far away (Tel Aviv): the view turns towards it but keeps the start well inside the globe
+    let map = lines([("Far", 32.1, 34.8, "Israel")])
+    let camera = CameraDirector.target(start: start, lines: map.lines)
+    #expect(Geo.angle(camera.centre, start) < 62 * .pi / 180)
+}
+
+@Test func liveWorldViewFollowsTheLatestConnections() throws {
+    // a ping to London, then pings to Seattle: the camera turns back to show Seattle and the start
+    let seattle = GeoPoint(latitude: 47.6, longitude: -122.3), london = GeoPoint(latitude: 51.5, longitude: -0.1)
+    let toSeattle = try #require(CameraDirector.follow(start: start, recent: [seattle]))
+    #expect(toSeattle.zoom == CameraDirector.worldZoom)
+    #expect(Geo.angle(toSeattle.centre, seattle) < .pi / 4 && Geo.angle(toSeattle.centre, start) < .pi / 4)
+    let toLondon = try #require(CameraDirector.follow(start: start, recent: [london]))
+    #expect(Geo.angle(toLondon.centre, london) < .pi / 2 && Geo.angle(toLondon.centre, start) < .pi / 2)
+    // nothing recent: nothing to follow
+    #expect(CameraDirector.follow(start: start, recent: []) == nil)
+}
+
+@Test func theStartingViewShowsTheContiguousUS() {
+    // from the middle of the US, both coasts are in the starting view, so the first lines are on screen at once
+    let camera = CameraDirector.target(start: start, lines: [])
+    for coast in [GeoPoint(latitude: 37.8, longitude: -122.4), GeoPoint(latitude: 40.7, longitude: -74.0)] {
+        #expect(sin(Geo.angle(camera.centre, coast)) * camera.zoom < 0.5)
+    }
 }
